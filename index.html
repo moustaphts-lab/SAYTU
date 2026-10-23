@@ -89,6 +89,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-weight:600;font-size:19px}
 .slot.conf{background:var(--bad-soft)}
 .slot b{display:block}
 .empty{padding:28px;text-align:center;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:4px 11px;font:13px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -200,6 +201,10 @@ function errMsg(e){let m=e?.message||String(e);
   if(m.includes("no_teacher_overlap"))m="Conflit : le professeur a déjà un cours sur ce créneau.";
   if(m.includes("no_group_overlap"))m="Conflit : le groupe a déjà un cours sur ce créneau.";
   if(m.includes("Invalid login"))m="Adresse ou mot de passe incorrect.";
+  if(m.includes("duplicate key"))m="Cet enregistrement existe déjà (même code, même adresse ou même affectation).";
+  if(m.includes("foreign key"))m="Opération impossible : cet élément est utilisé ailleurs (séances, affectations, bulletins…).";
+  if(m.includes("check constraint"))m="Valeurs invalides : vérifiez les dates, les durées et les montants.";
+  if(m.includes("Failed to send a request to the Edge Function"))m="Le service de gestion des comptes est injoignable. Réessayez dans un instant.";
   return m}
 async function q(p){const {data,error}=await p;if(error)throw error;return data}
 function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c?.code)} · ${esc(c?.name)}`}
@@ -232,6 +237,7 @@ async function boot(){
     S.roles=await q(sb.rpc("my_roles"));
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
+    try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
   if(!tabs.length){$app.innerHTML=`<div class="wrap"><p class="empty">Aucun rôle n'est attribué à ce compte. Contactez l'administrateur.</p></div>`;return}
@@ -260,11 +266,12 @@ function renderShell(){
   const name=S.user.user_metadata?.full_name||S.user.email;
   const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
   $app.innerHTML=`<header class="top"><div class="wrap">
-      <div class="brand">UCAB<small>Année universitaire 2026-2027</small></div>
+      <div class="brand">UCAB<small>Année universitaire ${esc(S.year||"")}</small></div>
       <div class="who"><span class="name"><b style="color:var(--ink)">${esc(name)}</b> · ${esc(roles)}</span>
-      <button class="btn sm" id="logout">Se déconnecter</button></div></div>
+      <button class="btn sm" id="pwBtn">Mon mot de passe</button> <button class="btn sm" id="logout">Se déconnecter</button></div></div>
     <div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${t.label}</button>`).join("")}</nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
+  pwBtn.onclick=passwordDialog;
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
@@ -279,7 +286,7 @@ function openDialog(html,onSubmit){
   f.onsubmit=async ev=>{
     const btn=ev.submitter;if(btn&&btn.value==="cancel")return;
     ev.preventDefault();
-    try{btn&&(btn.disabled=true);await onSubmit(btn?btn.value:null,f);dlg.close();}
+    try{btn&&(btn.disabled=true);const r=await onSubmit(btn?btn.value:null,f);if(r!=="keep")dlg.close();}
     catch(e){document.getElementById("dlgErr").textContent=errMsg(e);btn&&(btn.disabled=false)}
   };
   dlg.showModal();
@@ -402,38 +409,62 @@ function reviewDialog(a){
 
 /* ---------- emplois du temps ---------- */
 async function viewPlanning(v){
-  const [slots,conf,groups,teachers,rooms]=await Promise.all([
-    q(sb.from("timetable_slots").select("id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
+  const [slots,conf,groups,teachers,rooms,assigns,courses,sems]=await Promise.all([
+    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
     q(sb.from("slot_conflicts").select("*")),
     q(sb.from("student_groups").select("id,code,name").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name").order("last_name")),
-    q(sb.from("rooms").select("id,code,name").order("code"))]);
+    q(sb.from("rooms").select("id,code,name,capacity").order("code")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
+    q(sb.from("courses").select("id,code,name").order("code")),
+    q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date"))]);
   const lists={group:groups.map(g=>[g.id,g.code]),teacher:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),room:rooms.map(r=>[r.id,r.code])};
   if(!S.planId||!lists[S.planView].some(x=>x[0]==S.planId))S.planId=lists[S.planView][0]?.[0];
   const key={group:s=>s.teaching_assignments.group_id,teacher:s=>s.teaching_assignments.teacher_id,room:s=>s.room_id}[S.planView];
   const mine=slots.filter(s=>key(s)==S.planId);
   const confIds=new Set(conf.flatMap(c=>[c.slot_a,c.slot_b]));
   const today=iso(new Date()),in4=iso(addDays(new Date(),28));
+  const drafts=slots.filter(s=>!s.published).length;
+
+  const weekly={};slots.forEach(s=>{weekly[s.assignment_id]=(weekly[s.assignment_id]||0)+(toMin(s.end_time)-toMin(s.start_time))/60});
+  const weeksOf=sem=>Math.max(1,Math.ceil(((new Date(sem.end_date)-new Date(sem.start_date))/86400000+1)/7));
+  const num=n=>Number(Number(n).toFixed(2));
+  const unplaced=assigns.filter(a=>!weekly[a.id]).length;
+
   v.innerHTML=`<h1>Emplois du temps</h1>
-    <p class="lead">Emploi du temps hebdomadaire du semestre 1. Les créneaux publiés servent à créer les séances datées que les professeurs émargent.</p>
+    <p class="lead">Saisissez qui enseigne quoi (les affectations), placez-le dans la semaine (les créneaux), puis créez les séances datées que les professeurs émargent. Les conflits de salle, de professeur et de groupe sont refusés à l'enregistrement.</p>
     <div class="stats"><div class="stat"><b>${slots.length}</b><span>Créneaux hebdomadaires</span></div>
-      <div class="stat"><b>${slots.filter(s=>s.published).length}</b><span>Publiés</span></div>
+      <div class="stat"><b style="color:${drafts?"var(--warn)":"inherit"}">${drafts}</b><span>Brouillons</span></div>
+      <div class="stat"><b style="color:${unplaced?"var(--warn)":"inherit"}">${unplaced}</b><span>Affectations non placées</span></div>
       <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>Conflits détectés</span></div></div>
     <div class="row" style="margin-bottom:12px">
       <label>Afficher par<select id="pView"><option value="group">Groupe</option><option value="teacher">Professeur</option><option value="room">Salle</option></select></label>
       <label>&nbsp;<select id="pId">${lists[S.planView].map(([id,l])=>`<option value="${id}" ${id==S.planId?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
+      <button class="btn primary" id="addSlot" ${assigns.length?"":"disabled"}>Ajouter un créneau</button>
+      ${drafts?`<button class="btn" id="pubAll">Publier les ${drafts} brouillon(s)</button>`:""}
     </div>
     <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
       <span class="mono">${hm(s.start_time)}–${hm(s.end_time)}</span><b>${esc(s.teaching_assignments.courses.code)} ${esc(s.teaching_assignments.courses.name)}</b>
       <span class="sub">${esc(s.teaching_assignments.teachers.last_name)} · ${esc(s.teaching_assignments.student_groups.code)} · ${esc(s.rooms.code)}</span>
-      ${s.published?"":`<div><span class="pill p-mute">Brouillon</span></div>`}</div>`).join("")}</div>`).join("")}</div>
+      <div class="row" style="gap:6px;margin-top:6px">${s.published?"":`<span class="pill p-mute">Brouillon</span>`}<button class="btn sm" data-es="${s.id}">Modifier</button><button class="btn sm danger" data-ds="${s.id}">Supprimer</button></div></div>`).join("")}</div>`).join("")}</div>
     ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
+
+    <div class="row" style="justify-content:space-between"><h2>Affectations · ${assigns.length}</h2><button class="btn sm" id="addAsg">Ajouter une affectation</button></div>
+    <p class="sub" style="margin:0 0 10px">Une affectation relie un professeur, une matière et un groupe, avec le volume d'heures prévu sur le semestre. La colonne « Placé » compare les créneaux de la semaine à ce volume.</p>
+    <div class="panel tbl">${assigns.length?`<table><thead><tr><th>Matière</th><th>Groupe</th><th>Professeur</th><th>Semestre</th><th>Prévu</th><th>Placé</th><th>État</th><th></th></tr></thead><tbody>
+    ${assigns.map(a=>{const w=weekly[a.id]||0,wk=weeksOf(a.semesters);
+      const st=!w?'<span class="pill p-warn">Non placé</span>':(w*wk<a.planned_hours?'<span class="pill p-bad">Volume insuffisant</span>':'<span class="pill p-ok">Placé</span>');
+      return `<tr><td>${esc(a.courses.code)}<div class="sub">${esc(a.courses.name)}</div></td><td>${esc(a.student_groups.code)}</td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td><td>${esc(a.semesters.label)}</td>
+      <td class="num">${num(a.planned_hours)} h</td><td class="num">${num(w)} h/sem × ${wk} sem = ${num(w*wk)} h</td><td>${st}</td>
+      <td style="white-space:nowrap"><button class="btn sm" data-ea="${a.id}">Modifier</button> <button class="btn sm danger" data-da="${a.id}">Supprimer</button></td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune affectation. Ajoutez la première pour pouvoir placer des créneaux.</p>`}</div>
+
     <h2>Créer les séances datées</h2>
     <div class="panel" style="padding:16px"><form class="row" id="genForm">
       <label>Du<input id="gFrom" type="date" required value="${today}"></label>
       <label>Au<input id="gTo" type="date" required value="${in4}"></label>
       <button class="btn primary" type="submit">Créer les séances</button>
-      <span class="sub" style="flex-basis:100%">Les séances déjà existantes ne sont pas dupliquées. Une séance en conflit avec une autre n'est pas créée et vous est signalée.</span></form></div>`;
+      <span class="sub" style="flex-basis:100%">Seuls les créneaux publiés sont utilisés. Les séances déjà existantes ne sont pas dupliquées. Une séance en conflit avec une autre n'est pas créée et vous est signalée.</span></form></div>`;
+
   pView.value=S.planView;
   pView.onchange=()=>{S.planView=pView.value;S.planId=null;rerender()};
   pId.onchange=()=>{S.planId=pId.value;rerender()};
@@ -441,6 +472,57 @@ async function viewPlanning(v){
     try{const r=(await q(sb.rpc("generate_sessions",{p_from:gFrom.value,p_to:gTo.value})))[0];
       toast(`${r.created} séance(s) créée(s)`+(r.conflicts.length?` · ${r.conflicts.length} non placée(s) pour conflit`:""),r.conflicts.length>0)}
     catch(e){toast(errMsg(e),true)}};
+  const pa=document.getElementById("pubAll");
+  if(pa)pa.onclick=async()=>{try{await q(sb.from("timetable_slots").update({published:true}).eq("published",false));toast("Créneaux publiés");rerender()}catch(e){toast(errMsg(e),true)}};
+
+  /* créneaux */
+  const aLabel=a=>`${a.courses.code} · ${a.student_groups.code} · ${a.teachers.last_name}`;
+  const slotFields=()=>[
+    {k:"assignment_id",l:"Affectation",t:"select",num:1,opt:assigns.map(a=>[a.id,aLabel(a)]),req:1},
+    {k:"day_of_week",l:"Jour",t:"select",num:1,opt:[1,2,3,4,5,6].map(d=>[d,DAYS[d]]),req:1},
+    {k:"start_time",l:"Début",t:"time",req:1},{k:"end_time",l:"Fin",t:"time",req:1},
+    {k:"room_id",l:"Salle",t:"select",num:1,opt:rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"]),req:1},
+    {k:"published",l:"Publier ce créneau",t:"bool"}];
+  const slotDialog=row=>{
+    const f=slotFields();
+    const vals=row?{...row,start_time:hm(row.start_time),end_time:hm(row.end_time)}:{day_of_week:1,start_time:"08:00",end_time:"10:00",published:false};
+    openDialog(`<h3>${row?"Modifier le créneau":"Ajouter un créneau"}</h3>
+      <div class="grid2">${f.map(x=>fieldHtml(x,vals[x.k])).join("")}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const o=readFields(f);
+      if(o.end_time<=o.start_time)throw new Error("L'heure de fin doit être après l'heure de début.");
+      if(row)await q(sb.from("timetable_slots").update(o).eq("id",row.id));else await q(sb.from("timetable_slots").insert(o));
+      toast(row?"Créneau modifié":"Créneau ajouté");rerender()});
+  };
+  addSlot.onclick=()=>slotDialog(null);
+  v.querySelectorAll("[data-es]").forEach(b=>b.onclick=()=>slotDialog(slots.find(s=>s.id==b.dataset.es)));
+  v.querySelectorAll("[data-ds]").forEach(b=>b.onclick=()=>{const s=slots.find(x=>x.id==b.dataset.ds);
+    openDialog(`<h3>Supprimer ce créneau ?</h3><p style="margin:0">${esc(s.teaching_assignments.courses.code)}, ${DAYS[s.day_of_week]} ${hm(s.start_time)}–${hm(s.end_time)}. Les séances à venir de ce créneau qui n'ont pas encore été émargées seront supprimées. Les séances passées sont conservées.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+    async()=>{const r=await q(sb.from("timetable_slots").delete().eq("id",s.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Créneau supprimé");rerender()})});
+
+  /* affectations */
+  const asgFields=()=>[
+    {k:"semester_id",l:"Semestre",t:"select",num:1,opt:sems.map(s=>[s.id,s.academic_years.label+" · "+s.label]),req:1},
+    {k:"course_id",l:"Matière",t:"select",num:1,opt:courses.map(c=>[c.id,c.code+" · "+c.name]),req:1},
+    {k:"group_id",l:"Groupe",t:"select",num:1,opt:groups.map(g=>[g.id,g.code]),req:1},
+    {k:"teacher_id",l:"Professeur",t:"select",num:1,opt:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),req:1},
+    {k:"planned_hours",l:"Volume prévu (h)",t:"number",min:0.5,step:"0.5",req:1}];
+  const asgDialog=row=>{
+    const f=asgFields();
+    openDialog(`<h3>${row?"Modifier l'affectation":"Ajouter une affectation"}</h3>
+      <div class="grid2">${f.map(x=>fieldHtml(x,row?row[x.k]:undefined)).join("")}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const o=readFields(f);
+      if(row)await q(sb.from("teaching_assignments").update(o).eq("id",row.id));else await q(sb.from("teaching_assignments").insert(o));
+      toast("Affectation enregistrée");rerender()});
+  };
+  addAsg.onclick=()=>asgDialog(null);
+  v.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>asgDialog(assigns.find(a=>a.id==b.dataset.ea)));
+  v.querySelectorAll("[data-da]").forEach(b=>b.onclick=()=>{const a=assigns.find(x=>x.id==b.dataset.da);
+    openDialog(`<h3>Supprimer l'affectation ?</h3><p style="margin:0">${esc(aLabel(a))}. Ses créneaux hebdomadaires seront supprimés aussi. Si des séances existent déjà pour cette affectation, la suppression sera refusée.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+    async()=>{const r=await q(sb.from("teaching_assignments").delete().eq("id",a.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Affectation supprimée");rerender()})});
 }
 
 /* ---------- synthèse ---------- */
@@ -461,37 +543,230 @@ async function viewSummary(v){
 }
 
 /* ---------- référentiel ---------- */
-async function viewRef(v){
-  const [deps,teachers,courses,groups,rooms,statuses]=await Promise.all([
+const SEC_LABEL={enseignants:"Enseignants",matieres:"Matières",groupes:"Groupes et filières",salles:"Salles",structure:"Structure",comptes:"Comptes et rôles"};
+const BLOCKS_BY_SEC={enseignants:["enseignants","statuts"],matieres:["matieres"],groupes:["groupes","filieres"],salles:["salles"],structure:["departements","annees","semestres"]};
+
+async function refLookups(){
+  const [deps,programs,years,statuses]=await Promise.all([
     q(sb.from("departments").select("id,code,name").order("code")),
-    q(sb.from("teachers").select("id,first_name,last_name,email,profile_id,departments(code),teacher_statuses(label)").order("last_name")),
-    q(sb.from("courses").select("code,name,course_type,total_hours,departments(code)").order("code")),
-    q(sb.from("student_groups").select("code,name,size,programs(name,level)").order("code")),
-    q(sb.from("rooms").select("code,name,capacity,room_type").order("code")),
+    q(sb.from("programs").select("id,code,name,level").order("code")),
+    q(sb.from("academic_years").select("id,label").order("label")),
     q(sb.from("teacher_statuses").select("id,label").order("id"))]);
-  const tbl=(h,rows)=>`<div class="panel tbl"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
-  v.innerHTML=`<h1>Référentiel</h1><p class="lead">Données de l'université de démonstration. Les modifications sont enregistrées dans le journal.</p>
-    <div class="row" style="justify-content:space-between"><h2>Enseignants · ${teachers.length}</h2><button class="btn sm" id="addT">Ajouter un enseignant</button></div>
-    ${tbl(["Nom","Département","Statut","E-mail","Compte"],teachers.map(t=>`<tr><td>${esc(t.first_name+" "+t.last_name)}</td><td>${esc(t.departments?.code)}</td><td>${esc(t.teacher_statuses?.label)}</td><td class="mono">${esc(t.email)}</td><td>${t.profile_id?`<span class="pill p-ok">Lié</span>`:`<span class="pill p-mute">Sans compte</span>`}</td></tr>`))}
-    <h2>Matières · ${courses.length}</h2>
-    ${tbl(["Code","Intitulé","Type","Volume","Département"],courses.map(c=>`<tr><td class="mono">${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.course_type)}</td><td class="num">${c.total_hours} h</td><td>${esc(c.departments?.code)}</td></tr>`))}
-    <h2>Groupes · ${groups.length}</h2>
-    ${tbl(["Code","Groupe","Filière","Effectif"],groups.map(g=>`<tr><td class="mono">${esc(g.code)}</td><td>${esc(g.name)}</td><td>${esc(g.programs?.name)} ${esc(g.programs?.level)}</td><td class="num">${g.size}</td></tr>`))}
-    <div class="row" style="justify-content:space-between"><h2>Salles · ${rooms.length}</h2><button class="btn sm" id="addR">Ajouter une salle</button></div>
-    ${tbl(["Code","Nom","Capacité","Type"],rooms.map(r=>`<tr><td class="mono">${esc(r.code)}</td><td>${esc(r.name)}</td><td class="num">${r.capacity}</td><td>${esc(r.room_type)}</td></tr>`))}`;
-  addT.onclick=()=>openDialog(`<h3>Nouvel enseignant</h3>
-    <div class="row"><label>Prénom<input id="tF" required></label><label>Nom<input id="tL" required></label></div>
-    <label>E-mail (sert à lier son compte)<input id="tE" type="email" required></label>
-    <div class="row"><label>Département<select id="tD">${deps.map(d=>`<option value="${d.id}">${esc(d.code)} · ${esc(d.name)}</option>`).join("")}</select></label>
-    <label>Statut (détermine le tarif)<select id="tG">${statuses.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join("")}</select></label></div>
+  return {deps,programs,years,statuses};
+}
+
+function refDefs(L){
+  const dep=L.deps.map(d=>[d.id,d.code+" · "+d.name]);
+  const code=r=>`<span class="mono">${esc(r.code)}</span>`;
+  return {
+    enseignants:{title:"Enseignants",one:"enseignant",table:"teachers",select:"*,departments(code),teacher_statuses(label)",order:"last_name",
+      cols:[["Nom",r=>esc(r.last_name+" "+r.first_name)],["Département",r=>esc(r.departments?.code)],["Statut",r=>esc(r.teacher_statuses?.label)],["E-mail",r=>`<span class="mono">${esc(r.email)}</span>`],
+        ["Compte",r=>r.profile_id?'<span class="pill p-ok">Lié</span>':'<span class="pill p-mute">Sans compte</span>'],["Actif",r=>r.active?"Oui":'<span class="pill p-mute">Non</span>']],
+      fields:[{k:"first_name",l:"Prénom",req:1},{k:"last_name",l:"Nom",req:1},{k:"email",l:"E-mail (sert à lier son compte)",t:"email",req:1},{k:"phone",l:"Téléphone"},
+        {k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},{k:"status_id",l:"Statut (détermine le tarif)",t:"select",num:1,opt:L.statuses.map(s=>[s.id,s.label]),req:1},{k:"active",l:"Enseignant actif",t:"bool"}],
+      defaults:{active:true},normalize:o=>{o.email=o.email.toLowerCase();return o},name:r=>r.first_name+" "+r.last_name},
+    statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",
+      cols:[["Code",code],["Libellé",r=>esc(r.label)]],
+      fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
+    matieres:{title:"Matières",one:"matière",table:"courses",select:"*,departments(code)",order:"code",
+      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Intitulé",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},
+        {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}]},
+    groupes:{title:"Groupes d'étudiants",one:"groupe",table:"student_groups",select:"*,programs(name,level)",order:"code",
+      cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1}]},
+    filieres:{title:"Filières",one:"filière",table:"programs",select:"*,departments(code)",order:"code",
+      cols:[["Code",code],["Filière",r=>esc(r.name)],["Niveau",r=>esc(r.level)],["Département",r=>esc(r.departments?.code)]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"level",l:"Niveau (L1, L2, M1…)",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1}]},
+    salles:{title:"Salles",one:"salle",table:"rooms",order:"code",
+      cols:[["Code",code],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(r.room_type)]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
+        {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"]],req:1}]},
+    departements:{title:"Départements",one:"département",table:"departments",order:"code",
+      cols:[["Code",code],["Nom",r=>esc(r.name)]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1}]},
+    annees:{title:"Années universitaires",one:"année universitaire",table:"academic_years",order:"label",
+      cols:[["Année",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`],["En cours",r=>r.is_current?'<span class="pill p-ok">Oui</span>':""]],
+      fields:[{k:"label",l:"Libellé (ex. 2027-2028)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1},{k:"is_current",l:"Année en cours",t:"bool"}],
+      name:r=>r.label,
+      before:async(o,row)=>{if(o.is_current)await q(sb.from("academic_years").update({is_current:false}).neq("id",row?row.id:-1))}},
+    semestres:{title:"Semestres",one:"semestre",table:"semesters",select:"*,academic_years(label)",order:"start_date",
+      cols:[["Année",r=>esc(r.academic_years?.label)],["Semestre",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`]],
+      fields:[{k:"academic_year_id",l:"Année",t:"select",num:1,opt:L.years.map(y=>[y.id,y.label]),req:1},{k:"label",l:"Libellé (ex. Semestre 1)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1}],
+      name:r=>r.label}
+  };
+}
+
+function fieldHtml(f,val){
+  const id="f_"+f.k;
+  if(f.t==="select")return `<label>${f.l}<select id="${id}" ${f.req?"required":""}>${f.req?"":'<option value="">—</option>'}${f.opt.map(([v,l])=>`<option value="${esc(v)}" ${String(v)===String(val)?"selected":""}>${esc(l)}</option>`).join("")}</select></label>`;
+  if(f.t==="bool")return `<label style="flex-direction:row;align-items:center;gap:8px;align-self:end"><input id="${id}" type="checkbox" ${val?"checked":""}> ${f.l}</label>`;
+  return `<label>${f.l}<input id="${id}" type="${f.t||"text"}" ${f.req?"required":""} ${f.min!=null?`min="${f.min}"`:""} ${f.step?`step="${f.step}"`:""} value="${esc(val??"")}"></label>`;
+}
+function readFields(fields){
+  const o={};
+  fields.forEach(f=>{const el=document.getElementById("f_"+f.k);let v;
+    if(f.t==="bool")v=el.checked;
+    else{v=el.value.trim();
+      if(f.t==="number")v=v===""?null:Number(v);
+      else if(f.t==="select"&&f.num)v=v===""?null:Number(v);
+      else if(v==="")v=null}
+    o[f.k]=v});
+  return o;
+}
+
+async function renderBlock(def,el){
+  const rows=await q(sb.from(def.table).select(def.select||"*").order(def.order||"id"));
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2>${esc(def.title)} · ${rows.length}</h2><button class="btn sm" data-add>Ajouter</button></div>
+    <div class="panel tbl">${rows.length?`<table><thead><tr>${def.cols.map(c=>`<th>${c[0]}</th>`).join("")}<th></th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr>${def.cols.map(c=>`<td>${c[1](r)}</td>`).join("")}<td style="white-space:nowrap"><button class="btn sm" data-e="${i}">Modifier</button> <button class="btn sm danger" data-d="${i}">Supprimer</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Rien pour l'instant. Utilisez « Ajouter » pour commencer.</p>`}</div>`;
+  el.querySelector("[data-add]").onclick=()=>formDialog(def,null);
+  el.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>formDialog(def,rows[b.dataset.e]));
+  el.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>deleteDialog(def,rows[b.dataset.d]));
+}
+
+function formDialog(def,row){
+  const vals=row||def.defaults||{};
+  openDialog(`<h3>${row?"Modifier":"Ajouter"} : ${esc(def.one)}</h3>
+    <div class="grid2">${def.fields.map(f=>fieldHtml(f,vals[f.k])).join("")}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await q(sb.from("teachers").insert({first_name:tF.value.trim(),last_name:tL.value.trim(),email:tE.value.trim().toLowerCase(),department_id:Number(tD.value),status_id:Number(tG.value)}));toast("Enseignant ajouté");rerender()});
-  addR.onclick=()=>openDialog(`<h3>Nouvelle salle</h3>
-    <div class="row"><label>Code<input id="rC" required></label><label>Capacité<input id="rCap" type="number" min="1" required></label></div>
-    <label>Nom<input id="rN" required></label>
-    <label>Type<select id="rT"><option value="standard">Standard</option><option value="labo">Laboratoire</option><option value="amphi">Amphithéâtre</option></select></label>
-    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await q(sb.from("rooms").insert({code:rC.value.trim(),name:rN.value.trim(),capacity:Number(rCap.value),room_type:rT.value}));toast("Salle ajoutée");rerender()});
+  async()=>{
+    let o=readFields(def.fields);
+    if(def.normalize)o=def.normalize(o);
+    if(def.before)await def.before(o,row);
+    if(row)await q(sb.from(def.table).update(o).eq("id",row.id));
+    else await q(sb.from(def.table).insert(o));
+    toast("Enregistré");rerender();
+  });
+}
+function deleteDialog(def,row){
+  const nm=(def.name||(r=>r.name||r.label||r.code||("n° "+r.id)))(row);
+  openDialog(`<h3>Supprimer « ${esc(nm)} » ?</h3>
+    <p style="margin:0">La suppression est définitive. Si cet élément est déjà utilisé (séances, affectations, bulletins), elle sera refusée.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+  async()=>{const r=await q(sb.from(def.table).delete().eq("id",row.id).select());
+    if(!r.length)throw new Error("Suppression refusée.");toast("Supprimé");rerender()});
+}
+
+async function viewRef(v){
+  const sec=SEC_LABEL[S.refSec]?S.refSec:"enseignants";S.refSec=sec;
+  v.innerHTML=`<h1>Référentiel</h1>
+    <p class="lead">Les données de l'université : enseignants, matières, groupes, salles et comptes. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>
+    <div class="chips" style="margin-bottom:16px">${Object.keys(SEC_LABEL).map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join("")}</div>
+    <div id="refBody"></div>`;
+  v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.sec;rerender()});
+  const body=document.getElementById("refBody");
+  if(sec==="comptes"){await viewAccounts(body);return}
+  const defs=refDefs(await refLookups());
+  body.innerHTML=BLOCKS_BY_SEC[sec].map(k=>`<div id="blk-${k}"></div>`).join("");
+  await Promise.all(BLOCKS_BY_SEC[sec].map(k=>renderBlock(defs[k],document.getElementById("blk-"+k))));
+}
+
+/* ---------- comptes et rôles ---------- */
+const SIMPLE_ROLES=["admin","planificateur","professeur","finance","direction"];
+async function callUsers(body){
+  const {data,error}=await sb.functions.invoke("manage-users",{body});
+  if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.error)m=j.error}catch(e){}throw new Error(m)}
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+function roleBoxes(deps,current){
+  const has_=(r,d)=>current.has(r+"|"+(d||""));
+  const box=(r,d,l)=>`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-role="${r}" data-dep="${d||""}" ${has_(r,d)?"checked":""}> ${l}</label>`;
+  return `<div style="display:grid;gap:6px"><span class="sub">Rôles</span>
+    ${SIMPLE_ROLES.map(r=>box(r,"",ROLE_LABEL[r])).join("")}
+    <span class="sub" style="margin-top:6px">Responsable pédagogique de</span>
+    ${box("responsable","","Tous les départements")}${deps.map(d=>box("responsable",d.id,esc(d.code+" · "+d.name))).join("")}</div>`;
+}
+function readRoleBoxes(){
+  const s=new Set();
+  document.querySelectorAll("#dlgForm input[data-role]").forEach(c=>{if(c.checked)s.add(c.dataset.role+"|"+c.dataset.dep)});
+  return s;
+}
+function showCredentials(title,email,pwd){
+  const f=document.getElementById("dlgForm");
+  f.innerHTML=`<h3>${esc(title)}</h3>
+    <dl class="kv"><dt>Adresse</dt><dd class="mono">${esc(email)}</dd><dt>Mot de passe provisoire</dt><dd class="mono" id="tmpPwd" style="user-select:all">${esc(pwd)}</dd></dl>
+    <p class="sub" style="margin:0">Transmettez-le à la personne. Il ne sera plus affiché. Elle pourra le changer depuis « Mon mot de passe ».</p>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="cpPwd">Copier</button><button class="btn primary" value="cancel">Fermer</button></div>`;
+  document.getElementById("cpPwd").onclick=async()=>{try{await navigator.clipboard.writeText(pwd);toast("Copié")}catch(e){const r=document.createRange();r.selectNodeContents(document.getElementById("tmpPwd"));const s=getSelection();s.removeAllRanges();s.addRange(r)}};
+  document.getElementById("dlg").addEventListener("close",()=>rerender(),{once:true});
+}
+
+async function viewAccounts(el){
+  const [profiles,roles,teachers,deps]=await Promise.all([
+    q(sb.from("profiles").select("id,full_name,email,active").order("full_name")),
+    q(sb.from("user_roles").select("id,user_id,role,department_id")),
+    q(sb.from("teachers").select("id,profile_id,first_name,last_name,email")),
+    q(sb.from("departments").select("id,code,name").order("code"))]);
+  const dcode=id=>deps.find(d=>d.id===id)?.code;
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes · ${profiles.length}</h2><button class="btn sm primary" id="addAcc">Créer un compte</button></div>
+    <p class="sub" style="margin:0 0 10px">Un compte est lié automatiquement à l'enseignant qui a la même adresse e-mail. Le rôle « Professeur » donne accès à l'émargement.</p>
+    <div class="panel tbl"><table><thead><tr><th>Nom</th><th>Rôles</th><th>Enseignant</th><th>État</th><th></th></tr></thead><tbody>
+    ${profiles.map(u=>{const rs=roles.filter(r=>r.user_id===u.id);const t=teachers.find(t=>t.profile_id===u.id);
+      return `<tr><td>${esc(u.full_name)}<div class="sub mono">${esc(u.email)}</div></td>
+      <td><div class="chips">${rs.length?rs.map(r=>`<span class="pill p-info">${ROLE_LABEL[r.role]}${r.role==="responsable"?" · "+(r.department_id?esc(dcode(r.department_id)):"tous"):""}</span>`).join(""):'<span class="sub">Aucun rôle</span>'}</div></td>
+      <td>${t?esc(t.first_name+" "+t.last_name):'<span class="sub">—</span>'}</td>
+      <td>${u.active===false?'<span class="pill p-bad">Désactivé</span>':'<span class="pill p-ok">Actif</span>'}</td>
+      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-ro="${u.id}">Rôles</button><button class="btn sm" data-pw="${u.id}">Mot de passe</button>
+        ${u.id!==S.user.id?`<button class="btn sm ${u.active===false?"":"danger"}" data-ac="${u.id}">${u.active===false?"Réactiver":"Désactiver"}</button>`:""}</div></td></tr>`}).join("")}
+    </tbody></table></div>`;
+
+  const saveRoles=async(userId,desired)=>{
+    const mine=roles.filter(r=>r.user_id===userId);
+    const key=r=>r.role+"|"+(r.department_id||"");
+    const have=new Set(mine.map(key));
+    if(userId===S.user.id&&mine.some(r=>r.role==="admin")&&!desired.has("admin|"))throw new Error("Vous ne pouvez pas retirer votre propre rôle d'administrateur.");
+    for(const r of mine)if(!desired.has(key(r)))await q(sb.from("user_roles").delete().eq("id",r.id));
+    for(const k of desired)if(!have.has(k)){const [role,dep]=k.split("|");await q(sb.from("user_roles").insert({user_id:userId,role,department_id:dep?Number(dep):null}))}
+  };
+
+  addAcc.onclick=()=>{
+    const free=teachers.filter(t=>!t.profile_id);
+    openDialog(`<h3>Créer un compte</h3>
+      ${free.length?`<label>Enseignant sans compte (facultatif)<select id="aT"><option value="">—</option>${free.map(t=>`<option value="${t.id}">${esc(t.first_name+" "+t.last_name+" · "+t.email)}</option>`).join("")}</select></label>`:""}
+      <div class="grid2"><label>Nom complet<input id="aN" required></label><label>Adresse e-mail<input id="aE" type="email" required></label></div>
+      ${roleBoxes(deps,new Set())}
+      <p class="sub" style="margin:0">Un mot de passe provisoire sera généré et affiché une seule fois.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer le compte</button></div>`,
+    async()=>{
+      const desired=readRoleBoxes();
+      const r=await callUsers({action:"create",email:aE.value,full_name:aN.value});
+      try{await saveRoles(r.user_id,desired)}catch(e){toast("Compte créé, mais les rôles n'ont pas pu être enregistrés : "+errMsg(e),true)}
+      showCredentials("Compte créé",r.email,r.temp_password);
+      return "keep";
+    });
+    const sel=document.getElementById("aT");
+    if(sel)sel.onchange=()=>{const t=free.find(x=>x.id==sel.value);if(!t)return;aN.value=t.first_name+" "+t.last_name;aE.value=t.email;
+      const c=document.querySelector('#dlgForm input[data-role="professeur"]');if(c)c.checked=true};
+  };
+  el.querySelectorAll("[data-ro]").forEach(b=>b.onclick=()=>{
+    const u=profiles.find(p=>p.id===b.dataset.ro);const cur=new Set(roles.filter(r=>r.user_id===u.id).map(r=>r.role+"|"+(r.department_id||"")));
+    openDialog(`<h3>Rôles de ${esc(u.full_name)}</h3>${roleBoxes(deps,cur)}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{await saveRoles(u.id,readRoleBoxes());toast("Rôles enregistrés");rerender()});
+  });
+  el.querySelectorAll("[data-pw]").forEach(b=>b.onclick=()=>{
+    const u=profiles.find(p=>p.id===b.dataset.pw);
+    openDialog(`<h3>Réinitialiser le mot de passe</h3><p style="margin:0">Un nouveau mot de passe provisoire sera créé pour <b>${esc(u.full_name)}</b>. L'ancien ne fonctionnera plus.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Réinitialiser</button></div>`,
+    async()=>{const r=await callUsers({action:"reset_password",user_id:u.id});showCredentials("Nouveau mot de passe",u.email,r.temp_password);return "keep"});
+  });
+  el.querySelectorAll("[data-ac]").forEach(b=>b.onclick=()=>{
+    const u=profiles.find(p=>p.id===b.dataset.ac);const to=u.active===false;
+    openDialog(`<h3>${to?"Réactiver":"Désactiver"} le compte ?</h3><p style="margin:0">${to?"La personne pourra de nouveau se connecter.":"La personne ne pourra plus se connecter. Ses données et son historique sont conservés."}</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn ${to?"primary":"danger"}" value="ok">${to?"Réactiver":"Désactiver"}</button></div>`,
+    async()=>{await callUsers({action:"set_active",user_id:u.id,active:to});toast(to?"Compte réactivé":"Compte désactivé");rerender()});
+  });
+}
+
+function passwordDialog(){
+  openDialog(`<h3>Mon mot de passe</h3>
+    <label>Nouveau mot de passe (8 caractères minimum)<input id="pw1" type="password" minlength="8" required autocomplete="new-password"></label>
+    <label>Confirmer<input id="pw2" type="password" minlength="8" required autocomplete="new-password"></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Changer</button></div>`,
+  async()=>{if(pw1.value!==pw2.value)throw new Error("Les deux mots de passe ne sont pas identiques.");
+    const {error}=await sb.auth.updateUser({password:pw1.value});if(error)throw error;toast("Mot de passe modifié")});
 }
 
 /* ---------- paie ---------- */

@@ -4,6 +4,7 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 
 - Interface : `index.html`, un fichier unique, sans étape de compilation.
 - Données et sécurité : Supabase, projet « Gestion Enseignements Paie ». Les permissions sont vérifiées côté serveur.
+- Comptes : la fonction `manage-users` (dossier `supabase/functions`) crée les comptes et réinitialise les mots de passe. Elle est déjà déployée sur Supabase et réservée aux administrateurs.
 
 ## Hébergement sur Cloudflare Pages
 
@@ -11,6 +12,12 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 2. Choisir le dépôt `moustaphts-lab/UCAB`, branche `main`.
 3. Framework preset : **None**. Build command : *(laisser vide)*. Build output directory : `/`.
 4. Save and Deploy. Chaque modification poussée sur `main` est publiée automatiquement.
+
+## Saisie depuis l'application (administrateur et responsable des emplois du temps)
+
+- Référentiel : enseignants, statuts, matières, groupes, filières, salles, départements, années et semestres.
+- Emplois du temps : affectations (professeur, matière, groupe, volume prévu) et créneaux hebdomadaires, avec refus des conflits de salle, de professeur et de groupe et des salles trop petites.
+- Comptes et rôles : création, rôles par département, mot de passe provisoire, désactivation.
 
 ## Règles de paie actuelles
 
