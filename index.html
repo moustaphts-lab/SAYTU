@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>UCAB Enseignements</title>
+<title>UCAB Touba · Enseignements</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -158,9 +158,9 @@ function makePayslipPdf(jsPDF, slip, payments){
   const doc=new jsPDF({unit:"mm",format:"a4"}); const W=210, L=16, R=W-16;
 
   doc.setFillColor(...accent); doc.rect(0,0,W,4,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text("UCAB",L,18);
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text("UCAB Touba",L,18);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
-  doc.text("Université de démonstration · Service financier",L,23.5);
+  doc.text("Service financier",L,23.5);
   doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...ink);
   doc.text("Bulletin de rémunération",R,16,{align:"right"});
   doc.setFont("courier","normal"); doc.setFontSize(10); doc.text(slip.number,R,22,{align:"right"});
@@ -257,7 +257,7 @@ function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c
 /* ---------- connexion ---------- */
 function renderLogin(msg){
   $app.innerHTML=`<div class="wrap"><div class="login">
-    <div class="brand"><i>U</i><div>UCAB<small>Enseignements</small></div></div>
+    <div class="brand"><i>U</i><div>UCAB Touba<small>Enseignements</small></div></div>
     <h1>Connexion</h1>
     <p class="lead">Emplois du temps, émargement et paie des enseignants.</p>
     <form class="panel" id="loginForm">
@@ -312,7 +312,7 @@ function renderShell(){
   const name=S.user.user_metadata?.full_name||S.user.email;
   const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
-      <div class="brand"><i>U</i><div>UCAB<small>Année universitaire ${esc(S.year||"")}</small></div></div>
+      <div class="brand"><i>U</i><div>UCAB Touba<small>Année universitaire ${esc(S.year||"")}</small></div></div>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
     <div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${t.label}</button>`).join("")}</nav></div>

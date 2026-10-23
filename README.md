@@ -1,4 +1,4 @@
-# UCAB Enseignements
+# UCAB Touba – Enseignements
 
 Application web de gestion universitaire : emplois du temps hebdomadaires, émargement électronique des professeurs, contrôle des heures, paie à l'heure et bulletins PDF.
 
