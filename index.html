@@ -169,15 +169,14 @@ const SUPABASE_KEY = "sb_publishable_R98wA_kmIeqPt2YTmCRLQQ_69QKmx4s";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const DEMO = [
-  ["awa.ndiaye@univdemo.test","Professeure (Informatique)"],
-  ["resp.info@univdemo.test","Resp. Informatique + professeur"],
-  ["resp.gd@univdemo.test","Resp. Gestion et Droit"],
-  ["planif@univdemo.test","Emplois du temps"],
-  ["finance@univdemo.test","Service financier"],
-  ["direction@univdemo.test","Direction"],
-  ["admin@univdemo.test","Administrateur"]];
+  ["awa.ndiaye@univdemo.test","Professeure"],
+  ["directeur@univdemo.test","Directeur des études (enseigne aussi)"],
+  ["secretaire@univdemo.test","Secrétaire"],
+  ["aide.finance@univdemo.test","Aide du responsable financier"],
+  ["financier@univdemo.test","Responsable financier"],
+  ["admin@univdemo.test","Administrateur (comptes)"]];
 const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const ROLE_LABEL = {admin:"Administrateur",planificateur:"Emplois du temps",professeur:"Professeur",responsable:"Responsable pédagogique",finance:"Service financier",direction:"Direction"};
+const ROLE_LABEL = {admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Consultation"};
 const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
@@ -250,14 +249,14 @@ function availableTabs(){
   const t=[];
   if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(S.teacher)t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
-  if(has("responsable")||has("admin"))t.push({id:"controle",label:"Contrôle des émargements",fn:viewReview});
-  if(has("planificateur")||has("admin"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
-  if(has("finance")||has("direction")||has("admin")){
+  if(has("responsable"))t.push({id:"controle",label:"Contrôle des émargements",fn:viewReview});
+  if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
+  if(has("finance")||has("direction")){
     t.push({id:"paie",label:"Paie",fn:viewPayroll});
-    t.push({id:"tarifs",label:"Tarifs horaires",fn:viewRates});
-    t.push({id:"synthese",label:"Heures validées",fn:viewSummary});}
-  if(has("admin"))t.push({id:"referentiel",label:"Référentiel",fn:viewRef});
-  if(has("admin")||has("direction"))t.push({id:"journal",label:"Journal",fn:viewAudit});
+    t.push({id:"tarifs",label:"Tarifs horaires",fn:viewRates});}
+  if(has("finance")||has("direction")||has("planificateur")||has("responsable"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
+  if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
+  if(has("admin")||has("direction")||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   return t;
 }
 
@@ -649,10 +648,11 @@ function deleteDialog(def,row){
 }
 
 async function viewRef(v){
-  const sec=SEC_LABEL[S.refSec]?S.refSec:"enseignants";S.refSec=sec;
+  const allowed=Object.keys(SEC_LABEL).filter(k=>k==="comptes"?has("admin"):has("planificateur"));
+  const sec=allowed.includes(S.refSec)?S.refSec:allowed[0];S.refSec=sec;
   v.innerHTML=`<h1>Référentiel</h1>
     <p class="lead">Les données de l'université : enseignants, matières, groupes, salles et comptes. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>
-    <div class="chips" style="margin-bottom:16px">${Object.keys(SEC_LABEL).map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join("")}</div>
+    <div class="chips" style="margin-bottom:16px">${allowed.length>1?allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join(""):""}</div>
     <div id="refBody"></div>`;
   v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.sec;rerender()});
   const body=document.getElementById("refBody");
@@ -663,7 +663,7 @@ async function viewRef(v){
 }
 
 /* ---------- comptes et rôles ---------- */
-const SIMPLE_ROLES=["admin","planificateur","professeur","finance","direction"];
+const SIMPLE_ROLES=["admin","planificateur","professeur","finance"];
 async function callUsers(body){
   const {data,error}=await sb.functions.invoke("manage-users",{body});
   if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.error)m=j.error}catch(e){}throw new Error(m)}
@@ -675,7 +675,7 @@ function roleBoxes(deps,current){
   const box=(r,d,l)=>`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-role="${r}" data-dep="${d||""}" ${has_(r,d)?"checked":""}> ${l}</label>`;
   return `<div style="display:grid;gap:6px"><span class="sub">Rôles</span>
     ${SIMPLE_ROLES.map(r=>box(r,"",ROLE_LABEL[r])).join("")}
-    <span class="sub" style="margin-top:6px">Responsable pédagogique de</span>
+    <span class="sub" style="margin-top:6px">Validation des heures : départements concernés</span>
     ${box("responsable","","Tous les départements")}${deps.map(d=>box("responsable",d.id,esc(d.code+" · "+d.name))).join("")}</div>`;
 }
 function readRoleBoxes(){
@@ -775,7 +775,7 @@ const SLIP={approuve:["À payer","p-warn"],partiellement_paye:["Partiellement pa
 function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="pill ${c}">${l}</span>`}
 function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
 function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
-function canPay(){return has("finance")||has("admin")}
+function canPay(){return has("finance")}
 
 async function viewPayroll(v){
   const periods=await q(sb.from("pay_periods").select("*").order("start_date",{ascending:false}));

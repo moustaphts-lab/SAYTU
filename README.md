@@ -13,11 +13,18 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 3. Framework preset : **None**. Build command : *(laisser vide)*. Build output directory : `/`.
 4. Save and Deploy. Chaque modification poussée sur `main` est publiée automatiquement.
 
-## Saisie depuis l'application (administrateur et responsable des emplois du temps)
+## Qui fait quoi
 
-- Référentiel : enseignants, statuts, matières, groupes, filières, salles, départements, années et semestres.
-- Emplois du temps : affectations (professeur, matière, groupe, volume prévu) et créneaux hebdomadaires, avec refus des conflits de salle, de professeur et de groupe et des salles trop petites.
-- Comptes et rôles : création, rôles par département, mot de passe provisoire, désactivation.
+| Personne | Ce qu'elle fait dans l'application |
+|---|---|
+| Professeur | Émarge ses séances, consulte ses heures et ses bulletins. |
+| Directeur des études (enseigne aussi) | Saisit le référentiel, construit les emplois du temps, suit les heures. |
+| Secrétaire | Assiste le directeur (référentiel, emplois du temps) et l'aide du responsable financier (validation des heures). |
+| Aide du responsable financier | Valide les heures des professeurs de tous les départements. |
+| Responsable financier | Tarifs, calcul et approbation de la paie, bulletins, paiements. |
+| Administrateur (nommé par l'université) | Crée les comptes, attribue les rôles, réinitialise les mots de passe. N'a pas accès à la paie. |
+
+Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures.
 
 ## Règles de paie actuelles
 
@@ -26,7 +33,7 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 - Périodes de paie libres, créées par le service financier.
 - Seules les durées retenues des émargements validés sont payées. Une séance ne peut être payée qu'une fois.
 - Net = brut (aucune retenue ni cotisation pour l'instant).
-- Approbation par le service financier : les bulletins sont alors figés.
+- Approbation par le responsable financier : les bulletins sont alors figés.
 
 ## Comptes de démonstration
 
@@ -34,16 +41,11 @@ Mot de passe commun : `Demo-2026!`
 
 | Compte | Rôle |
 |---|---|
-| awa.ndiaye@univdemo.test | Professeure (Informatique) |
-| resp.info@univdemo.test | Responsable Informatique et professeur |
-| resp.gd@univdemo.test | Responsable Gestion et Droit |
-| planif@univdemo.test | Emplois du temps |
-| finance@univdemo.test | Service financier |
-| direction@univdemo.test | Direction |
+| awa.ndiaye@univdemo.test | Professeure |
+| directeur@univdemo.test | Directeur des études (enseigne aussi) |
+| secretaire@univdemo.test | Secrétaire |
+| aide.finance@univdemo.test | Aide du responsable financier |
+| financier@univdemo.test | Responsable financier |
 | admin@univdemo.test | Administrateur |
 
-Ces comptes sont à supprimer avant toute utilisation réelle.
-
-## Remarque sur la clé Supabase
-
-La clé présente dans `index.html` est la clé publique (publishable) : elle est faite pour être dans le navigateur. La protection des données repose sur les règles de sécurité de la base (RLS) et les fonctions contrôlées.
+Les autres professeurs de démonstration : ibrahima.diallo, fatou.sow, cheikh.mbaye, mariama.ba, ousmane.faye (même domaine). Ces comptes sont à supprimer avant toute utilisation réelle.
