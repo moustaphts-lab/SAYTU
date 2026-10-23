@@ -32,7 +32,7 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);-webkit-text-size-adjust:100%;font-variant-numeric:tabular-nums}
 .wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-header.top .bar{display:flex;align-items:center;gap:12px;padding-block:10px}
+header.top .bar{display:flex;align-items:center;gap:12px;padding-block:10px;min-height:56px}
 .brand{display:flex;align-items:center;gap:10px;font:700 18px var(--f-display);letter-spacing:-.01em}
 .brand i{width:34px;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:700 17px var(--f-display);font-style:normal}
 .brand small{display:block;font:400 12px var(--f-body);color:var(--muted);letter-spacing:0}
@@ -110,8 +110,8 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:7px 14px;font:500 13.5px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
-.bar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
-.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.hbar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
+.hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
   .xbar{width:100%}.xbar .btn{flex:1}
   body{font-size:16px}
@@ -709,7 +709,7 @@ async function viewDashboard(v){
     }catch(e){pay=null}
   }
   const barRow=(label,full,part,right)=>`<div style="display:grid;grid-template-columns:minmax(70px,110px) 1fr;gap:6px 12px;align-items:center;margin:10px 0"><span>${esc(label)}</span>
-    <div><div class="bar" style="width:${full}%"><i style="width:${part}%"></i></div><div class="sub" style="margin-top:3px">${right}</div></div></div>`;
+    <div><div class="hbar" style="width:${full}%"><i style="width:${part}%"></i></div><div class="sub" style="margin-top:3px">${right}</div></div></div>`;
   const maxPrev=Math.max(1,...deps.map(d=>d.minPrev));
   const canReview=has("responsable");
   document.getElementById("dBody").innerHTML=`
