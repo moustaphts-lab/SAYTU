@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 /* Mise en page : barre d'en-tête, onglets selon le rôle, contenu en registre (tableaux denses, pastilles d'état) */
 :root{
@@ -98,6 +100,68 @@ dialog h3{margin:0;font-family:var(--f-display);font-weight:600;font-size:19px}
 <div id="app"></div>
 <dialog id="dlg"><form id="dlgForm" method="dialog"></form></dialog>
 
+<script id="pdf-builder">
+/* Bulletin PDF : construit uniquement à partir de la version figée (snapshot) du bulletin */
+function makePayslipPdf(jsPDF, slip, payments){
+  const sn=slip.snapshot, E=sn.enseignant, P=sn.periode;
+  const money=n=>Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA";
+  const d=s=>{const [y,m,j]=String(s).slice(0,10).split("-");return j+"/"+m+"/"+y};
+  const h=m=>{const H=Math.floor(m/60),M=m%60;return H+" h"+(M?" "+String(M).padStart(2,"0"):"")};
+  const ink=[22,32,46], muted=[93,104,121], accent=[29,79,140], line=[221,225,232];
+  const doc=new jsPDF({unit:"mm",format:"a4"}); const W=210, L=16, R=W-16;
+
+  doc.setFillColor(...accent); doc.rect(0,0,W,4,"F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text("UCAB",L,18);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
+  doc.text("Université de démonstration · Service financier",L,23.5);
+  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...ink);
+  doc.text("Bulletin de rémunération",R,16,{align:"right"});
+  doc.setFont("courier","normal"); doc.setFontSize(10); doc.text(slip.number,R,22,{align:"right"});
+
+  doc.setDrawColor(...line); doc.line(L,29,R,29);
+  const block=(x,title,rows)=>{doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(...muted);doc.text(title.toUpperCase(),x,36);
+    rows.forEach(([k,v],i)=>{const y=42+i*5.4;doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...muted);doc.text(k,x,y);
+      doc.setTextColor(...ink);doc.text(String(v||"-"),x+27,y)})};
+  block(L,"Enseignant",[["Nom",E.nom],["Statut",E.statut],["Département",E.departement],["E-mail",E.email]]);
+  block(112,"Période",[["Libellé",P.nom],["Du",d(P.debut)],["Au",d(P.fin)],["Approuvé le",d(sn.approuve_le)]]);
+
+  const lines=sn.lignes.map(l=>[d(l.date)+(l.rattrapage?" (rattrapage)":""),l.cours,l.groupe,h(l.minutes),
+    money(l.tarif)+(l.source==="individuel"?" *":""),money(l.montant)]);
+  doc.autoTable({startY:68,head:[["Date","Cours","Groupe","Durée","Tarif horaire","Montant"]],body:lines,
+    theme:"plain",margin:{left:L,right:16},
+    styles:{font:"helvetica",fontSize:8.5,textColor:ink,cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:line,lineWidth:{bottom:0.2}},
+    headStyles:{fontStyle:"bold",textColor:muted,fontSize:7.5,lineWidth:{bottom:0.4},lineColor:ink},
+    columnStyles:{0:{cellWidth:30},2:{cellWidth:22},3:{halign:"right",cellWidth:16},4:{halign:"right",cellWidth:30},5:{halign:"right",cellWidth:28}}});
+
+  let y=doc.lastAutoTable.finalY+8;
+  if(y>230){doc.addPage();y=20}
+  const paid=(payments||[]).reduce((s,p)=>s+p.amount_fcfa,0);
+  const tot=[["Heures payables",h(slip.total_minutes)],["Rémunération brute",money(slip.gross_fcfa)],["Primes",money(0)],
+    ["Retenues et cotisations",money(slip.deductions_fcfa)]];
+  const x0=112;
+  tot.forEach(([k,v],i)=>{doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...muted);doc.text(k,x0,y+i*6);doc.setTextColor(...ink);doc.text(v,R,y+i*6,{align:"right"})});
+  y+=tot.length*6;
+  doc.setFillColor(227,236,247); doc.rect(x0-3,y-4.5,R-x0+5,10,"F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(...accent);
+  doc.text("Net à payer",x0,y+2); doc.text(money(slip.net_fcfa),R,y+2,{align:"right"});
+  y+=13;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
+  doc.text("Réglé à ce jour",x0,y); doc.setTextColor(...ink); doc.text(money(paid),R,y,{align:"right"});
+  doc.setTextColor(...muted); doc.text("Reste dû",x0,y+6); doc.setTextColor(...ink); doc.text(money(slip.net_fcfa-paid),R,y+6,{align:"right"});
+
+  if((payments||[]).length){doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text("Règlements : "+payments.map(p=>d(p.paid_on)+" "+p.method+" "+money(p.amount_fcfa)+(p.reference?" ("+p.reference+")":"")).join(" ; "),L,y+16,{maxWidth:R-L})}
+
+  doc.setFontSize(7.5); doc.setTextColor(...muted);
+  const foot=["Montant = durée retenue × tarif horaire en vigueur à la date de la séance. * Tarif individuel.",
+    "Aucune retenue ni cotisation n'est appliquée selon les règles actuelles de l'établissement.",
+    "Bulletin approuvé par "+(sn.approuve_par||"le service financier")+". Ce document ne vaut pas preuve de paiement.",
+    "Édité le "+new Date().toLocaleDateString("fr-FR")+" · "+slip.number];
+  foot.forEach((t,i)=>doc.text(t,L,282+i*3.6-(foot.length-1)*3.6));
+  return doc;
+}
+</script>
+
 <script>
 const SUPABASE_URL = "https://fkfuviwquoacpehmctsn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_R98wA_kmIeqPt2YTmCRLQQ_69QKmx4s";
@@ -179,9 +243,13 @@ async function boot(){
 function availableTabs(){
   const t=[];
   if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
+  if(S.teacher)t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
   if(has("responsable")||has("admin"))t.push({id:"controle",label:"Contrôle des émargements",fn:viewReview});
   if(has("planificateur")||has("admin"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
-  if(has("finance")||has("direction")||has("admin"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
+  if(has("finance")||has("direction")||has("admin")){
+    t.push({id:"paie",label:"Paie",fn:viewPayroll});
+    t.push({id:"tarifs",label:"Tarifs horaires",fn:viewRates});
+    t.push({id:"synthese",label:"Heures validées",fn:viewSummary});}
   if(has("admin"))t.push({id:"referentiel",label:"Référentiel",fn:viewRef});
   if(has("admin")||has("direction"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   return t;
@@ -377,33 +445,34 @@ async function viewPlanning(v){
 
 /* ---------- synthèse ---------- */
 async function viewSummary(v){
-  const rows=await q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,teacher_id,teachers(first_name,last_name,grade,departments(code))"));
+  const rows=await q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,teacher_id,teachers(first_name,last_name,teacher_statuses(label),departments(code))"));
   const by={};
   rows.forEach(a=>{const k=a.teacher_id;by[k]??={t:a.teachers,val:0,wait:0,n:0,rej:0};const o=by[k];o.n++;
     if(a.status==="valide")o.val+=a.retained_minutes; if(a.status==="soumis")o.wait+=a.declared_minutes; if(a.status==="rejete")o.rej++});
   const list=Object.values(by).sort((a,b)=>b.val-a.val);
   const tot=list.reduce((s,o)=>s+o.val,0),tw=list.reduce((s,o)=>s+o.wait,0);
   v.innerHTML=`<h1>Heures validées</h1>
-    <p class="lead">Base du futur calcul de rémunération : seules les durées retenues des émargements validés seront payables.</p>
+    <p class="lead">Base du calcul de rémunération : seules les durées retenues des émargements validés sont payables.</p>
     <div class="stats"><div class="stat"><b>${hrs(tot)}</b><span>Total validé</span></div><div class="stat"><b>${hrs(tw)}</b><span>En attente</span></div>
       <div class="stat"><b>${rows.length}</b><span>Émargements</span></div></div>
     <div class="panel tbl"><table><thead><tr><th>Professeur</th><th>Département</th><th>Statut</th><th>Validé</th><th>En attente</th><th>Rejets</th></tr></thead><tbody>
-    ${list.map(o=>`<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}</td><td>${esc(o.t.departments?.code)}</td><td>${esc(o.t.grade)}</td>
+    ${list.map(o=>`<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}</td><td>${esc(o.t.departments?.code)}</td><td>${esc(o.t.teacher_statuses?.label)}</td>
       <td class="num">${hrs(o.val)}</td><td class="num">${hrs(o.wait)}</td><td class="num">${o.rej}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 /* ---------- référentiel ---------- */
 async function viewRef(v){
-  const [deps,teachers,courses,groups,rooms]=await Promise.all([
+  const [deps,teachers,courses,groups,rooms,statuses]=await Promise.all([
     q(sb.from("departments").select("id,code,name").order("code")),
-    q(sb.from("teachers").select("id,first_name,last_name,email,grade,profile_id,departments(code)").order("last_name")),
+    q(sb.from("teachers").select("id,first_name,last_name,email,profile_id,departments(code),teacher_statuses(label)").order("last_name")),
     q(sb.from("courses").select("code,name,course_type,total_hours,departments(code)").order("code")),
     q(sb.from("student_groups").select("code,name,size,programs(name,level)").order("code")),
-    q(sb.from("rooms").select("code,name,capacity,room_type").order("code"))]);
+    q(sb.from("rooms").select("code,name,capacity,room_type").order("code")),
+    q(sb.from("teacher_statuses").select("id,label").order("id"))]);
   const tbl=(h,rows)=>`<div class="panel tbl"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
   v.innerHTML=`<h1>Référentiel</h1><p class="lead">Données de l'université de démonstration. Les modifications sont enregistrées dans le journal.</p>
     <div class="row" style="justify-content:space-between"><h2>Enseignants · ${teachers.length}</h2><button class="btn sm" id="addT">Ajouter un enseignant</button></div>
-    ${tbl(["Nom","Département","Statut","E-mail","Compte"],teachers.map(t=>`<tr><td>${esc(t.first_name+" "+t.last_name)}</td><td>${esc(t.departments?.code)}</td><td>${esc(t.grade)}</td><td class="mono">${esc(t.email)}</td><td>${t.profile_id?`<span class="pill p-ok">Lié</span>`:`<span class="pill p-mute">Sans compte</span>`}</td></tr>`))}
+    ${tbl(["Nom","Département","Statut","E-mail","Compte"],teachers.map(t=>`<tr><td>${esc(t.first_name+" "+t.last_name)}</td><td>${esc(t.departments?.code)}</td><td>${esc(t.teacher_statuses?.label)}</td><td class="mono">${esc(t.email)}</td><td>${t.profile_id?`<span class="pill p-ok">Lié</span>`:`<span class="pill p-mute">Sans compte</span>`}</td></tr>`))}
     <h2>Matières · ${courses.length}</h2>
     ${tbl(["Code","Intitulé","Type","Volume","Département"],courses.map(c=>`<tr><td class="mono">${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.course_type)}</td><td class="num">${c.total_hours} h</td><td>${esc(c.departments?.code)}</td></tr>`))}
     <h2>Groupes · ${groups.length}</h2>
@@ -414,15 +483,201 @@ async function viewRef(v){
     <div class="row"><label>Prénom<input id="tF" required></label><label>Nom<input id="tL" required></label></div>
     <label>E-mail (sert à lier son compte)<input id="tE" type="email" required></label>
     <div class="row"><label>Département<select id="tD">${deps.map(d=>`<option value="${d.id}">${esc(d.code)} · ${esc(d.name)}</option>`).join("")}</select></label>
-    <label>Statut<input id="tG" placeholder="Vacataire, Maître-assistant…"></label></div>
+    <label>Statut (détermine le tarif)<select id="tG">${statuses.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join("")}</select></label></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await q(sb.from("teachers").insert({first_name:tF.value.trim(),last_name:tL.value.trim(),email:tE.value.trim().toLowerCase(),department_id:Number(tD.value),grade:tG.value.trim()||null}));toast("Enseignant ajouté");rerender()});
+    async()=>{await q(sb.from("teachers").insert({first_name:tF.value.trim(),last_name:tL.value.trim(),email:tE.value.trim().toLowerCase(),department_id:Number(tD.value),status_id:Number(tG.value)}));toast("Enseignant ajouté");rerender()});
   addR.onclick=()=>openDialog(`<h3>Nouvelle salle</h3>
     <div class="row"><label>Code<input id="rC" required></label><label>Capacité<input id="rCap" type="number" min="1" required></label></div>
     <label>Nom<input id="rN" required></label>
     <label>Type<select id="rT"><option value="standard">Standard</option><option value="labo">Laboratoire</option><option value="amphi">Amphithéâtre</option></select></label>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{await q(sb.from("rooms").insert({code:rC.value.trim(),name:rN.value.trim(),capacity:Number(rCap.value),room_type:rT.value}));toast("Salle ajoutée");rerender()});
+}
+
+/* ---------- paie ---------- */
+const PER={ouverte:["Ouverte","p-mute"],en_verification:["Calculée, à vérifier","p-warn"],approuvee:["Approuvée","p-info"],payee:["Payée","p-ok"]};
+const SLIP={approuve:["À payer","p-warn"],partiellement_paye:["Partiellement payé","p-info"],paye:["Payé","p-ok"]};
+function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="pill ${c}">${l}</span>`}
+function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
+function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
+function canPay(){return has("finance")||has("admin")}
+
+async function viewPayroll(v){
+  const periods=await q(sb.from("pay_periods").select("*").order("start_date",{ascending:false}));
+  const totals=await q(sb.from("payslips").select("pay_period_id,net_fcfa"));
+  const items=await q(sb.from("payroll_items").select("pay_period_id,amount_fcfa"));
+  const sum=(arr,id)=>arr.filter(x=>x.pay_period_id===id).reduce((s,x)=>s+(x.net_fcfa??x.amount_fcfa),0);
+  if(!periods.some(p=>p.id===S.periodId))S.periodId=(periods.find(p=>p.status==="ouverte"||p.status==="en_verification")||periods[0])?.id;
+  const p=periods.find(x=>x.id===S.periodId);
+  v.innerHTML=`<h1>Paie</h1>
+    <p class="lead">Rémunération à l'heure, calculée uniquement sur les heures validées. Une fois la période approuvée, les bulletins sont figés et chaque séance payée ne peut plus être reprise dans une autre période.</p>
+    <div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Périodes de rémunération</h2>${canPay()?`<button class="btn sm" id="newP">Nouvelle période</button>`:""}</div>
+    <div class="panel tbl">${periods.length?`<table><thead><tr><th>Période</th><th>Du</th><th>Au</th><th>Limite d'émargement</th><th>État</th><th>Montant</th><th></th></tr></thead><tbody>
+    ${periods.map(x=>`<tr ${x.id===S.periodId?'style="background:var(--accent-soft)"':""}><td><b>${esc(x.name)}</b></td><td class="mono">${fdl(x.start_date)}</td><td class="mono">${fdl(x.end_date)}</td><td class="mono">${fdl(x.attendance_deadline)}</td>
+      <td>${ppill(PER,x.status)}</td><td class="num">${x.status==="ouverte"?"—":fcfa(["approuvee","payee"].includes(x.status)?sum(totals,x.id):sum(items,x.id))}</td>
+      <td><button class="btn sm" data-p="${x.id}">Ouvrir</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucune période. Créez la première période de rémunération.</p>`}</div>
+    <div id="pDetail"></div>`;
+  v.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{S.periodId=Number(b.dataset.p);rerender()});
+  if(canPay())newP.onclick=periodDialog;
+  if(p)await periodDetail(document.getElementById("pDetail"),p);
+}
+
+function periodDialog(){
+  openDialog(`<h3>Nouvelle période de rémunération</h3>
+    <label>Nom<input id="nN" required placeholder="Ex. : Novembre 2026"></label>
+    <div class="row"><label>Du<input id="nS" type="date" required></label><label>Au<input id="nE" type="date" required></label></div>
+    <div class="row"><label>Limite d'émargement<input id="nD" type="date"></label><label>Échéance de régularisation<input id="nR" type="date"></label></div>
+    <p class="sub" style="margin:0">La période peut durer un mois, une quinzaine, un semestre ou toute autre durée.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer la période</button></div>`,
+  async()=>{
+    if(nE.value<nS.value)throw new Error("La date de fin doit être postérieure à la date de début.");
+    const r=await q(sb.from("pay_periods").insert({name:nN.value.trim(),start_date:nS.value,end_date:nE.value,attendance_deadline:nD.value||null,regularization_deadline:nR.value||null,manager_id:S.user.id}).select().single());
+    S.periodId=r.id;toast("Période créée");rerender();
+  });
+}
+
+async function periodDetail(el,p){
+  const frozen=["approuvee","payee"].includes(p.status);
+  if(!frozen){
+    const [items,pending]=await Promise.all([
+      q(sb.from("payroll_items").select("*,teachers(first_name,last_name,teacher_statuses(label))").eq("pay_period_id",p.id).order("session_date")),
+      q(sb.from("attendance_records").select("id,status,schedule_sessions!inner(session_date)").in("status",["soumis","correction_demandee"]).gte("schedule_sessions.session_date",p.start_date).lte("schedule_sessions.session_date",p.end_date))]);
+    const by=groupBy(items);
+    const tot=items.reduce((s,i)=>s+i.amount_fcfa,0);
+    el.innerHTML=`<h2>${esc(p.name)}</h2>
+      ${pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
+      ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
+      ${canPay()?`<div class="row" style="margin-bottom:12px"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
+        ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
+        ${p.status==="ouverte"?`<button class="btn danger" id="delP">Supprimer la période</button>`:""}</div>`:""}
+      ${items.length?`<div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Total brut = net</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
+      ${teacherTable(by,false)}`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
+    if(canPay()){
+      calc.onclick=async()=>{try{const r=await q(sb.rpc("calculate_payroll",{p_period:p.id}));
+        toast(`${r.lignes} séance(s) payable(s) · ${fcfa(r.total_fcfa)}`+(r.sans_tarif?` · ${r.sans_tarif} sans tarif défini`:""),r.sans_tarif>0);rerender()}catch(e){toast(errMsg(e),true)}};
+      document.getElementById("appr")&&(appr.onclick=()=>openDialog(`<h3>Approuver la période ?</h3>
+        <p style="margin:0">${by.length} bulletin(s) pour un total de <b>${fcfa(tot)}</b> vont être générés. Après approbation, les montants sont figés et ces séances ne pourront plus être payées dans une autre période.</p>
+        ${pending.length?`<p class="sub" style="margin:0">${pending.length} émargement(s) non validé(s) restent en dehors de cette paie.</p>`:""}
+        <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Approuver</button></div>`,
+        async()=>{const n=await q(sb.rpc("approve_payroll",{p_period:p.id}));toast(`${n} bulletin(s) générés`);rerender()}));
+      document.getElementById("delP")&&(delP.onclick=()=>openDialog(`<h3>Supprimer « ${esc(p.name)} » ?</h3><p style="margin:0">La période n'a pas encore été approuvée. Aucune donnée d'émargement ne sera perdue.</p>
+        <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+        async()=>{await q(sb.from("pay_periods").delete().eq("id",p.id));S.periodId=null;toast("Période supprimée");rerender()}));
+    }
+    el.querySelectorAll("[data-dt]").forEach(b=>b.onclick=()=>linesDialog(by.find(o=>o.id==b.dataset.dt)));
+    return;
+  }
+  const [slips,pays]=await Promise.all([
+    q(sb.from("payslips").select("*").eq("pay_period_id",p.id).order("number")),
+    q(sb.from("payments").select("*,payslips!inner(pay_period_id)").eq("payslips.pay_period_id",p.id).order("paid_on"))]);
+  const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
+  const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
+  el.innerHTML=`<h2>${esc(p.name)}</h2>
+    <p class="sub" style="margin:0 0 12px">Approuvée le ${new Date(p.approved_at).toLocaleString("fr-FR",{dateStyle:"long",timeStyle:"short"})}. Les bulletins ci-dessous sont la version de référence.</p>
+    <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
+      <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
+    <div class="panel tbl"><table><thead><tr><th>Bulletin</th><th>Enseignant</th><th>Heures</th><th>Net</th><th>Réglé</th><th>État</th><th></th></tr></thead><tbody>
+    ${slips.map(s=>`<tr><td class="mono">${esc(s.number)}</td><td>${esc(s.snapshot.enseignant.nom)}<div class="sub">${esc(s.snapshot.enseignant.statut)}</div></td>
+      <td class="num">${hrs(s.total_minutes)}</td><td class="num">${fcfa(s.net_fcfa)}</td><td class="num">${fcfa(paid(s.id))}</td><td>${ppill(SLIP,s.status)}</td>
+      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Paiement</button>`:""}</div></td></tr>`).join("")}
+    </tbody></table></div>
+    ${pays.length?`<h2>Règlements enregistrés</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Bulletin</th><th>Mode</th><th>Référence</th><th>Montant</th></tr></thead><tbody>
+    ${pays.map(x=>`<tr><td class="mono">${fdl(x.paid_on)}</td><td class="mono">${esc(slips.find(s=>s.id===x.payslip_id)?.number)}</td><td>${esc(x.method)}</td><td class="mono">${esc(x.reference||"—")}</td><td class="num">${fcfa(x.amount_fcfa)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
+  el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  el.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const s=slips.find(x=>x.id==b.dataset.pay);const due=s.net_fcfa-paid(s.id);
+    openDialog(`<h3>Enregistrer un paiement</h3>
+      <dl class="kv"><dt>Bulletin</dt><dd class="mono">${esc(s.number)}</dd><dt>Enseignant</dt><dd>${esc(s.snapshot.enseignant.nom)}</dd><dt>Reste dû</dt><dd class="mono">${fcfa(due)}</dd></dl>
+      <div class="row"><label>Montant (FCFA)<input id="pA" type="number" min="1" max="${due}" required value="${due}"></label><label>Date<input id="pD" type="date" required value="${iso(new Date())}"></label></div>
+      <div class="row"><label>Mode<select id="pM"><option>virement</option><option>Wave</option><option>Orange Money</option><option>chèque</option><option>espèces</option></select></label><label>Référence<input id="pR" placeholder="N° de virement, de transaction…"></label></div>
+      <p class="sub" style="margin:0">Le paiement est enregistré par le service financier. Il n'exécute aucun virement.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:Number(pA.value),p_paid_on:pD.value,p_method:pM.value,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender()})});
+}
+
+function groupBy(items){
+  const m={};items.forEach(i=>{m[i.teacher_id]??={id:i.teacher_id,t:i.teachers,lines:[],min:0,amt:0};const o=m[i.teacher_id];o.lines.push(i);o.min+=i.minutes;o.amt+=i.amount_fcfa});
+  return Object.values(m).sort((a,b)=>a.t.last_name.localeCompare(b.t.last_name));
+}
+function teacherTable(by){
+  return `<div class="panel tbl"><table><thead><tr><th>Enseignant</th><th>Statut</th><th>Séances</th><th>Heures</th><th>Tarif(s)</th><th>Montant</th><th></th></tr></thead><tbody>
+  ${by.map(o=>{const rates=[...new Set(o.lines.map(l=>l.rate_fcfa+(l.rate_source==="individuel"?" (indiv.)":"")))];const catchUp=o.lines.some(l=>l.is_catch_up);
+    return `<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}${catchUp?`<div><span class="pill p-info">Rattrapage inclus</span></div>`:""}</td><td>${esc(o.t.teacher_statuses?.label)}</td>
+    <td class="num">${o.lines.length}</td><td class="num">${hrs(o.min)}</td><td class="mono">${rates.map(esc).join(" / ")}</td><td class="num"><b>${fcfa(o.amt)}</b></td>
+    <td><button class="btn sm" data-dt="${o.id}">Détail</button></td></tr>`}).join("")}</tbody></table></div>`;
+}
+function linesDialog(o){
+  openDialog(`<h3>${esc(o.t.first_name+" "+o.t.last_name)}</h3>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Cours</th><th>Durée</th><th>Tarif</th><th>Montant</th></tr></thead><tbody>
+    ${o.lines.map(l=>`<tr><td class="mono">${fdl(l.session_date)}${l.is_catch_up?' <span class="pill p-info">rattrapage</span>':""}</td><td>${esc(l.course_label)}<div class="sub">${esc(l.group_code)}</div></td><td class="num">${hrs(l.minutes)}</td><td class="num">${l.rate_fcfa}${l.rate_source==="individuel"?"*":""}</td><td class="num">${fcfa(l.amount_fcfa)}</td></tr>`).join("")}
+    </tbody></table></div><p class="sub" style="margin:0">Montant = durée retenue × tarif horaire en vigueur à la date de la séance. * tarif individuel.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{});
+}
+
+function downloadSlip(slip,payments){
+  try{
+    if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
+    const doc=makePayslipPdf(window.jspdf.jsPDF,slip,payments.filter(p=>p.payslip_id===slip.id));
+    doc.save(`${slip.number}_${slip.snapshot.enseignant.nom.replace(/\s+/g,"-")}.pdf`);
+  }catch(e){toast(errMsg(e),true)}
+}
+
+/* ---------- tarifs ---------- */
+async function viewRates(v){
+  const [statuses,rates,teachers,used]=await Promise.all([
+    q(sb.from("teacher_statuses").select("id,code,label").order("id")),
+    q(sb.from("hourly_rates").select("*").order("effective_from",{ascending:false})),
+    q(sb.from("teachers").select("id,first_name,last_name,status_id").order("last_name")),
+    q(sb.from("payroll_items").select("rate_id"))]);
+  const usedIds=new Set(used.map(u=>u.rate_id));
+  const today=iso(new Date());
+  const current=(list)=>list.filter(r=>r.effective_from<=today).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];
+  const target=r=>r.status_id?statuses.find(s=>s.id===r.status_id)?.label:(()=>{const t=teachers.find(t=>t.id===r.teacher_id);return t?t.first_name+" "+t.last_name:"?"})();
+  const indiv=teachers.filter(t=>rates.some(r=>r.teacher_id===t.id));
+  v.innerHTML=`<h1>Tarifs horaires</h1>
+    <p class="lead">Le tarif dépend du statut de l'enseignant. Une exception individuelle remplace le tarif du statut. Pour changer un tarif, ajoutez-en un nouveau avec sa date d'effet : l'ancien reste appliqué aux séances antérieures.</p>
+    <div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Tarifs en vigueur au ${fdl(today)}</h2>${canPay()?`<button class="btn sm primary" id="addRate">Nouveau tarif</button>`:""}</div>
+    <div class="panel tbl"><table><thead><tr><th>Statut</th><th>Tarif horaire</th><th>Depuis le</th><th>Enseignants</th></tr></thead><tbody>
+    ${statuses.map(s=>{const c=current(rates.filter(r=>r.status_id===s.id));const next=rates.filter(r=>r.status_id===s.id&&r.effective_from>today).at(-1);
+      return `<tr><td>${esc(s.label)}</td><td class="num"><b>${c?fcfa(c.rate_fcfa):"Non défini"}</b>${next?`<div class="sub">${fcfa(next.rate_fcfa)} à partir du ${fdl(next.effective_from)}</div>`:""}</td><td class="mono">${c?fdl(c.effective_from):"—"}</td><td class="num">${teachers.filter(t=>t.status_id===s.id).length}</td></tr>`}).join("")}
+    ${indiv.map(t=>{const c=current(rates.filter(r=>r.teacher_id===t.id));return `<tr><td>${esc(t.first_name+" "+t.last_name)} <span class="pill p-info">Individuel</span></td><td class="num"><b>${c?fcfa(c.rate_fcfa):"pas encore en vigueur"}</b></td><td class="mono">${c?fdl(c.effective_from):"—"}</td><td></td></tr>`}).join("")}
+    </tbody></table></div>
+    <h2>Historique</h2>
+    <div class="panel tbl"><table><thead><tr><th>Date d'effet</th><th>S'applique à</th><th>Tarif</th><th>Note</th><th></th></tr></thead><tbody>
+    ${rates.map(r=>`<tr><td class="mono">${fdl(r.effective_from)}</td><td>${esc(target(r))}${r.teacher_id?' <span class="pill p-info">Individuel</span>':""}</td><td class="num">${fcfa(r.rate_fcfa)}</td><td class="sub">${esc(r.note||"")}</td>
+      <td>${usedIds.has(r.id)?`<span class="sub">Utilisé en paie</span>`:canPay()?`<button class="btn sm danger" data-del="${r.id}">Supprimer</button>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+  if(!canPay())return;
+  addRate.onclick=()=>openDialog(`<h3>Nouveau tarif horaire</h3>
+    <label>S'applique à<select id="rTg"><optgroup label="Statut">${statuses.map(s=>`<option value="s${s.id}">${esc(s.label)}</option>`).join("")}</optgroup>
+      <optgroup label="Exception individuelle">${teachers.map(t=>`<option value="t${t.id}">${esc(t.first_name+" "+t.last_name)}</option>`).join("")}</optgroup></select></label>
+    <div class="row"><label>Tarif horaire (FCFA)<input id="rAmt" type="number" min="1" step="500" required></label><label>Date d'effet<input id="rFrom" type="date" required value="${today}"></label></div>
+    <label>Note<input id="rNote" placeholder="Ex. : décision du conseil du 12/10/2026"></label>
+    <p class="sub" style="margin:0">Les séances déjà payées ne sont jamais recalculées.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const tg=rTg.value,id=Number(tg.slice(1));
+      await q(sb.from("hourly_rates").insert({status_id:tg[0]==="s"?id:null,teacher_id:tg[0]==="t"?id:null,rate_fcfa:Number(rAmt.value),effective_from:rFrom.value,note:rNote.value.trim()||null}));
+      toast("Tarif enregistré");rerender()});
+  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{try{const r=await q(sb.from("hourly_rates").delete().eq("id",b.dataset.del).select());
+    if(!r.length)throw new Error("Ce tarif a déjà servi au calcul d'une paie : il ne peut pas être supprimé.");toast("Tarif supprimé");rerender()}catch(e){toast(errMsg(e),true)}});
+}
+
+/* ---------- mes bulletins ---------- */
+async function viewMyPayslips(v){
+  const [slips,pays,unpaid]=await Promise.all([
+    q(sb.from("payslips").select("*").eq("teacher_id",S.teacher.id).order("generated_at",{ascending:false})),
+    q(sb.from("payments").select("*")),
+    q(sb.from("attendance_records").select("retained_minutes").eq("teacher_id",S.teacher.id).eq("status","valide").is("pay_period_id",null))]);
+  const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
+  const waiting=unpaid.reduce((s,a)=>s+a.retained_minutes,0);
+  v.innerHTML=`<h1>Mes bulletins</h1>
+    <p class="lead">Vos bulletins de rémunération approuvés. Ils ne sont visibles que par vous et par le service financier.</p>
+    <div class="stats"><div class="stat"><b>${slips.length}</b><span>Bulletins</span></div>
+      <div class="stat"><b>${fcfa(slips.reduce((s,x)=>s+x.net_fcfa,0))}</b><span>Total net</span></div>
+      <div class="stat"><b>${hrs(waiting)}</b><span>Heures validées pas encore payées</span></div></div>
+    <div class="panel tbl">${slips.length?`<table><thead><tr><th>Bulletin</th><th>Période</th><th>Heures</th><th>Net à payer</th><th>Réglé</th><th>État</th><th></th></tr></thead><tbody>
+    ${slips.map(s=>`<tr><td class="mono">${esc(s.number)}</td><td>${esc(s.snapshot.periode.nom)}<div class="sub mono">${fdl(s.snapshot.periode.debut)} au ${fdl(s.snapshot.periode.fin)}</div></td>
+      <td class="num">${hrs(s.total_minutes)}</td><td class="num"><b>${fcfa(s.net_fcfa)}</b></td><td class="num">${fcfa(paid(s.id))}</td><td>${ppill(SLIP,s.status)}</td>
+      <td><button class="btn sm primary" data-pdf="${s.id}">Télécharger le PDF</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucun bulletin pour l'instant. Il apparaîtra ici dès que le service financier aura approuvé une période.</p>`}</div>`;
+  v.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
 }
 
 /* ---------- journal ---------- */
@@ -432,9 +687,14 @@ async function viewAudit(v){
   const people=ids.length?await q(sb.from("profiles").select("id,full_name").in("id",ids)):[];
   const nm=id=>people.find(p=>p.id===id)?.full_name||"Système";
   const OP={INSERT:"Création",UPDATE:"Modification",DELETE:"Suppression"};
-  const TB={attendance_records:"Émargement",schedule_sessions:"Séance",timetable_slots:"Créneau",teaching_assignments:"Affectation",user_roles:"Rôle",teachers:"Enseignant",profiles:"Profil"};
+  const TB={attendance_records:"Émargement",schedule_sessions:"Séance",timetable_slots:"Créneau",teaching_assignments:"Affectation",user_roles:"Rôle",teachers:"Enseignant",profiles:"Profil",hourly_rates:"Tarif",pay_periods:"Période de paie",payslips:"Bulletin",payments:"Paiement",teacher_statuses:"Statut"};
   const detail=r=>{if(r.table_name==="attendance_records"&&r.new_data){const o=r.old_data?.status,n=r.new_data.status;return o&&o!==n?`${ATT[o]?.[0]||o} → ${ATT[n]?.[0]||n}`:(ATT[n]?.[0]||"")}
-    if(r.table_name==="schedule_sessions"&&r.new_data)return `${r.new_data.session_date} ${hm(r.new_data.start_time)} · ${r.new_data.status}`;return ""};
+    if(r.table_name==="schedule_sessions"&&r.new_data)return `${r.new_data.session_date} ${hm(r.new_data.start_time)} · ${r.new_data.status}`;
+    if(r.table_name==="pay_periods"&&r.new_data)return `${r.new_data.name} · ${PER[r.new_data.status]?.[0]||r.new_data.status}`;
+    if(r.table_name==="payslips"&&r.new_data)return `${r.new_data.number} · ${fcfa(r.new_data.net_fcfa)}`;
+    if(r.table_name==="payments"&&r.new_data)return `${fcfa(r.new_data.amount_fcfa)} · ${r.new_data.method}`;
+    if(r.table_name==="hourly_rates"&&r.new_data)return `${fcfa(r.new_data.rate_fcfa)} dès le ${fdl(r.new_data.effective_from)}`;
+    return ""};
   v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque création, modification ou suppression sensible est enregistrée avec son auteur et l'heure.</p>
     <div class="panel tbl">${rows.length?`<table><thead><tr><th>Date</th><th>Auteur</th><th>Opération</th><th>Élément</th><th>Détail</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td class="mono">${new Date(r.occurred_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</td><td>${esc(nm(r.actor))}</td><td>${OP[r.action]||r.action}</td><td>${TB[r.table_name]||r.table_name} <span class="sub mono">#${esc(r.record_id)}</span></td><td>${esc(detail(r))}</td></tr>`).join("")}
