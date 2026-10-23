@@ -110,6 +110,28 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:7px 14px;font:500 13.5px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hero{display:flex;gap:28px;align-items:center;padding:22px 26px;margin-bottom:16px}
+.ring{width:136px;height:136px;flex:0 0 auto}
+.herotxt{flex:1;min-width:0}
+.bigline{font:700 24px/1.2 var(--f-display);letter-spacing:-.01em;margin:2px 0 4px;text-wrap:balance}
+.late{color:var(--bad);font-weight:600}
+.mini{display:flex;gap:26px;flex-wrap:wrap;margin-top:14px}
+.mini b{display:block;font:700 18px var(--f-display)}.mini span{font-size:13px;color:var(--muted)}
+.acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:6px}
+.act{padding:18px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.act .btn{margin-top:8px}
+.actn{font:700 30px/1.1 var(--f-display);letter-spacing:-.02em}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.legend i.dash{background:none;border-top:2px dashed var(--muted);height:0;border-radius:0;width:16px;vertical-align:3px}
+.drow{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line)}
+.drow:nth-last-child(2){border-bottom:0}
+.dname{font-weight:600;padding-top:1px}
+.stack{display:flex;height:12px;border-radius:99px;background:var(--accent-soft);overflow:hidden;margin-bottom:5px}
+.stack i{display:block;height:100%}
+.rank{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,38%) 52px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.rank:last-child{border-bottom:0}
+.rpct{font-weight:700;text-align:right;white-space:nowrap}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -128,6 +150,8 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
   .xbar{width:100%}.xbar .btn{flex:1}
+  .hero{flex-direction:column;align-items:flex-start;gap:14px;padding:18px}.ring{width:120px;height:120px}.bigline{font-size:21px}
+  .drow{grid-template-columns:1fr;gap:4px}.rank{grid-template-columns:minmax(0,1fr) 58px}.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;width:100%}.rank .rbar{grid-column:1/-1;grid-row:2}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
   .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
   body{font-size:16px}
@@ -720,39 +744,69 @@ async function qAll(make){let all=[],from=0;for(;;){const d=await q(make().range
 
 /* ---------- tableau de bord ---------- */
 function rateClass(p){return p>=90?"p-ok":p>=70?"p-warn":"p-bad"}
+const DPRESETS=[["semaine","Cette semaine"],["mois","Ce mois"],["semestre","Ce semestre"],["perso","Personnalisée"]];
+function trendChart(buckets){
+  /* courbe : heures prévues (pointillés) et heures validées (aire) par semaine ou par jour */
+  const wide=window.innerWidth>720,W=wide?1040:360,H=wide?250:210,L=wide?44:34,R=14,T=14,B=30,n=buckets.length;
+  const maxH=Math.max(1,Math.ceil(Math.max(...buckets.map(b=>Math.max(b.prev,b.val)))/60));
+  const X=i=>n===1?L+(W-L-R)/2:L+i*(W-L-R)/(n-1),Y=h=>T+(H-T-B)*(1-h/maxH);
+  const pts=k=>buckets.map((b,i)=>`${X(i).toFixed(1)},${Y(b[k]/60).toFixed(1)}`).join(" ");
+  const step=Math.ceil(n/(wide?10:4));
+  const area=n>1?`<polygon points="${X(0).toFixed(1)},${Y(0)} ${pts("val")} ${X(n-1).toFixed(1)},${Y(0)}" fill="var(--accent)" fill-opacity=".14"/>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Heures prévues et validées par ${buckets[0]?.unit||"semaine"}" style="width:100%;height:auto;display:block">
+    ${[0,.5,1].map(f=>{const h=maxH*f;return `<line x1="${L}" x2="${W-R}" y1="${Y(h)}" y2="${Y(h)}" stroke="var(--line)"/><text x="${L-8}" y="${Y(h)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${Math.round(h)} h</text>`}).join("")}
+    ${area}${n>1?`<polyline points="${pts("prev")}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/><polyline points="${pts("val")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:""}
+    ${buckets.map((b,i)=>`<circle cx="${X(i)}" cy="${Y(b.val/60)}" r="4" fill="var(--accent)"><title>${b.label} : ${hrs(b.val)} validées sur ${hrs(b.prev)} prévues</title></circle>${n===1?`<circle cx="${X(i)}" cy="${Y(b.prev/60)}" r="4" fill="none" stroke="var(--muted)"/>`:""}${i%step===0||i===n-1?`<text x="${X(i)}" y="${H-8}" text-anchor="${i===0&&n>1?"start":i===n-1&&n>1?"end":"middle"}" font-size="12" fill="var(--muted)">${b.label}</text>`:""}`).join("")}
+  </svg>`;
+}
 async function viewDashboard(v){
-  const today=iso(new Date());
-  if(!S.dFrom){const d=new Date();S.dFrom=iso(new Date(d.getFullYear(),d.getMonth(),1));S.dTo=today}
+  const today=iso(new Date()),now=new Date();
+  let sems=[];try{sems=await q(sb.from("semesters").select("label,start_date,end_date").order("start_date"))}catch(e){}
+  const sem=sems.find(s=>s.start_date<=today&&today<=s.end_date)||sems[sems.length-1];
+  S.dPreset=S.dPreset||"mois";
+  if(S.dPreset==="semestre"&&!sem)S.dPreset="mois";
+  if(S.dPreset==="semaine"){S.dFrom=iso(mondayOf(now));S.dTo=iso(addDays(mondayOf(now),6))}
+  else if(S.dPreset==="mois"){S.dFrom=iso(new Date(now.getFullYear(),now.getMonth(),1));S.dTo=iso(new Date(now.getFullYear(),now.getMonth()+1,0))}
+  else if(S.dPreset==="semestre"){S.dFrom=sem.start_date;S.dTo=sem.end_date}
+  else if(!S.dFrom){S.dFrom=iso(new Date(now.getFullYear(),now.getMonth(),1));S.dTo=today}
+  const presets=DPRESETS.filter(([k])=>k!=="semestre"||sem);
   v.innerHTML=`<h1>Tableau de bord</h1>
-    <p class="lead">Suivi des séances, des émargements et des heures validées sur la période choisie.</p>
-    <div class="panel" style="padding:14px;margin-bottom:16px"><div class="row">
-      <label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label>
-      <button class="btn" id="dOk">Afficher</button><span style="margin-left:auto">${xbar("dX")}</span></div></div>
+    <p class="lead">${fdl(S.dFrom)} au ${fdl(S.dTo)}${S.dPreset==="semestre"&&sem?" · "+esc(sem.label):""}</p>
+    <div class="row" style="margin-bottom:${S.dPreset==="perso"?"10":"18"}px;align-items:center">
+      <div class="chips">${presets.map(([k,l])=>`<button data-pre="${k}" aria-pressed="${S.dPreset===k}">${l}</button>`).join("")}</div>
+      <span style="margin-left:auto">${xbar("dX")}</span></div>
+    ${S.dPreset==="perso"?`<div class="row" style="margin-bottom:18px"><label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label><button class="btn" id="dOk">Afficher</button></div>`:""}
     <div id="dBody"><p class="empty">Chargement…</p></div>`;
-  dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
+  v.querySelectorAll("[data-pre]").forEach(b=>b.onclick=()=>{S.dPreset=b.dataset.pre;rerender()});
+  if(S.dPreset==="perso")dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
+
   const sess=await qAll(()=>sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teachers(first_name,last_name,departments(code)),teaching_assignments(courses(code,name,departments(code))),student_groups(code),attendance_records(status,retained_minutes,declared_minutes,entered_for_teacher)").gte("session_date",S.dFrom).lte("session_date",S.dTo).order("session_date"));
   const due=sess.filter(s=>s.status!=="annulee"&&s.session_date<=today);
   const K={prevues:due.length,annulees:sess.filter(s=>s.status==="annulee").length,emargees:0,valid:0,wait:0,corr:0,rej:0,deleg:0,minPrev:0,minVal:0,minWait:0};
-  const dep={},tea={},sans=[];
+  const dep={},tea={},sans=[],bk={};
+  const span=(new Date(S.dTo)-new Date(S.dFrom))/864e5,byDay=span<=14;
   due.forEach(s=>{
     const a=s.attendance_records,pm=toMin(s.end_time)-toMin(s.start_time);
     const dc=s.teaching_assignments?.courses?.departments?.code||"—";
-    const d=dep[dc]??={code:dc,prev:0,em:0,minPrev:0,minVal:0};
-    const tk=s.teacher_id;const t=tea[tk]??={name:s.teachers?(s.teachers.last_name+" "+s.teachers.first_name):"—",dep:s.teachers?.departments?.code||"—",prev:0,em:0,minVal:0,minWait:0};
-    K.minPrev+=pm;d.prev++;d.minPrev+=pm;t.prev++;
+    const d=dep[dc]??={code:dc,prev:0,em:0,minPrev:0,minVal:0,minWait:0};
+    const t=tea[s.teacher_id]??={name:s.teachers?(s.teachers.last_name+" "+s.teachers.first_name):"—",dep:s.teachers?.departments?.code||"—",prev:0,em:0,minVal:0,minWait:0};
+    const key=byDay?s.session_date:iso(mondayOf(new Date(s.session_date+"T12:00:00")));
+    const b=bk[key]??={key,prev:0,val:0};
+    K.minPrev+=pm;d.prev++;d.minPrev+=pm;t.prev++;b.prev+=pm;
     if(!a){sans.push(s);return}
     K.emargees++;d.em++;t.em++;
     if(a.entered_for_teacher)K.deleg++;
-    if(a.status==="valide"){K.valid++;K.minVal+=a.retained_minutes||0;d.minVal+=a.retained_minutes||0;t.minVal+=a.retained_minutes||0}
-    else if(a.status==="soumis"){K.wait++;K.minWait+=a.declared_minutes||0;t.minWait+=a.declared_minutes||0}
+    if(a.status==="valide"){const m=a.retained_minutes||0;K.valid++;K.minVal+=m;d.minVal+=m;t.minVal+=m;b.val+=m}
+    else if(a.status==="soumis"){const m=a.declared_minutes||0;K.wait++;K.minWait+=m;d.minWait+=m;t.minWait+=m}
     else if(a.status==="correction_demandee")K.corr++;
     else if(a.status==="rejete")K.rej++;
   });
   const pct=(a,b)=>b?Math.round(a/b*100):0;
   const rate=pct(K.emargees,K.prevues);
-  const deps=Object.values(dep).sort((a,b)=>b.minPrev-a.minPrev),teas=Object.values(tea).sort((a,b)=>pct(a.em,a.prev)-pct(b.em,b.prev)||a.name.localeCompare(b.name));
+  const deps=Object.values(dep).sort((a,b)=>b.minPrev-a.minPrev);
+  const teas=Object.values(tea).sort((a,b)=>pct(a.em,a.prev)-pct(b.em,b.prev)||a.name.localeCompare(b.name));
   const sansSorted=sans.slice().sort((a,b)=>a.session_date.localeCompare(b.session_date));
-  /* paie : seulement pour ceux qui y ont droit */
+  const buckets=Object.values(bk).sort((a,b)=>a.key.localeCompare(b.key)).map(b=>({...b,unit:byDay?"jour":"semaine",label:new Date(b.key+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}));
   let pay=null;
   if(has("finance")||has("direction")){
     try{
@@ -762,28 +816,41 @@ async function viewDashboard(v){
       pay={net,paid,due:net-paid,openMin:open.reduce((s,x)=>s+(x.retained_minutes||0),0)};
     }catch(e){pay=null}
   }
-  const barRow=(label,full,part,right)=>`<div style="display:grid;grid-template-columns:minmax(70px,110px) 1fr;gap:6px 12px;align-items:center;margin:10px 0"><span>${esc(label)}</span>
-    <div><div class="hbar" style="width:${full}%"><i style="width:${part}%"></i></div><div class="sub" style="margin-top:3px">${right}</div></div></div>`;
+  const ringColor=rate>=90?"var(--ok)":rate>=70?"var(--warn)":"var(--bad)",C=2*Math.PI*52;
+  const late=sans.length;
+  const headline=K.prevues?`${K.emargees} séance${K.emargees>1?"s":""} émargée${K.emargees>1?"s":""} sur ${K.prevues}`:"Aucune séance prévue sur cette période";
+  const hero=`<div class="panel hero">
+    <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Taux d'émargement : ${rate} %"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--line)" stroke-width="12"/>
+      <circle cx="60" cy="60" r="52" fill="none" stroke="${ringColor}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(C*rate/100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/>
+      <text x="60" y="68" text-anchor="middle" font-size="26" font-weight="700" fill="var(--ink)">${rate} %</text></svg>
+    <div class="herotxt"><div class="sub">Taux d'émargement</div><div class="bigline">${headline}</div>
+      <div class="${late?"late":"sub"}">${K.prevues?(late?`${late} séance${late>1?"s":""} sans émargement`:"Aucun retard : toutes les séances sont émargées"):""}</div>
+      <div class="mini"><div><b>${hrs(K.minVal)}</b><span>validées</span></div><div><b>${hrs(K.minPrev)}</b><span>prévues</span></div><div><b>${hrs(K.minWait)}</b><span>à valider</span></div><div><b>${K.deleg}</b><span>par délégation</span></div></div></div></div>`;
+  const cards={
+    val:K.wait?`<div class="panel act"><div class="sub">À valider</div><div class="actn" style="color:var(--warn)">${K.wait}</div><div class="sub">émargement${K.wait>1?"s":""} en attente · ${hrs(K.minWait)}</div>${has("responsable")?`<button class="btn primary" id="goCtl">Valider maintenant</button>`:""}</div>`:"",
+    sans:late?`<div class="panel act"><div class="sub">Sans émargement</div><div class="actn" style="color:var(--bad)">${late}</div><div class="sub">séance${late>1?"s":""} passée${late>1?"s":""} à relancer</div><button class="btn" id="goSans">Voir la liste</button></div>`:"",
+    pay:pay?`<div class="panel act"><div class="sub">Reste dû sur les paies approuvées</div><div class="actn">${fcfa(pay.due)}</div>
+      <div class="hbar" style="width:100%"><i style="width:${pct(pay.paid,pay.net)}%"></i></div><div class="sub">${fcfa(pay.paid)} réglés sur ${fcfa(pay.net)} · ${hrs(pay.openMin)} validées pas encore payées</div><button class="btn" id="goPay">Ouvrir la paie</button></div>`:""};
+  const onlyFin=has("finance")&&!has("planificateur")&&!has("responsable"),onlyVal=has("responsable")&&!has("planificateur")&&!has("finance");
+  const order=onlyFin?["pay","val","sans"]:onlyVal?["val","sans","pay"]:["sans","val","pay"];
+  const acts=order.map(k=>cards[k]).filter(Boolean).join("");
+  const seg=(d)=>{const p1=pct(d.minVal,d.minPrev),p2=pct(d.minWait,d.minPrev);return `<div class="stack" title="${hrs(d.minVal)} validées · ${hrs(d.minWait)} en attente · ${hrs(Math.max(0,d.minPrev-d.minVal-d.minWait))} manquantes"><i style="width:${p1}%;background:var(--accent)"></i><i style="width:${Math.min(p2,100-p1)}%;background:var(--ochre)"></i></div>`};
   const maxPrev=Math.max(1,...deps.map(d=>d.minPrev));
-  const canReview=has("responsable");
-  document.getElementById("dBody").innerHTML=`
-    <div class="stats">
-      <div class="stat"><b>${K.prevues}</b><span>Séances prévues (jusqu'à aujourd'hui)</span></div>
-      <div class="stat"><b>${rate} %</b><span>Taux d'émargement (${K.emargees} sur ${K.prevues})</span></div>
-      <div class="stat"><b>${hrs(K.minVal)}</b><span>Heures validées</span></div>
-      <div class="stat"><b style="color:${K.wait?"var(--warn)":"inherit"}">${K.wait}</b><span>À valider (${hrs(K.minWait)})</span></div>
-      <div class="stat"><b style="color:${sans.length?"var(--bad)":"inherit"}">${sans.length}</b><span>Séances sans émargement</span></div>
-      <div class="stat"><b>${K.deleg}</b><span>Saisis par délégation</span></div>
-      ${pay?`<div class="stat"><b>${fcfa(pay.due)}</b><span>Reste dû sur les paies approuvées</span></div><div class="stat"><b>${hrs(pay.openMin)}</b><span>Heures validées pas encore payées</span></div>`:""}
-    </div>
-    ${canReview&&K.wait?`<p style="margin:0 0 16px"><button class="btn primary" id="goCtl">Valider les ${K.wait} émargement(s) en attente</button></p>`:""}
-    ${deps.length?`<h2>Heures par département</h2><div class="panel" style="padding:6px 16px 10px">${deps.map(d=>barRow(d.code,pct(d.minPrev,maxPrev),pct(d.minVal,d.minPrev),`${hrs(d.minVal)} validées sur ${hrs(d.minPrev)} prévues · émargement ${pct(d.em,d.prev)} %`)).join("")}</div>`:`<div class="panel"><p class="empty">Aucune séance sur cette période.</p></div>`}
-    ${sansSorted.length?`<h2>Séances sans émargement</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Enseignant</th><th>Cours</th><th>Groupe</th></tr></thead><tbody>
+  document.getElementById("dBody").innerHTML=`${hero}
+    ${acts?`<div class="acts">${acts}</div>`:""}
+    <h2>Heures validées et prévues</h2>
+    <div class="panel" style="padding:16px 18px">${buckets.length?`${trendChart(buckets)}<div class="legend"><span><i style="background:var(--accent)"></i>Validées</span><span><i class="dash"></i>Prévues</span><span class="sub">par ${byDay?"jour":"semaine"}</span></div>`:`<p class="empty">Aucune séance sur cette période.</p>`}</div>
+    ${deps.length?`<h2>Par département</h2><div class="panel" style="padding:6px 18px 12px">${deps.map(d=>`<div class="drow"><div class="dname">${esc(d.code)}</div><div class="dbars"><div style="width:${Math.max(4,pct(d.minPrev,maxPrev))}%">${seg(d)}</div>
+      <div class="sub">${hrs(d.minVal)} validées${d.minWait?` · ${hrs(d.minWait)} en attente`:""} sur ${hrs(d.minPrev)} prévues · émargement ${pct(d.em,d.prev)} %</div></div></div>`).join("")}
+      <div class="legend"><span><i style="background:var(--accent)"></i>Validées</span><span><i style="background:var(--ochre)"></i>En attente</span><span><i style="background:var(--accent-soft)"></i>Reste prévu</span></div></div>`:""}
+    ${teas.length?`<h2>Émargement par enseignant</h2><div class="panel" style="padding:4px 18px">${teas.map(t=>{const p=pct(t.em,t.prev),c=p>=90?"var(--ok)":p>=70?"var(--warn)":"var(--bad)";return `<div class="rank"><div><b>${esc(t.name)}</b><div class="sub">${esc(t.dep)} · ${hrs(t.minVal)} validées${t.minWait?` · ${hrs(t.minWait)} en attente`:""}</div></div>
+      <div class="rbar"><div class="hbar" style="width:100%"><i style="width:${p}%;background:${c}"></i></div></div><div class="rpct" style="color:${c}">${p} %</div></div>`}).join("")}</div>`:""}
+    ${sansSorted.length?`<h2 id="sansList">Séances sans émargement</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Enseignant</th><th>Cours</th><th>Groupe</th></tr></thead><tbody>
       ${sansSorted.slice(0,15).map(s=>`<tr><td>${fdate(s.session_date)} ${hm(s.start_time)}</td><td>${esc(s.teachers?s.teachers.last_name+" "+s.teachers.first_name:"—")}</td><td>${sessionLabel(s)}</td><td>${esc(s.student_groups?.code)}</td></tr>`).join("")}</tbody></table></div>
-      ${sansSorted.length>15?`<p class="sub">Les 15 plus anciennes sur ${sansSorted.length}. La liste complète est dans l'export.</p>`:""}`:""}
-    ${teas.length?`<h2>Par enseignant</h2><div class="panel tbl"><table><thead><tr><th>Enseignant</th><th>Département</th><th>Séances</th><th>Émargement</th><th>Validé</th><th>En attente</th></tr></thead><tbody>
-      ${teas.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.dep)}</td><td class="num">${t.prev}</td><td><span class="pill ${rateClass(pct(t.em,t.prev))}">${pct(t.em,t.prev)} %</span></td><td class="num">${hrs(t.minVal)}</td><td class="num">${hrs(t.minWait)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
-  if(document.getElementById("goCtl"))goCtl.onclick=()=>{S.tab="controle";S.filter="soumis";try{history.replaceState(null,"","#controle")}catch(e){}renderShell()};
+      ${sansSorted.length>15?`<p class="sub">Les 15 plus anciennes sur ${sansSorted.length}. La liste complète est dans l'export.</p>`:""}`:""}`;
+  const go=(id,tab)=>{const b=document.getElementById(id);if(b)b.onclick=()=>{S.tab=tab;S.filter="soumis";try{history.replaceState(null,"","#"+tab)}catch(e){}renderShell()}};
+  go("goCtl","controle");go("goPay","paie");
+  const gs=document.getElementById("goSans");if(gs)gs.onclick=()=>document.getElementById("sansList").scrollIntoView({behavior:"smooth",block:"start"});
   wireExport("dX",()=>({file:"tableau-de-bord_"+S.dFrom+"_"+S.dTo,title:"Tableau de bord",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),sheets:[
     {name:"Résumé",title:"Résumé",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),keepEmpty:1,head:["Indicateur","Valeur"],rows:[
       ["Séances prévues (jusqu'à aujourd'hui)",K.prevues],["Séances annulées",K.annulees],["Séances émargées",K.emargees],["Taux d'émargement (%)",rate],
