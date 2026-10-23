@@ -111,6 +111,11 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:7px 14px;font:500 13.5px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
+.dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
+.srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
+.srow:last-child{border-bottom:0}
+.stime{font-weight:600;line-height:1.3}.stime span{display:block;color:var(--muted);font-weight:400}
+.sact{align-self:center}
 .avrow{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
 .avrow:last-child{border-bottom:0}
 .avday{width:96px;font-weight:600;flex:0 0 auto}
@@ -123,6 +128,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
   .xbar{width:100%}.xbar .btn{flex:1}
+  .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
   .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
   body{font-size:16px}
   main{padding-block:18px calc(96px + env(safe-area-inset-bottom,0px))}
@@ -389,20 +395,22 @@ async function viewTeacher(v){
       <button class="btn" id="wNext">Semaine suivante →</button>
       <button class="btn" id="wNow">Cette semaine</button>
     </div>
-    <div class="panel tbl">${week.length?`<table><thead><tr><th>Date</th><th>Horaire</th><th>Cours</th><th>Groupe · Salle</th><th>Émargement</th><th></th></tr></thead><tbody>
-    ${week.map(s=>{const a=s.attendance_records;const started=new Date(s.session_date+"T"+s.start_time)<=now;
-      let act="";
-      if(s.status==="annulee")act=`<span class="pill p-mute">Annulée</span>`;
-      else if(!a&&started)act=`<button class="btn primary sm" data-em="${s.id}">Émarger</button>`;
-      else if(!a)act=`<span class="sub">À venir</span>`;
-      else if(a.status==="soumis"||a.status==="correction_demandee")act=`<button class="btn sm" data-em="${s.id}">${a.status==="correction_demandee"?"Corriger":"Modifier"}</button>`;
-      return `<tr><td>${fdate(s.session_date)}</td><td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
-      <td>${sessionLabel(s)}${s.note?`<div class="sub">${esc(s.note)}</div>`:""}</td>
-      <td>${esc(s.student_groups?.code)}<div class="sub">${esc(s.rooms?.code)}</div></td>
-      <td>${s.status==="annulee"?"—":pill(a?.status)}${a?`<div class="sub mono">déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.retained_minutes!=null?" · retenu "+hrs(a.retained_minutes):""}</div>`:""}
-        ${a?.entered_for_teacher?`<div class="sub">Saisi par délégation${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>`:""}
-        ${a?.review_reason?`<div class="sub">Motif : ${esc(a.review_reason)}</div>`:""}</td>
-      <td>${act}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune séance cette semaine.</p>`}</div>`;
+    ${week.length?(()=>{const days=[...new Set(week.map(s=>s.session_date))];
+      return days.map(d=>{const dt=new Date(d+"T12:00:00");const lab=dt.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+        return `<h2 class="dhead">${lab.charAt(0).toUpperCase()+lab.slice(1)}${d===iso(now)?` <span class="pill p-info">Aujourd'hui</span>`:""}</h2>
+        <div class="panel">${week.filter(s=>s.session_date===d).map(s=>{const a=s.attendance_records;const started=new Date(s.session_date+"T"+s.start_time)<=now;
+          let act="";
+          if(s.status==="annulee")act=`<span class="pill p-mute">Annulée</span>`;
+          else if(!a&&started)act=`<button class="btn primary sm" data-em="${s.id}">Émarger</button>`;
+          else if(!a)act=`<span class="sub">À venir</span>`;
+          else if(a.status==="soumis"||a.status==="correction_demandee")act=`<button class="btn sm" data-em="${s.id}">${a.status==="correction_demandee"?"Corriger":"Modifier"}</button>`;
+          return `<div class="srow"><div class="stime">${hm(s.start_time)}<span>${hm(s.end_time)}</span></div>
+            <div><b>${sessionLabel(s)}</b><div class="sub">${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}${s.note?" · "+esc(s.note):""}</div>
+              <div style="margin-top:6px">${s.status==="annulee"?"":(!a?(started?`<span class="pill p-warn">À émarger</span>`:""):pill(a.status))}</div>
+              ${a?`<div class="sub">Déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.retained_minutes!=null?" · retenu "+hrs(a.retained_minutes):""}</div>`:""}
+              ${a?.entered_for_teacher?`<div class="sub">Saisi par délégation${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>`:""}
+              ${a?.review_reason?`<div class="sub">Motif : ${esc(a.review_reason)}</div>`:""}</div>
+            <div class="sact">${act}</div></div>`}).join("")}</div>`}).join("")})():`<div class="panel"><p class="empty">Aucune séance cette semaine.</p></div>`}`;
   wPrev.onclick=()=>{S.week=addDays(S.week,-7);rerender()};
   wNext.onclick=()=>{S.week=addDays(S.week,7);rerender()};
   wNow.onclick=()=>{S.week=mondayOf(new Date());rerender()};
