@@ -339,12 +339,13 @@ async function boot(){
   renderShell();
 }
 
+function isProf(){return !!S.teacher&&has("professeur")}
 function availableTabs(){
   const t=[];
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
-  if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
-  if(S.teacher)t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
-  if(S.teacher)t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
+  if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
+  if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
+  if(isProf())t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
   if(has("finance")||has("direction")){
