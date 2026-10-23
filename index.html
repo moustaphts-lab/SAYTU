@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Design : sobre, vert profond, grandes zones tactiles. Sur téléphone : navigation en bas, tableaux en cartes, fenêtres en feuille basse. */
 :root{
@@ -108,7 +109,11 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:7px 14px;font:500 13.5px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.xbar{display:flex;gap:8px;flex-wrap:wrap}
+.bar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
+  .xbar{width:100%}.xbar .btn{flex:1}
   body{font-size:16px}
   main{padding-block:18px calc(96px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
@@ -294,6 +299,7 @@ async function boot(){
 
 function availableTabs(){
   const t=[];
+  if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(S.teacher)t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
@@ -422,7 +428,8 @@ async function viewReview(v){
   const F=[["soumis","En attente",c("soumis")],["correction_demandee","Correction demandée",c("correction_demandee")],["valide","Validés",c("valide")],["rejete","Rejetés",c("rejete")],["tous","Tous",counts.length]];
   v.innerHTML=`<h1>Contrôle des émargements</h1>
     <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
-    <p style="margin:0 0 12px"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button> <span class="sub">Pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours).</span></p>
+    <div class="row" style="margin:0 0 6px;align-items:center"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button><span style="margin-left:auto">${xbar("rX")}</span></div>
+    <p class="sub" style="margin:0 0 12px">Saisie pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours). L'export reprend la liste affichée.</p>
     <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
     <div class="panel tbl">${rows.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
     ${rows.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
@@ -437,6 +444,11 @@ async function viewReview(v){
   v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
   v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)));
   v.querySelector("#delegBtn").onclick=delegDialog;
+  const SL={soumis:"En attente",valide:"Validé",rejete:"Rejeté",correction_demandee:"Correction demandée"};
+  wireExport("rX",()=>({file:"emargements_"+(S.filter==="tous"?"tous":S.filter)+"_"+iso(new Date()),title:"Contrôle des émargements",subtitle:"Filtre : "+(F.find(f=>f[0]===S.filter)?.[1]||""),landscape:true,sheets:[
+    {name:"Émargements",title:"Émargements",keepEmpty:1,head:["Date","Enseignant","Cours","Groupe","Prévu","Déclaré","Écart (min)","État","Heures retenues","Saisi par délégation","Commentaire","Motif"],
+     rows:rows.map(a=>{const s=a.schedule_sessions;const c=s.teaching_assignments?.courses;return [fdl(s.session_date),a.teachers.last_name+" "+a.teachers.first_name,(c?c.code+" "+c.name:""),s.student_groups?.code||"",
+       hm(s.start_time)+"-"+hm(s.end_time),hm(a.declared_start)+"-"+hm(a.declared_end),a.declared_minutes-a.planned_minutes,SL[a.status]||a.status,a.retained_minutes!=null?dh(a.retained_minutes):"",a.entered_for_teacher?"Oui":"",a.teacher_comment||"",a.review_reason||""]})}]}));
 }
 
 async function delegDialog(){
@@ -602,6 +614,136 @@ async function viewPlanning(v){
     async()=>{const r=await q(sb.from("teaching_assignments").delete().eq("id",a.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Affectation supprimée");rerender()})});
 }
 
+/* ---------- exports Excel et PDF ---------- */
+function slug(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").replace(/^-|-$/g,"").toLowerCase()}
+const nf=n=>Number(n).toLocaleString("fr-FR").replace(/[  ]/g," ");
+const dh=min=>Math.round((min||0)/60*100)/100; /* minutes -> heures décimales (calculables dans Excel) */
+function xbar(id){return `<div class="xbar" id="${id}"><button class="btn sm" type="button" data-x="xlsx">Exporter Excel</button><button class="btn sm" type="button" data-x="pdf">Exporter PDF</button></div>`}
+function wireExport(id,build){
+  const host=document.getElementById(id);if(!host)return;
+  host.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{
+    try{const d=await build();if(b.dataset.x==="xlsx")exportExcel(d.file,d.sheets);else exportPdf(d.file,d.title,d.subtitle,d.sheets,d.landscape)}
+    catch(e){toast(errMsg(e),true)}});
+}
+function exportExcel(file,sheets){
+  try{
+    if(!window.XLSX)throw new Error("Le module Excel n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
+    const wb=XLSX.utils.book_new();
+    sheets.forEach(s=>{
+      const ws=XLSX.utils.aoa_to_sheet([[s.title||s.name],[s.subtitle||""],[],s.head,...s.rows]);
+      ws["!cols"]=s.head.map((h,c)=>({wch:Math.min(42,Math.max(String(h).length,...s.rows.map(r=>String(r[c]??"").length))+2)}));
+      XLSX.utils.book_append_sheet(wb,ws,String(s.name).replace(/[\\\/?*\[\]:]/g,"-").slice(0,31));
+    });
+    XLSX.writeFile(wb,file+".xlsx");
+  }catch(e){toast(errMsg(e),true)}
+}
+function exportPdf(file,title,subtitle,sheets,landscape){
+  try{
+    if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
+    const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:landscape?"landscape":"portrait"});
+    const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+    doc.setFillColor(11,110,91);doc.rect(0,0,W,3,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(22,32,46);doc.text("UCAB Touba",14,16);
+    doc.setFontSize(12);doc.text(title,14,23);
+    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);
+    doc.text(subtitle+" · Édité le "+new Date().toLocaleDateString("fr-FR"),14,29);
+    let y=36;
+    sheets.forEach(s=>{
+      if(!s.rows.length&&!s.keepEmpty)return;
+      if(y>H-40){doc.addPage();y=18}
+      if(s.title){doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(22,32,46);doc.text(s.title,14,y);y+=2}
+      doc.autoTable({startY:y+2,head:[s.head],body:s.rows.map(r=>r.map(c=>typeof c==="number"?nf(c):String(c??""))),
+        theme:"striped",margin:{left:14,right:14,bottom:16},styles:{font:"helvetica",fontSize:8,cellPadding:2,textColor:[22,32,46]},
+        headStyles:{fillColor:[11,110,91],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[243,246,244]}});
+      y=doc.lastAutoTable.finalY+9;
+    });
+    const n=doc.internal.getNumberOfPages();
+    for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text(`Page ${i} / ${n}`,W-14,H-8,{align:"right"})}
+    doc.save(file+".pdf");
+  }catch(e){toast(errMsg(e),true)}
+}
+async function qAll(make){let all=[],from=0;for(;;){const d=await q(make().range(from,from+999));all=all.concat(d);if(d.length<1000)return all;from+=1000}}
+
+/* ---------- tableau de bord ---------- */
+function rateClass(p){return p>=90?"p-ok":p>=70?"p-warn":"p-bad"}
+async function viewDashboard(v){
+  const today=iso(new Date());
+  if(!S.dFrom){const d=new Date();S.dFrom=iso(new Date(d.getFullYear(),d.getMonth(),1));S.dTo=today}
+  v.innerHTML=`<h1>Tableau de bord</h1>
+    <p class="lead">Suivi des séances, des émargements et des heures validées sur la période choisie.</p>
+    <div class="panel" style="padding:14px;margin-bottom:16px"><div class="row">
+      <label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label>
+      <button class="btn" id="dOk">Afficher</button><span style="margin-left:auto">${xbar("dX")}</span></div></div>
+    <div id="dBody"><p class="empty">Chargement…</p></div>`;
+  dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
+  const sess=await qAll(()=>sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teachers(first_name,last_name,departments(code)),teaching_assignments(courses(code,name,departments(code))),student_groups(code),attendance_records(status,retained_minutes,declared_minutes,entered_for_teacher)").gte("session_date",S.dFrom).lte("session_date",S.dTo).order("session_date"));
+  const due=sess.filter(s=>s.status!=="annulee"&&s.session_date<=today);
+  const K={prevues:due.length,annulees:sess.filter(s=>s.status==="annulee").length,emargees:0,valid:0,wait:0,corr:0,rej:0,deleg:0,minPrev:0,minVal:0,minWait:0};
+  const dep={},tea={},sans=[];
+  due.forEach(s=>{
+    const a=s.attendance_records,pm=toMin(s.end_time)-toMin(s.start_time);
+    const dc=s.teaching_assignments?.courses?.departments?.code||"—";
+    const d=dep[dc]??={code:dc,prev:0,em:0,minPrev:0,minVal:0};
+    const tk=s.teacher_id;const t=tea[tk]??={name:s.teachers?(s.teachers.last_name+" "+s.teachers.first_name):"—",dep:s.teachers?.departments?.code||"—",prev:0,em:0,minVal:0,minWait:0};
+    K.minPrev+=pm;d.prev++;d.minPrev+=pm;t.prev++;
+    if(!a){sans.push(s);return}
+    K.emargees++;d.em++;t.em++;
+    if(a.entered_for_teacher)K.deleg++;
+    if(a.status==="valide"){K.valid++;K.minVal+=a.retained_minutes||0;d.minVal+=a.retained_minutes||0;t.minVal+=a.retained_minutes||0}
+    else if(a.status==="soumis"){K.wait++;K.minWait+=a.declared_minutes||0;t.minWait+=a.declared_minutes||0}
+    else if(a.status==="correction_demandee")K.corr++;
+    else if(a.status==="rejete")K.rej++;
+  });
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  const rate=pct(K.emargees,K.prevues);
+  const deps=Object.values(dep).sort((a,b)=>b.minPrev-a.minPrev),teas=Object.values(tea).sort((a,b)=>pct(a.em,a.prev)-pct(b.em,b.prev)||a.name.localeCompare(b.name));
+  const sansSorted=sans.slice().sort((a,b)=>a.session_date.localeCompare(b.session_date));
+  /* paie : seulement pour ceux qui y ont droit */
+  let pay=null;
+  if(has("finance")||has("direction")){
+    try{
+      const [slips,pays,open]=await Promise.all([qAll(()=>sb.from("payslips").select("id,net_fcfa")),qAll(()=>sb.from("payments").select("amount_fcfa")),
+        qAll(()=>sb.from("attendance_records").select("retained_minutes").eq("status","valide").is("pay_period_id",null))]);
+      const net=slips.reduce((s,x)=>s+x.net_fcfa,0),paid=pays.reduce((s,x)=>s+x.amount_fcfa,0);
+      pay={net,paid,due:net-paid,openMin:open.reduce((s,x)=>s+(x.retained_minutes||0),0)};
+    }catch(e){pay=null}
+  }
+  const barRow=(label,full,part,right)=>`<div style="display:grid;grid-template-columns:minmax(70px,110px) 1fr;gap:6px 12px;align-items:center;margin:10px 0"><span>${esc(label)}</span>
+    <div><div class="bar" style="width:${full}%"><i style="width:${part}%"></i></div><div class="sub" style="margin-top:3px">${right}</div></div></div>`;
+  const maxPrev=Math.max(1,...deps.map(d=>d.minPrev));
+  const canReview=has("responsable");
+  document.getElementById("dBody").innerHTML=`
+    <div class="stats">
+      <div class="stat"><b>${K.prevues}</b><span>Séances prévues (jusqu'à aujourd'hui)</span></div>
+      <div class="stat"><b>${rate} %</b><span>Taux d'émargement (${K.emargees} sur ${K.prevues})</span></div>
+      <div class="stat"><b>${hrs(K.minVal)}</b><span>Heures validées</span></div>
+      <div class="stat"><b style="color:${K.wait?"var(--warn)":"inherit"}">${K.wait}</b><span>À valider (${hrs(K.minWait)})</span></div>
+      <div class="stat"><b style="color:${sans.length?"var(--bad)":"inherit"}">${sans.length}</b><span>Séances sans émargement</span></div>
+      <div class="stat"><b>${K.deleg}</b><span>Saisis par délégation</span></div>
+      ${pay?`<div class="stat"><b>${fcfa(pay.due)}</b><span>Reste dû sur les paies approuvées</span></div><div class="stat"><b>${hrs(pay.openMin)}</b><span>Heures validées pas encore payées</span></div>`:""}
+    </div>
+    ${canReview&&K.wait?`<p style="margin:0 0 16px"><button class="btn primary" id="goCtl">Valider les ${K.wait} émargement(s) en attente</button></p>`:""}
+    ${deps.length?`<h2>Heures par département</h2><div class="panel" style="padding:6px 16px 10px">${deps.map(d=>barRow(d.code,pct(d.minPrev,maxPrev),pct(d.minVal,d.minPrev),`${hrs(d.minVal)} validées sur ${hrs(d.minPrev)} prévues · émargement ${pct(d.em,d.prev)} %`)).join("")}</div>`:`<div class="panel"><p class="empty">Aucune séance sur cette période.</p></div>`}
+    ${sansSorted.length?`<h2>Séances sans émargement</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Enseignant</th><th>Cours</th><th>Groupe</th></tr></thead><tbody>
+      ${sansSorted.slice(0,15).map(s=>`<tr><td>${fdate(s.session_date)} ${hm(s.start_time)}</td><td>${esc(s.teachers?s.teachers.last_name+" "+s.teachers.first_name:"—")}</td><td>${sessionLabel(s)}</td><td>${esc(s.student_groups?.code)}</td></tr>`).join("")}</tbody></table></div>
+      ${sansSorted.length>15?`<p class="sub">Les 15 plus anciennes sur ${sansSorted.length}. La liste complète est dans l'export.</p>`:""}`:""}
+    ${teas.length?`<h2>Par enseignant</h2><div class="panel tbl"><table><thead><tr><th>Enseignant</th><th>Département</th><th>Séances</th><th>Émargement</th><th>Validé</th><th>En attente</th></tr></thead><tbody>
+      ${teas.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.dep)}</td><td class="num">${t.prev}</td><td><span class="pill ${rateClass(pct(t.em,t.prev))}">${pct(t.em,t.prev)} %</span></td><td class="num">${hrs(t.minVal)}</td><td class="num">${hrs(t.minWait)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
+  if(document.getElementById("goCtl"))goCtl.onclick=()=>{S.tab="controle";S.filter="soumis";try{history.replaceState(null,"","#controle")}catch(e){}renderShell()};
+  wireExport("dX",()=>({file:"tableau-de-bord_"+S.dFrom+"_"+S.dTo,title:"Tableau de bord",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),sheets:[
+    {name:"Résumé",title:"Résumé",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),keepEmpty:1,head:["Indicateur","Valeur"],rows:[
+      ["Séances prévues (jusqu'à aujourd'hui)",K.prevues],["Séances annulées",K.annulees],["Séances émargées",K.emargees],["Taux d'émargement (%)",rate],
+      ["Heures prévues",dh(K.minPrev)],["Heures validées",dh(K.minVal)],["Heures en attente de validation",dh(K.minWait)],["Émargements validés",K.valid],["Émargements en attente",K.wait],
+      ["Corrections demandées",K.corr],["Émargements rejetés",K.rej],["Saisis par délégation",K.deleg],["Séances sans émargement",sans.length],
+      ...(pay?[["Reste dû sur les paies approuvées (FCFA)",pay.due],["Heures validées pas encore payées",dh(pay.openMin)]]:[])]},
+    {name:"Par département",title:"Par département",head:["Département","Séances prévues","Séances émargées","Taux d'émargement (%)","Heures prévues","Heures validées"],
+      rows:deps.map(d=>[d.code,d.prev,d.em,pct(d.em,d.prev),dh(d.minPrev),dh(d.minVal)])},
+    {name:"Par enseignant",title:"Par enseignant",head:["Enseignant","Département","Séances prévues","Séances émargées","Taux d'émargement (%)","Heures validées","Heures en attente"],
+      rows:teas.map(t=>[t.name,t.dep,t.prev,t.em,pct(t.em,t.prev),dh(t.minVal),dh(t.minWait)])},
+    {name:"Sans émargement",title:"Séances sans émargement",head:["Date","Heure","Enseignant","Cours","Groupe"],
+      rows:sansSorted.map(s=>[fdl(s.session_date),hm(s.start_time),s.teachers?s.teachers.last_name+" "+s.teachers.first_name:"—",sessionLabel(s).replace(/&amp;/g,"&"),s.student_groups?.code||""])}]}));
+}
+
 /* ---------- synthèse ---------- */
 async function viewSummary(v){
   const rows=await q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,teacher_id,teachers(first_name,last_name,teacher_statuses(label),departments(code))"));
@@ -612,11 +754,15 @@ async function viewSummary(v){
   const tot=list.reduce((s,o)=>s+o.val,0),tw=list.reduce((s,o)=>s+o.wait,0);
   v.innerHTML=`<h1>Heures validées</h1>
     <p class="lead">Base du calcul de rémunération : seules les durées retenues des émargements validés sont payables.</p>
+    <p style="margin:0 0 16px">${xbar("sX")}</p>
     <div class="stats"><div class="stat"><b>${hrs(tot)}</b><span>Total validé</span></div><div class="stat"><b>${hrs(tw)}</b><span>En attente</span></div>
       <div class="stat"><b>${rows.length}</b><span>Émargements</span></div></div>
     <div class="panel tbl"><table><thead><tr><th>Professeur</th><th>Département</th><th>Statut</th><th>Validé</th><th>En attente</th><th>Rejets</th></tr></thead><tbody>
     ${list.map(o=>`<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}</td><td>${esc(o.t.departments?.code)}</td><td>${esc(o.t.teacher_statuses?.label)}</td>
       <td class="num">${hrs(o.val)}</td><td class="num">${hrs(o.wait)}</td><td class="num">${o.rej}</td></tr>`).join("")}</tbody></table></div>`;
+  wireExport("sX",()=>({file:"heures-validees_"+iso(new Date()),title:"Heures validées",subtitle:"Situation au "+fdl(iso(new Date())),sheets:[
+    {name:"Heures validées",title:"Heures validées par enseignant",keepEmpty:1,head:["Enseignant","Département","Statut","Heures validées","Heures en attente","Rejets"],
+     rows:list.map(o=>[o.t.last_name+" "+o.t.first_name,o.t.departments?.code||"",o.t.teacher_statuses?.label||"",dh(o.val),dh(o.wait),o.rej])}]}));
 }
 
 /* ---------- référentiel ---------- */
@@ -897,7 +1043,7 @@ async function periodDetail(el,p){
       q(sb.from("attendance_records").select("id,status,schedule_sessions!inner(session_date)").in("status",["soumis","correction_demandee"]).gte("schedule_sessions.session_date",p.start_date).lte("schedule_sessions.session_date",p.end_date))]);
     const by=groupBy(items);
     const tot=items.reduce((s,i)=>s+i.amount_fcfa,0);
-    el.innerHTML=`<h2>${esc(p.name)}</h2>
+    el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0 0 12px">${esc(p.name)}</h2>${items.length?xbar("pX"):""}</div>
       ${pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
       ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
       ${canPay()?`<div class="row" style="margin-bottom:12px"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
@@ -918,6 +1064,11 @@ async function periodDetail(el,p){
         async()=>{await q(sb.from("pay_periods").delete().eq("id",p.id));S.periodId=null;toast("Période supprimée");rerender()}));
     }
     el.querySelectorAll("[data-dt]").forEach(b=>b.onclick=()=>linesDialog(by.find(o=>o.id==b.dataset.dt)));
+    wireExport("pX",()=>({file:"paie_"+slug(p.name)+"_provisoire",title:"Paie : "+p.name+" (calcul provisoire)",subtitle:"Du "+fdl(p.start_date)+" au "+fdl(p.end_date),landscape:true,sheets:[
+      {name:"Par enseignant",title:"Total par enseignant (FCFA)",head:["Enseignant","Statut","Séances","Heures","Montant (FCFA)"],
+       rows:by.map(o=>[o.t.last_name+" "+o.t.first_name,o.t.teacher_statuses?.label||"",o.lines.length,dh(o.min),o.amt]).concat([["Total","",items.length,dh(by.reduce((s,o)=>s+o.min,0)),tot]])},
+      {name:"Détail des séances",title:"Détail des séances",head:["Enseignant","Date","Cours","Groupe","Heures","Tarif (FCFA/h)","Montant (FCFA)","Rattrapage"],
+       rows:by.flatMap(o=>o.lines.map(l=>[o.t.last_name+" "+o.t.first_name,fdl(l.session_date),l.course_label,l.group_code,dh(l.minutes),l.rate_fcfa,l.amount_fcfa,l.is_catch_up?"Oui":""]))}]}));
     return;
   }
   const [slips,pays]=await Promise.all([
@@ -925,7 +1076,7 @@ async function periodDetail(el,p){
     q(sb.from("payments").select("*,payslips!inner(pay_period_id)").eq("payslips.pay_period_id",p.id).order("paid_on"))]);
   const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
   const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
-  el.innerHTML=`<h2>${esc(p.name)}</h2>
+  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0 0 12px">${esc(p.name)}</h2>${slips.length?xbar("pX"):""}</div>
     <p class="sub" style="margin:0 0 12px">Approuvée le ${new Date(p.approved_at).toLocaleString("fr-FR",{dateStyle:"long",timeStyle:"short"})}. Les bulletins ci-dessous sont la version de référence.</p>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
@@ -937,6 +1088,12 @@ async function periodDetail(el,p){
     ${pays.length?`<h2>Règlements enregistrés</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Bulletin</th><th>Mode</th><th>Référence</th><th>Montant</th></tr></thead><tbody>
     ${pays.map(x=>`<tr><td class="mono">${fdl(x.paid_on)}</td><td class="mono">${esc(slips.find(s=>s.id===x.payslip_id)?.number)}</td><td>${esc(x.method)}</td><td class="mono">${esc(x.reference||"—")}</td><td class="num">${fcfa(x.amount_fcfa)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
   el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  wireExport("pX",()=>({file:"paie_"+slug(p.name),title:"État de paie : "+p.name,subtitle:"Du "+fdl(p.start_date)+" au "+fdl(p.end_date)+" · approuvée le "+fdl(p.approved_at),landscape:true,sheets:[
+    {name:"Bulletins",title:"Bulletins (FCFA)",head:["Bulletin","Enseignant","Statut","Heures","Net à payer (FCFA)","Réglé (FCFA)","Reste dû (FCFA)","État"],
+     rows:slips.map(s=>[s.number,s.snapshot.enseignant.nom,s.snapshot.enseignant.statut||"",dh(s.total_minutes),s.net_fcfa,paid(s.id),s.net_fcfa-paid(s.id),s.status])
+       .concat([["Total","","",dh(slips.reduce((a,s)=>a+s.total_minutes,0)),tot,tp,tot-tp,""]])},
+    {name:"Règlements",title:"Règlements enregistrés",head:["Date","Bulletin","Mode","Référence","Montant (FCFA)"],
+     rows:pays.map(x=>[fdl(x.paid_on),slips.find(s=>s.id===x.payslip_id)?.number||"",x.method,x.reference||"",x.amount_fcfa])}]}));
   el.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const s=slips.find(x=>x.id==b.dataset.pay);const due=s.net_fcfa-paid(s.id);
     openDialog(`<h3>Enregistrer un paiement</h3>
       <dl class="kv"><dt>Bulletin</dt><dd class="mono">${esc(s.number)}</dd><dt>Enseignant</dt><dd>${esc(s.snapshot.enseignant.nom)}</dd><dt>Reste dû</dt><dd class="mono">${fcfa(due)}</dd></dl>

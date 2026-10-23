@@ -26,6 +26,11 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 
 Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures, ni un émargement qu'il a saisi lui-même : une saisie par délégation est validée par un autre responsable (par exemple la secrétaire).
 
+## Tableau de bord et exports
+
+- Onglet « Tableau de bord » (directeur, secrétaire, aide, responsable financier) : séances prévues, taux d'émargement, heures validées, émargements à valider, séances sans émargement, heures par département et par enseignant, et pour la finance le reste dû. La période se choisit en haut.
+- Exports Excel (.xlsx) et PDF : tableau de bord, heures validées, liste des émargements (selon le filtre affiché), paie d'une période (provisoire ou approuvée avec les règlements). Les heures sont en décimal dans Excel (1,5 = 1 h 30) pour pouvoir calculer.
+
 ## Règles de paie actuelles
 
 - Tarif horaire selon le statut de l'enseignant (vacataire, maître-assistant, maître de conférences, professeur titulaire), avec exception individuelle possible.
