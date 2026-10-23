@@ -142,6 +142,11 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .rank{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,38%) 52px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .rank:last-child{border-bottom:0}
 .rpct{font-weight:700;text-align:right;white-space:nowrap}
+.dtools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.seg{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--accent-soft);border-radius:14px;padding:4px;gap:2px}
+.seg button{border:0;background:none;color:var(--muted);font:600 14px var(--f-body);padding:9px 16px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(20,32,27,.14)}
+.xbar .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:600}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -159,8 +164,11 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .hbar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
 .hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
-  .xbar{width:100%}.xbar .btn{flex:1}
-  .hero{flex-direction:column;align-items:flex-start;gap:14px;padding:18px}.ring{width:120px;height:120px}.bigline{font-size:21px}
+  .dtools{display:grid;gap:12px}.seg{display:grid}.seg button{padding:11px 4px}
+  .xbar{width:100%;display:grid;grid-template-columns:1fr 1fr}.xbar .btn{padding:11px 10px}
+  .hero{display:grid;grid-template-columns:92px 1fr;column-gap:16px;row-gap:2px;align-items:center;padding:18px}.herotxt{display:contents}
+  .ring{width:92px;height:92px;grid-row:1/4;grid-column:1}.herotxt>*{grid-column:2}.herotxt>.mini{grid-column:1/-1;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .bigline{font-size:18px;margin:0}.hero .sub,.hero .late{font-size:13.5px}
   .drow{grid-template-columns:1fr;gap:4px}.rank{grid-template-columns:minmax(0,1fr) 58px}.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;width:100%}.rank .rbar{grid-column:1/-1;grid-row:2}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
   .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
@@ -720,7 +728,8 @@ async function viewPlanning(v){
 function slug(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").replace(/^-|-$/g,"").toLowerCase()}
 const nf=n=>Number(n).toLocaleString("fr-FR").replace(/[  ]/g," ");
 const dh=min=>Math.round((min||0)/60*100)/100; /* minutes -> heures décimales (calculables dans Excel) */
-function xbar(id){return `<div class="xbar" id="${id}"><button class="btn sm" type="button" data-x="xlsx">Exporter Excel</button><button class="btn sm" type="button" data-x="pdf">Exporter PDF</button></div>`}
+const DLI=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>`;
+function xbar(id){return `<div class="xbar" id="${id}"><button class="btn sm" type="button" data-x="xlsx" aria-label="Exporter en Excel">${DLI}Excel</button><button class="btn sm" type="button" data-x="pdf" aria-label="Exporter en PDF">${DLI}PDF</button></div>`}
 function wireExport(id,build){
   const host=document.getElementById(id);if(!host)return;
   host.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{
@@ -768,7 +777,7 @@ async function qAll(make){let all=[],from=0;for(;;){const d=await q(make().range
 
 /* ---------- tableau de bord ---------- */
 function rateClass(p){return p>=90?"p-ok":p>=70?"p-warn":"p-bad"}
-const DPRESETS=[["semaine","Cette semaine"],["mois","Ce mois"],["semestre","Ce semestre"],["perso","Personnalisée"]];
+const DPRESETS=[["semaine","Semaine"],["mois","Mois"],["semestre","Semestre"],["perso","Perso."]];
 function trendChart(buckets){
   /* courbe : heures prévues (pointillés) et heures validées (aire) par semaine ou par jour */
   const wide=window.innerWidth>720,W=wide?1040:360,H=wide?250:210,L=wide?44:34,R=14,T=14,B=30,n=buckets.length;
@@ -796,9 +805,9 @@ async function viewDashboard(v){
   const presets=DPRESETS.filter(([k])=>k!=="semestre"||sem);
   v.innerHTML=`<h1>Tableau de bord</h1>
     <p class="lead">${fdl(S.dFrom)} au ${fdl(S.dTo)}${S.dPreset==="semestre"&&sem?" · "+esc(sem.label):""}</p>
-    <div class="row" style="margin-bottom:${S.dPreset==="perso"?"10":"18"}px;align-items:center">
-      <div class="chips">${presets.map(([k,l])=>`<button data-pre="${k}" aria-pressed="${S.dPreset===k}">${l}</button>`).join("")}</div>
-      <span style="margin-left:auto">${xbar("dX")}</span></div>
+    <div class="dtools" style="margin-bottom:${S.dPreset==="perso"?"10":"18"}px">
+      <div class="seg" role="group" aria-label="Période">${presets.map(([k,l])=>`<button data-pre="${k}" aria-pressed="${S.dPreset===k}">${l}</button>`).join("")}</div>
+      ${xbar("dX")}</div>
     ${S.dPreset==="perso"?`<div class="row" style="margin-bottom:18px"><label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label><button class="btn" id="dOk">Afficher</button></div>`:""}
     <div id="dBody"><p class="empty">Chargement…</p></div>`;
   v.querySelectorAll("[data-pre]").forEach(b=>b.onclick=()=>{S.dPreset=b.dataset.pre;rerender()});
