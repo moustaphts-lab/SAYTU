@@ -20,11 +20,11 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 | Professeur | Émarge ses séances, consulte ses heures et ses bulletins. |
 | Directeur des études (enseigne aussi) | Saisit le référentiel, construit les emplois du temps, suit les heures. |
 | Secrétaire | Assiste le directeur (référentiel, emplois du temps) et l'aide du responsable financier (validation des heures). |
-| Aide du responsable financier | Valide les heures des professeurs de tous les départements. |
+| Aide du responsable financier | Valide les heures des professeurs de tous les départements. Peut émarger à la place des professeurs qui ne le font pas (saisie par délégation, avec la fiche de cours comme source). |
 | Responsable financier | Tarifs, calcul et approbation de la paie, bulletins, paiements. |
 | Administrateur (nommé par l'université) | Crée les comptes, attribue les rôles, réinitialise les mots de passe. N'a pas accès à la paie. |
 
-Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures.
+Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures, ni un émargement qu'il a saisi lui-même : une saisie par délégation est validée par un autre responsable (par exemple la secrétaire).
 
 ## Règles de paie actuelles
 

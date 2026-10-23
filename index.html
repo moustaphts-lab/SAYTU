@@ -362,27 +362,53 @@ function toMin(t){const [h,m]=t.split(":").map(Number);return h*60+m}
 
 /* ---------- responsable ---------- */
 async function viewReview(v){
-  let qy=sb.from("attendance_records").select("id,status,planned_minutes,declared_start,declared_end,declared_minutes,retained_minutes,teacher_comment,review_reason,submitted_at,teacher_id,teachers(first_name,last_name),schedule_sessions(session_date,start_time,end_time,teaching_assignments(courses(code,name,departments(code))),student_groups(code),rooms(code))").order("submitted_at",{ascending:false}).limit(300);
+  let qy=sb.from("attendance_records").select("id,status,planned_minutes,declared_start,declared_end,declared_minutes,retained_minutes,teacher_comment,review_reason,submitted_at,submitted_by,entered_for_teacher,teacher_id,teachers(first_name,last_name),schedule_sessions(session_date,start_time,end_time,teaching_assignments(courses(code,name,departments(code))),student_groups(code),rooms(code))").order("submitted_at",{ascending:false}).limit(300);
   if(S.filter!=="tous")qy=qy.eq("status",S.filter);
   const rows=await q(qy);
   const counts=await q(sb.from("attendance_records").select("status"));
   const c=k=>counts.filter(x=>x.status===k).length;
   const F=[["soumis","En attente",c("soumis")],["correction_demandee","Correction demandée",c("correction_demandee")],["valide","Validés",c("valide")],["rejete","Rejetés",c("rejete")],["tous","Tous",counts.length]];
   v.innerHTML=`<h1>Contrôle des émargements</h1>
-    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures.</p>
+    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
+    <p style="margin:0 0 12px"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button> <span class="sub">Pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours).</span></p>
     <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
     <div class="panel tbl">${rows.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
     ${rows.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
       return `<tr><td>${fdate(s.session_date)}<div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}</div></td>
-      <td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td>
+      <td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}${a.entered_for_teacher?`<div class="sub">Saisi par délégation</div>`:""}</td>
       <td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
       <td class="mono">${hm(a.declared_start)}–${hm(a.declared_end)}${a.teacher_comment?`<div class="sub" style="font-family:var(--f-body)">« ${esc(a.teacher_comment)} »</div>`:""}</td>
       <td class="mono ${d?"gap":""}">${d?(d>0?"+":"−")+Math.abs(d)+" min":"—"}</td>
       <td>${pill(a.status)}${a.retained_minutes!=null?`<div class="sub">retenu ${hrs(a.retained_minutes)}</div>`:""}${a.review_reason?`<div class="sub">${esc(a.review_reason)}</div>`:""}</td>
-      <td>${a.status==="soumis"?(self?`<span class="sub">Vos heures</span>`:`<button class="btn primary sm" data-rv="${a.id}">Contrôler</button>`):""}</td></tr>`}).join("")}
+      <td>${a.status==="soumis"?(self?`<span class="sub">Vos heures</span>`:a.submitted_by===S.user.id?`<span class="sub">Saisi par vous : à valider par un collègue</span>`:`<button class="btn primary sm" data-rv="${a.id}">Contrôler</button>`):""}</td></tr>`}).join("")}
     </tbody></table>`:`<p class="empty">Aucun émargement dans cette catégorie.</p>`}</div>`;
   v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
   v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)));
+  v.querySelector("#delegBtn").onclick=delegDialog;
+}
+
+async function delegDialog(){
+  const from=new Date();from.setDate(from.getDate()-45);
+  let list=await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,teacher_id,teachers(first_name,last_name),teaching_assignments(courses(code,name)),student_groups(code),attendance_records(id)").neq("status","annulee").gte("session_date",iso(from)).lte("session_date",iso(new Date())).order("session_date",{ascending:false}).limit(500));
+  const now=new Date();
+  list=list.filter(s=>!s.attendance_records&&new Date(s.session_date+"T"+s.start_time)<=now&&!(S.teacher&&s.teacher_id===S.teacher.id));
+  if(!list.length){toast("Aucune séance en attente d'émargement sur les 45 derniers jours.");return}
+  const byId=Object.fromEntries(list.map(s=>[s.id,s]));
+  openDialog(`<h3>Émarger pour un professeur</h3>
+    <label>Séance<select id="dS">${list.map(s=>`<option value="${s.id}">${fdate(s.session_date)} ${hm(s.start_time)} · ${esc(s.teachers?.last_name)} ${esc(s.teachers?.first_name)} · ${esc(s.teaching_assignments?.courses?.code)} · ${esc(s.student_groups?.code)}</option>`).join("")}</select></label>
+    <div class="row"><label>Début réel<input id="dStart" type="time" required></label><label>Fin réelle<input id="dEnd" type="time" required></label></div>
+    <label>Source de la saisie (ex. fiche de cours n°…)<textarea id="dCom" required></textarea></label>
+    <p class="sub" style="margin:0">L'émargement est enregistré à votre nom, marqué « saisi par délégation », et devra être validé par un autre responsable.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+  async()=>{
+    const s=byId[dS.value];
+    if(toMin(dEnd.value)-toMin(dStart.value)<=0)throw new Error("L'heure de fin doit être après l'heure de début.");
+    if(!dCom.value.trim())throw new Error("Indiquez la source de la saisie.");
+    await q(sb.rpc("submit_attendance_for",{p_session_id:s.id,p_start:dStart.value,p_end:dEnd.value,p_comment:dCom.value.trim()}));
+    toast("Émargement enregistré, en attente de validation");rerender();
+  });
+  const fill=()=>{const s=byId[dS.value];dStart.value=hm(s.start_time);dEnd.value=hm(s.end_time)};
+  dS.onchange=fill;fill();
 }
 
 function reviewDialog(a){
