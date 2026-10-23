@@ -36,6 +36,8 @@ header.top .bar{display:flex;align-items:center;gap:12px;padding-block:10px;min-
 .brand{display:flex;align-items:center;gap:10px;font:700 18px var(--f-display);letter-spacing:-.01em}
 .brand i{width:34px;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:700 17px var(--f-display);font-style:normal}
 .brand small{display:block;font:400 12px var(--f-body);color:var(--muted);letter-spacing:0}
+.burger{display:none;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer;flex:0 0 auto;padding:0}
+.scrim,nav.tabs .drawer-top{display:none}
 .menu{margin-left:auto;position:relative}
 .menu summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 5px;border-radius:99px;border:1px solid var(--line)}
 .menu summary::-webkit-details-marker{display:none}
@@ -155,12 +157,19 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
   .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
   body{font-size:16px}
-  main{padding-block:18px calc(96px + env(safe-area-inset-bottom,0px))}
+  main{padding-block:18px calc(40px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
   .menu .nm{display:none}.menu summary{padding:3px}
   .brand small{display:none}
-  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding:6px max(8px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px));gap:2px}
-  nav.tabs button{flex:0 0 auto;min-width:84px;padding:9px 12px;font-size:13px;border-radius:12px}
+  .burger{display:grid}
+  nav.tabs{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);flex-direction:column;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);padding:calc(18px + env(safe-area-inset-top,0px)) 12px 24px;gap:4px;transform:translateX(-102%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;z-index:30;box-shadow:0 0 40px rgba(8,16,12,.25)}
+  body.nav-open nav.tabs{transform:none;visibility:visible;transition:transform .22s ease}
+  body.nav-open{overflow:hidden}
+  nav.tabs .drawer-top{display:block;padding:4px 8px 16px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+  nav.tabs .drawer-top p{margin:10px 0 0;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+  nav.tabs button{width:100%;text-align:left;padding:14px 14px;font-size:16px;border-radius:12px;flex:0 0 auto}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(8,16,12,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:29}
+  body.nav-open .scrim{opacity:1;pointer-events:auto}
   header.top .wrap:last-child{padding:0}
   input,select,textarea{font-size:16px;min-height:46px}
   .btn{min-height:44px}.btn.sm{min-height:40px}
@@ -362,11 +371,17 @@ function renderShell(){
   const name=S.user.user_metadata?.full_name||S.user.email;
   const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div class="brand"><i>U</i><div>UCAB Touba<small>Année universitaire ${esc(S.year||"")}</small></div></div>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${t.label}</button>`).join("")}</nav></div>
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top"><div class="brand"><i>U</i><div>UCAB Touba<small>Année universitaire ${esc(S.year||"")}</small></div></div><p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${t.label}</button>`).join("")}</nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
+  const setNav=o=>{document.body.classList.toggle("nav-open",o);burger.setAttribute("aria-expanded",o);burger.setAttribute("aria-label",o?"Fermer le menu":"Ouvrir le menu")};
+  document.body.classList.remove("nav-open");
+  burger.onclick=()=>setNav(!document.body.classList.contains("nav-open"));
+  scrim.onclick=()=>setNav(false);
+  document.onkeydown=e=>{if(e.key==="Escape")setNav(false)};
   pwBtn.onclick=passwordDialog;
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
