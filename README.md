@@ -17,7 +17,7 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 
 | Personne | Ce qu'elle fait dans l'application |
 |---|---|
-| Professeur | Émarge ses séances, consulte ses heures et ses bulletins. |
+| Professeur | Émarge ses séances, indique ses disponibilités de la semaine, consulte ses heures et ses bulletins. |
 | Directeur des études (enseigne aussi) | Saisit le référentiel, construit les emplois du temps, suit les heures. |
 | Secrétaire | Assiste le directeur (référentiel, emplois du temps) et l'aide du responsable financier (validation des heures). |
 | Aide du responsable financier | Valide les heures des professeurs de tous les départements. Peut émarger à la place des professeurs qui ne le font pas (saisie par délégation, avec la fiche de cours comme source). |
@@ -25,6 +25,10 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 | Administrateur (nommé par l'université) | Crée les comptes, attribue les rôles, réinitialise les mots de passe. N'a pas accès à la paie. |
 
 Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures, ni un émargement qu'il a saisi lui-même : une saisie par délégation est validée par un autre responsable (par exemple la secrétaire).
+
+## Disponibilités des professeurs
+
+Chaque professeur déclare dans « Mes disponibilités » les plages où il peut enseigner chaque semaine (plusieurs jours à la fois, précision facultative). Le directeur et la secrétaire les voient dans « Emplois du temps » : affichées par professeur, comptées dans un indicateur, et un créneau placé hors de ces plages est signalé « Hors disponibilités » (avertissement, pas un blocage). Sans plage déclarée, le professeur est considéré disponible à tout moment.
 
 ## Tableau de bord et exports
 

@@ -82,6 +82,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500;color:var(--muted)}
 input,select,textarea{font:15px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-height:42px;max-width:100%}
 textarea{min-height:76px;resize:vertical}
+input[type=checkbox]{min-height:0;width:18px;height:18px;padding:0;accent-color:var(--accent)}
 .login{max-width:420px;margin:7vh auto 0}
 .login .brand{margin-bottom:22px}
 .login .panel{padding:24px;display:flex;flex-direction:column;gap:14px}
@@ -110,10 +111,19 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:7px 14px;font:500 13.5px var(--f-body);cursor:pointer}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
+.avrow{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.avrow:last-child{border-bottom:0}
+.avday{width:96px;font-weight:600;flex:0 0 auto}
+.avchips{flex:1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.avchip{display:inline-flex;gap:8px;align-items:center;background:var(--accent-soft);color:var(--accent);padding:4px 4px 4px 12px;border-radius:99px;font-size:14px}
+.avx{border:0;background:none;color:inherit;cursor:pointer;font-size:14px;width:30px;height:30px;border-radius:50%}
+.avx:hover{background:var(--surface)}
+.day .avail{padding:6px 12px;border-bottom:1px dashed var(--line);color:var(--ok);font-size:12.5px}
 .hbar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
 .hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
   .xbar{width:100%}.xbar .btn{flex:1}
+  .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
   body{font-size:16px}
   main{padding-block:18px calc(96px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
@@ -251,6 +261,8 @@ function errMsg(e){let m=e?.message||String(e);
   if(m.includes("no_teacher_overlap"))m="Conflit : le professeur a déjà un cours sur ce créneau.";
   if(m.includes("no_group_overlap"))m="Conflit : le groupe a déjà un cours sur ce créneau.";
   if(m.includes("Invalid login"))m="Adresse ou mot de passe incorrect.";
+  if(m.includes("teacher_availability_no_overlap"))m="Cette plage chevauche une plage déjà déclarée ce jour-là.";
+  if(m.includes("availability_time_order"))m="L'heure de fin doit être après l'heure de début.";
   if(m.includes("duplicate key"))m="Cet enregistrement existe déjà (même code, même adresse ou même affectation).";
   if(m.includes("foreign key"))m="Opération impossible : cet élément est utilisé ailleurs (séances, affectations, bulletins…).";
   if(m.includes("check constraint"))m="Valeurs invalides : vérifiez les dates, les durées et les montants.";
@@ -301,6 +313,7 @@ function availableTabs(){
   const t=[];
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
+  if(S.teacher)t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
   if(S.teacher)t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
@@ -496,9 +509,34 @@ function reviewDialog(a){
   });
 }
 
+/* ---------- disponibilités (professeur) ---------- */
+async function viewAvailability(v){
+  const rows=await q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time,note").eq("teacher_id",S.teacher.id).order("start_time"));
+  v.innerHTML=`<h1>Mes disponibilités</h1>
+    <p class="lead">Indiquez les plages où vous pouvez enseigner chaque semaine. Le directeur des études les consulte pour construire l'emploi du temps et signale tout cours placé en dehors. Sans plage déclarée, vous êtes considéré disponible à tout moment.</p>
+    <p style="margin:0 0 16px"><button class="btn primary" id="avAdd">Ajouter une plage</button></p>
+    <div class="panel">${[1,2,3,4,5,6].map(d=>{const r=rows.filter(x=>x.day_of_week===d);
+      return `<div class="avrow"><div class="avday">${DAYS[d]}</div><div class="avchips">${r.length?r.map(x=>`<span class="avchip"><b>${hm(x.start_time)}–${hm(x.end_time)}</b>${x.note?` <span class="sub">${esc(x.note)}</span>`:""}<button class="avx" data-del="${x.id}" aria-label="Supprimer la plage ${hm(x.start_time)}–${hm(x.end_time)}">✕</button></span>`).join(""):`<span class="sub">Non renseigné</span>`}</div><button class="btn sm" data-add="${d}">Ajouter</button></div>`}).join("")}</div>
+    <p class="sub" style="margin-top:12px">${rows.length?"Vos disponibilités sont visibles par le directeur des études et la secrétaire.":"Aucune plage déclarée pour le moment."}</p>`;
+  const dlg=pre=>openDialog(`<h3>Ajouter une plage de disponibilité</h3>
+    <fieldset style="border:0;padding:0;margin:0"><legend style="font-size:13px;font-weight:500;color:var(--muted);padding:0 0 6px">Jours</legend><div class="chips">${[1,2,3,4,5,6].map(d=>`<label style="flex-direction:row;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:7px 12px;color:var(--ink)"><input type="checkbox" id="av${d}" ${d===pre?"checked":""}> ${DAYS[d]}</label>`).join("")}</div></fieldset>
+    <div class="row"><label>De<input id="avS" type="time" required value="08:00"></label><label>À<input id="avE" type="time" required value="12:00"></label></div>
+    <label>Précision (facultatif)<input id="avN" placeholder="Ex. : enseigne ailleurs l'après-midi"></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+  async()=>{
+    const days=[1,2,3,4,5,6].filter(d=>document.getElementById("av"+d).checked);
+    if(!days.length)throw new Error("Choisissez au moins un jour.");
+    if(avE.value<=avS.value)throw new Error("L'heure de fin doit être après l'heure de début.");
+    await q(sb.from("teacher_availability").insert(days.map(d=>({teacher_id:S.teacher.id,day_of_week:d,start_time:avS.value,end_time:avE.value,note:avN.value.trim()||null}))));
+    toast("Disponibilités enregistrées");rerender()});
+  avAdd.onclick=()=>dlg(null);
+  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>dlg(Number(b.dataset.add)));
+  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{try{await q(sb.from("teacher_availability").delete().eq("id",b.dataset.del));toast("Plage supprimée");rerender()}catch(e){toast(errMsg(e),true)}});
+}
+
 /* ---------- emplois du temps ---------- */
 async function viewPlanning(v){
-  const [slots,conf,groups,teachers,rooms,assigns,courses,sems]=await Promise.all([
+  const [slots,conf,groups,teachers,rooms,assigns,courses,sems,avails]=await Promise.all([
     q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
     q(sb.from("slot_conflicts").select("*")),
     q(sb.from("student_groups").select("id,code,name").order("code")),
@@ -506,7 +544,8 @@ async function viewPlanning(v){
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
     q(sb.from("courses").select("id,code,name").order("code")),
-    q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date"))]);
+    q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
+    q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time,note").order("start_time"))]);
   const lists={group:groups.map(g=>[g.id,g.code]),teacher:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),room:rooms.map(r=>[r.id,r.code])};
   if(!S.planId||!lists[S.planView].some(x=>x[0]==S.planId))S.planId=lists[S.planView][0]?.[0];
   const key={group:s=>s.teaching_assignments.group_id,teacher:s=>s.teaching_assignments.teacher_id,room:s=>s.room_id}[S.planView];
@@ -514,6 +553,10 @@ async function viewPlanning(v){
   const confIds=new Set(conf.flatMap(c=>[c.slot_a,c.slot_b]));
   const today=iso(new Date()),in4=iso(addDays(new Date(),28));
   const drafts=slots.filter(s=>!s.published).length;
+  const avOf=tid=>avails.filter(a=>a.teacher_id===tid);
+  const outside=s=>{const av=avOf(s.teaching_assignments.teacher_id);if(!av.length)return false;
+    return !av.some(a=>a.day_of_week===s.day_of_week&&a.start_time<=s.start_time&&a.end_time>=s.end_time)};
+  const outCount=slots.filter(outside).length;
 
   const weekly={};slots.forEach(s=>{weekly[s.assignment_id]=(weekly[s.assignment_id]||0)+(toMin(s.end_time)-toMin(s.start_time))/60});
   const weeksOf=sem=>Math.max(1,Math.ceil(((new Date(sem.end_date)-new Date(sem.start_date))/86400000+1)/7));
@@ -525,17 +568,18 @@ async function viewPlanning(v){
     <div class="stats"><div class="stat"><b>${slots.length}</b><span>Créneaux hebdomadaires</span></div>
       <div class="stat"><b style="color:${drafts?"var(--warn)":"inherit"}">${drafts}</b><span>Brouillons</span></div>
       <div class="stat"><b style="color:${unplaced?"var(--warn)":"inherit"}">${unplaced}</b><span>Affectations non placées</span></div>
-      <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>Conflits détectés</span></div></div>
+      <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>Conflits détectés</span></div>
+      <div class="stat"><b style="color:${outCount?"var(--warn)":"inherit"}">${outCount}</b><span>Hors disponibilités du professeur</span></div></div>
     <div class="row" style="margin-bottom:12px">
       <label>Afficher par<select id="pView"><option value="group">Groupe</option><option value="teacher">Professeur</option><option value="room">Salle</option></select></label>
       <label>&nbsp;<select id="pId">${lists[S.planView].map(([id,l])=>`<option value="${id}" ${id==S.planId?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
       <button class="btn primary" id="addSlot" ${assigns.length?"":"disabled"}>Ajouter un créneau</button>
       ${drafts?`<button class="btn" id="pubAll">Publier les ${drafts} brouillon(s)</button>`:""}
     </div>
-    <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
+    <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${S.planView==="teacher"&&avOf(Number(S.planId)).filter(a=>a.day_of_week===d).length?`<div class="avail">Disponible ${avOf(Number(S.planId)).filter(a=>a.day_of_week===d).map(a=>hm(a.start_time)+"–"+hm(a.end_time)).join(", ")}</div>`:""}${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
       <span class="mono">${hm(s.start_time)}–${hm(s.end_time)}</span><b>${esc(s.teaching_assignments.courses.code)} ${esc(s.teaching_assignments.courses.name)}</b>
       <span class="sub">${esc(s.teaching_assignments.teachers.last_name)} · ${esc(s.teaching_assignments.student_groups.code)} · ${esc(s.rooms.code)}</span>
-      <div class="row" style="gap:6px;margin-top:6px">${s.published?"":`<span class="pill p-mute">Brouillon</span>`}<button class="btn sm" data-es="${s.id}">Modifier</button><button class="btn sm danger" data-ds="${s.id}">Supprimer</button></div></div>`).join("")}</div>`).join("")}</div>
+      <div class="row" style="gap:6px;margin-top:6px">${s.published?"":`<span class="pill p-mute">Brouillon</span>`}${outside(s)?`<span class="pill p-warn">Hors disponibilités</span>`:""}<button class="btn sm" data-es="${s.id}">Modifier</button><button class="btn sm danger" data-ds="${s.id}">Supprimer</button></div></div>`).join("")}</div>`).join("")}</div>
     ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
 
     <div class="row" style="justify-content:space-between"><h2>Affectations · ${assigns.length}</h2><button class="btn sm" id="addAsg">Ajouter une affectation</button></div>
@@ -581,7 +625,9 @@ async function viewPlanning(v){
     async()=>{const o=readFields(f);
       if(o.end_time<=o.start_time)throw new Error("L'heure de fin doit être après l'heure de début.");
       if(row)await q(sb.from("timetable_slots").update(o).eq("id",row.id));else await q(sb.from("timetable_slots").insert(o));
-      toast(row?"Créneau modifié":"Créneau ajouté");rerender()});
+      const as=assigns.find(a=>a.id===o.assignment_id),av=as?avOf(as.teacher_id):[];
+      const off=av.length&&!av.some(a=>a.day_of_week===o.day_of_week&&hm(a.start_time)<=o.start_time&&hm(a.end_time)>=o.end_time);
+      toast((row?"Créneau modifié":"Créneau ajouté")+(off?" · Attention : en dehors des disponibilités du professeur":""),!!off);rerender()});
   };
   addSlot.onclick=()=>slotDialog(null);
   v.querySelectorAll("[data-es]").forEach(b=>b.onclick=()=>slotDialog(slots.find(s=>s.id==b.dataset.es)));
