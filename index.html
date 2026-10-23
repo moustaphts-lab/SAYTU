@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UCAB Enseignements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/* Mise en page : barre d'en-tête, onglets selon le rôle, contenu en registre (tableaux denses, pastilles d'état) */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --line:#dde1e8; --ink:#16202e; --muted:#5d6879;
+  --accent:#1d4f8c; --accent-soft:#e3ecf7; --ochre:#a8660c;
+  --ok:#1f7a4a; --ok-soft:#e2f3ea; --warn:#9a5b00; --warn-soft:#fbf0dc; --bad:#b3261e; --bad-soft:#fbe6e4;
+  --f-display:"Literata", Georgia, serif; --f-body:"IBM Plex Sans", system-ui, sans-serif; --f-mono:"IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --surface:#171e28; --line:#2a3443; --ink:#e6eaf0; --muted:#98a3b4;
+  --accent:#7fb0ec; --accent-soft:#1c2b40; --ochre:#e0a24a;
+  --ok:#5cc58c; --ok-soft:#163324; --warn:#e7b04f; --warn-soft:#3a2c12; --bad:#f0857c; --bad-soft:#3d1a18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --surface:#171e28; --line:#2a3443; --ink:#e6eaf0; --muted:#98a3b4;
+  --accent:#7fb0ec; --accent-soft:#1c2b40; --ochre:#e0a24a;
+  --ok:#5cc58c; --ok-soft:#163324; --warn:#e7b04f; --warn-soft:#3a2c12; --bad:#f0857c; --bad-soft:#3d1a18; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header.top .wrap{display:flex;align-items:center;gap:16px;padding-block:12px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-size:20px;font-weight:600;letter-spacing:.01em}
+.brand small{display:block;font-family:var(--f-body);font-size:12px;color:var(--muted);font-weight:400}
+.who{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;border-top:1px solid var(--line)}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;font:500 14px var(--f-body);color:var(--muted);cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+main{padding-block:24px 64px}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;margin:0 0 4px;text-wrap:balance}
+h2{font-size:16px;font-weight:600;margin:28px 0 10px}
+.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.stat b{display:block;font:500 24px var(--f-mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.sub{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:500;white-space:nowrap}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-bad{background:var(--bad-soft);color:var(--bad)} .p-info{background:var(--accent-soft);color:var(--accent)}
+.p-mute{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.gap{color:var(--ochre);font-weight:500}
+button.btn,.btn{font:500 14px var(--f-body);border-radius:6px;padding:7px 12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:4px 9px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input,select,textarea{font:14px var(--f-body);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+textarea{min-height:64px;resize:vertical}
+.login{max-width:440px;margin:8vh auto 0}
+.login .panel{padding:24px;display:flex;flex-direction:column;gap:14px}
+.demo{margin-top:16px;font-size:13px}
+.demo button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:8px 2px;color:var(--ink);font:13px var(--f-body);cursor:pointer}
+.demo button span{color:var(--muted);float:right}
+.err{color:var(--bad);font-size:13px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;font-size:14px;z-index:20;max-width:90vw}
+.toast.bad{background:var(--bad);color:var(--surface)}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);padding:0;width:min(520px,94vw)}
+dialog::backdrop{background:rgba(10,15,25,.45)}
+dialog form{padding:20px;display:flex;flex-direction:column;gap:12px}
+dialog h3{margin:0;font-family:var(--f-display);font-weight:600;font-size:19px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.week{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:8px;overflow-x:auto}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-height:120px}
+.day h4{margin:0;padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line)}
+.slot{margin:8px;padding:8px;border-radius:6px;background:var(--accent-soft);font-size:13px}
+.slot.conf{background:var(--bad-soft)}
+.slot b{display:block}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:4px 11px;font:13px var(--f-body);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+@media (max-width:560px){h1{font-size:22px}.who .name{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"><form id="dlgForm" method="dialog"></form></dialog>
+
+<script>
+const SUPABASE_URL = "https://fkfuviwquoacpehmctsn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_R98wA_kmIeqPt2YTmCRLQQ_69QKmx4s";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const DEMO = [
+  ["awa.ndiaye@univdemo.test","Professeure (Informatique)"],
+  ["resp.info@univdemo.test","Resp. Informatique + professeur"],
+  ["resp.gd@univdemo.test","Resp. Gestion et Droit"],
+  ["planif@univdemo.test","Emplois du temps"],
+  ["finance@univdemo.test","Service financier"],
+  ["direction@univdemo.test","Direction"],
+  ["admin@univdemo.test","Administrateur"]];
+const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+const ROLE_LABEL = {admin:"Administrateur",planificateur:"Emplois du temps",professeur:"Professeur",responsable:"Responsable pédagogique",finance:"Service financier",direction:"Direction"};
+const ATT = {
+  soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
+
+const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()), filter:"soumis", planView:"group", planId:null};
+const $app = document.getElementById("app");
+
+/* ---------- utilitaires ---------- */
+function esc(v){return String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function pad(n){return String(n).padStart(2,"0")}
+function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const k=(x.getDay()+6)%7;x.setDate(x.getDate()-k);return x}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function fdate(s){const [y,m,d]=s.split("-").map(Number);const x=new Date(y,m-1,d);return x.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"short"})}
+function hm(t){return (t||"").slice(0,5)}
+function hrs(min){if(min==null)return "—";const h=Math.floor(min/60),m=min%60;return h+" h"+(m?" "+pad(m):"")}
+function has(r){return S.roles.some(x=>x.role===r)}
+function pill(st){const [l,c]=ATT[st]||["Non émargé","p-mute"];return `<span class="pill ${c}">${l}</span>`}
+function toast(msg,bad){const t=document.createElement("div");t.className="toast"+(bad?" bad":"");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),bad?6000:3000)}
+function errMsg(e){let m=e?.message||String(e);
+  if(m.includes("no_room_overlap"))m="Conflit : la salle est déjà occupée sur ce créneau.";
+  if(m.includes("no_teacher_overlap"))m="Conflit : le professeur a déjà un cours sur ce créneau.";
+  if(m.includes("no_group_overlap"))m="Conflit : le groupe a déjà un cours sur ce créneau.";
+  if(m.includes("Invalid login"))m="Adresse ou mot de passe incorrect.";
+  return m}
+async function q(p){const {data,error}=await p;if(error)throw error;return data}
+function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c?.code)} · ${esc(c?.name)}`}
+
+/* ---------- connexion ---------- */
+function renderLogin(msg){
+  $app.innerHTML=`<div class="wrap"><div class="login">
+    <h1>UCAB Enseignements</h1>
+    <p class="lead">Emplois du temps, émargement des professeurs et contrôle des heures.</p>
+    <form class="panel" id="loginForm">
+      <label>Adresse e-mail<input id="lEmail" type="email" required autocomplete="username"></label>
+      <label>Mot de passe<input id="lPass" type="password" required autocomplete="current-password"></label>
+      ${msg?`<div class="err">${esc(msg)}</div>`:""}
+      <button class="btn primary" type="submit">Se connecter</button>
+    </form>
+    <div class="demo"><p class="sub">Comptes de démonstration (mot de passe : <span class="mono">Demo-2026!</span>)</p>
+      ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
+    </div></div></div>`;
+  document.getElementById("loginForm").onsubmit=async ev=>{ev.preventDefault();
+    const {error}=await sb.auth.signInWithPassword({email:lEmail.value.trim(),password:lPass.value});
+    if(error)renderLogin(errMsg(error)); else boot()};
+  $app.querySelectorAll(".demo button").forEach(b=>b.onclick=()=>{lEmail.value=b.dataset.email;lPass.value="Demo-2026!";lPass.focus()});
+}
+
+async function boot(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){renderLogin();return}
+  S.user=session.user;
+  try{
+    S.roles=await q(sb.rpc("my_roles"));
+    const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
+    S.teacher=t;
+  }catch(e){toast(errMsg(e),true)}
+  const tabs=availableTabs();
+  if(!tabs.length){$app.innerHTML=`<div class="wrap"><p class="empty">Aucun rôle n'est attribué à ce compte. Contactez l'administrateur.</p></div>`;return}
+  let h=location.hash.slice(1);
+  S.tab=tabs.find(t=>t.id===h)?h:tabs[0].id;
+  renderShell();
+}
+
+function availableTabs(){
+  const t=[];
+  if(S.teacher)t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
+  if(has("responsable")||has("admin"))t.push({id:"controle",label:"Contrôle des émargements",fn:viewReview});
+  if(has("planificateur")||has("admin"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
+  if(has("finance")||has("direction")||has("admin"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
+  if(has("admin"))t.push({id:"referentiel",label:"Référentiel",fn:viewRef});
+  if(has("admin")||has("direction"))t.push({id:"journal",label:"Journal",fn:viewAudit});
+  return t;
+}
+
+function renderShell(){
+  const tabs=availableTabs();
+  const name=S.user.user_metadata?.full_name||S.user.email;
+  const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
+  $app.innerHTML=`<header class="top"><div class="wrap">
+      <div class="brand">UCAB<small>Année universitaire 2026-2027</small></div>
+      <div class="who"><span class="name"><b style="color:var(--ink)">${esc(name)}</b> · ${esc(roles)}</span>
+      <button class="btn sm" id="logout">Se déconnecter</button></div></div>
+    <div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${t.label}</button>`).join("")}</nav></div>
+  </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
+  logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
+  $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
+  const tab=tabs.find(t=>t.id===S.tab);
+  tab.fn(document.getElementById("view")).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
+}
+function rerender(){renderShell()}
+
+/* ---------- dialogue ---------- */
+function openDialog(html,onSubmit){
+  const dlg=document.getElementById("dlg"),f=document.getElementById("dlgForm");
+  f.innerHTML=html+`<div class="err" id="dlgErr"></div>`;
+  f.onsubmit=async ev=>{
+    const btn=ev.submitter;if(btn&&btn.value==="cancel")return;
+    ev.preventDefault();
+    try{btn&&(btn.disabled=true);await onSubmit(btn?btn.value:null,f);dlg.close();}
+    catch(e){document.getElementById("dlgErr").textContent=errMsg(e);btn&&(btn.disabled=false)}
+  };
+  dlg.showModal();
+}
+
+/* ---------- professeur ---------- */
+const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name)),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at)";
+
+async function viewTeacher(v){
+  const from=iso(S.week),to=iso(addDays(S.week,6));
+  const [week,all]=await Promise.all([
+    q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",S.teacher.id).gte("session_date",from).lte("session_date",to).order("session_date").order("start_time")),
+    q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes").eq("teacher_id",S.teacher.id))]);
+  const pastNot=await q(sb.from("schedule_sessions").select("id,attendance_records(id)").eq("teacher_id",S.teacher.id).neq("status","annulee").lt("session_date",iso(new Date())));
+  const missing=pastNot.filter(s=>!s.attendance_records).length;
+  const val=all.filter(a=>a.status==="valide").reduce((s,a)=>s+a.retained_minutes,0);
+  const wait=all.filter(a=>a.status==="soumis").reduce((s,a)=>s+a.declared_minutes,0);
+  const toFix=all.filter(a=>a.status==="correction_demandee").length;
+  const now=new Date();
+  v.innerHTML=`<h1>Mes séances</h1>
+    <p class="lead">${esc(S.teacher.first_name+" "+S.teacher.last_name)}. Émargez chaque séance après l'avoir dispensée. Seules les heures validées par le responsable comptent pour la rémunération.</p>
+    <div class="stats">
+      <div class="stat"><b>${hrs(val)}</b><span>Heures validées</span></div>
+      <div class="stat"><b>${hrs(wait)}</b><span>En attente de contrôle</span></div>
+      <div class="stat"><b style="color:${missing?"var(--warn)":"inherit"}">${missing}</b><span>Séances passées à émarger</span></div>
+      <div class="stat"><b style="color:${toFix?"var(--accent)":"inherit"}">${toFix}</b><span>Corrections demandées</span></div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn" id="wPrev">← Semaine précédente</button>
+      <b style="padding:7px 4px">Semaine du ${S.week.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</b>
+      <button class="btn" id="wNext">Semaine suivante →</button>
+      <button class="btn" id="wNow">Cette semaine</button>
+    </div>
+    <div class="panel tbl">${week.length?`<table><thead><tr><th>Date</th><th>Horaire</th><th>Cours</th><th>Groupe · Salle</th><th>Émargement</th><th></th></tr></thead><tbody>
+    ${week.map(s=>{const a=s.attendance_records;const started=new Date(s.session_date+"T"+s.start_time)<=now;
+      let act="";
+      if(s.status==="annulee")act=`<span class="pill p-mute">Annulée</span>`;
+      else if(!a&&started)act=`<button class="btn primary sm" data-em="${s.id}">Émarger</button>`;
+      else if(!a)act=`<span class="sub">À venir</span>`;
+      else if(a.status==="soumis"||a.status==="correction_demandee")act=`<button class="btn sm" data-em="${s.id}">${a.status==="correction_demandee"?"Corriger":"Modifier"}</button>`;
+      return `<tr><td>${fdate(s.session_date)}</td><td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
+      <td>${sessionLabel(s)}${s.note?`<div class="sub">${esc(s.note)}</div>`:""}</td>
+      <td>${esc(s.student_groups?.code)}<div class="sub">${esc(s.rooms?.code)}</div></td>
+      <td>${s.status==="annulee"?"—":pill(a?.status)}${a?`<div class="sub mono">déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.retained_minutes!=null?" · retenu "+hrs(a.retained_minutes):""}</div>`:""}
+        ${a?.review_reason?`<div class="sub">Motif : ${esc(a.review_reason)}</div>`:""}</td>
+      <td>${act}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune séance cette semaine.</p>`}</div>`;
+  wPrev.onclick=()=>{S.week=addDays(S.week,-7);rerender()};
+  wNext.onclick=()=>{S.week=addDays(S.week,7);rerender()};
+  wNow.onclick=()=>{S.week=mondayOf(new Date());rerender()};
+  v.querySelectorAll("[data-em]").forEach(b=>b.onclick=()=>emargeDialog(week.find(s=>s.id==b.dataset.em)));
+}
+
+function emargeDialog(s){
+  const a=s.attendance_records;
+  openDialog(`<h3>Émarger la séance</h3>
+    <dl class="kv"><dt>Cours</dt><dd>${sessionLabel(s)}</dd><dt>Date</dt><dd>${fdate(s.session_date)}</dd>
+      <dt>Prévu</dt><dd class="mono">${hm(s.start_time)}–${hm(s.end_time)}</dd><dt>Groupe</dt><dd>${esc(s.student_groups?.name)}</dd></dl>
+    ${a?.review_reason?`<p class="sub" style="margin:0">Demande du responsable : ${esc(a.review_reason)}</p>`:""}
+    <div class="row"><label>Début réel<input id="eStart" type="time" required value="${hm(a?.declared_start||s.start_time)}"></label>
+    <label>Fin réelle<input id="eEnd" type="time" required value="${hm(a?.declared_end||s.end_time)}"></label></div>
+    <label>Commentaire (obligatoire si la durée diffère)<textarea id="eCom">${esc(a?.teacher_comment||"")}</textarea></label>
+    <p class="sub" style="margin:0">Je confirme avoir dispensé ce cours. La déclaration est horodatée et conservée.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Soumettre l'émargement</button></div>`,
+  async()=>{
+    const st=eStart.value,en=eEnd.value,com=eCom.value.trim();
+    const planned=(toMin(s.end_time)-toMin(s.start_time)),decl=toMin(en)-toMin(st);
+    if(decl<=0)throw new Error("L'heure de fin doit être après l'heure de début.");
+    if(decl!==planned&&!com)throw new Error("La durée déclarée diffère de la durée prévue : ajoutez un commentaire.");
+    await q(sb.rpc("submit_attendance",{p_session_id:s.id,p_start:st,p_end:en,p_comment:com||null}));
+    toast("Émargement soumis");rerender();
+  });
+}
+function toMin(t){const [h,m]=t.split(":").map(Number);return h*60+m}
+
+/* ---------- responsable ---------- */
+async function viewReview(v){
+  let qy=sb.from("attendance_records").select("id,status,planned_minutes,declared_start,declared_end,declared_minutes,retained_minutes,teacher_comment,review_reason,submitted_at,teacher_id,teachers(first_name,last_name),schedule_sessions(session_date,start_time,end_time,teaching_assignments(courses(code,name,departments(code))),student_groups(code),rooms(code))").order("submitted_at",{ascending:false}).limit(300);
+  if(S.filter!=="tous")qy=qy.eq("status",S.filter);
+  const rows=await q(qy);
+  const counts=await q(sb.from("attendance_records").select("status"));
+  const c=k=>counts.filter(x=>x.status===k).length;
+  const F=[["soumis","En attente",c("soumis")],["correction_demandee","Correction demandée",c("correction_demandee")],["valide","Validés",c("valide")],["rejete","Rejetés",c("rejete")],["tous","Tous",counts.length]];
+  v.innerHTML=`<h1>Contrôle des émargements</h1>
+    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures.</p>
+    <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
+    <div class="panel tbl">${rows.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
+    ${rows.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
+      return `<tr><td>${fdate(s.session_date)}<div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}</div></td>
+      <td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td>
+      <td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
+      <td class="mono">${hm(a.declared_start)}–${hm(a.declared_end)}${a.teacher_comment?`<div class="sub" style="font-family:var(--f-body)">« ${esc(a.teacher_comment)} »</div>`:""}</td>
+      <td class="mono ${d?"gap":""}">${d?(d>0?"+":"−")+Math.abs(d)+" min":"—"}</td>
+      <td>${pill(a.status)}${a.retained_minutes!=null?`<div class="sub">retenu ${hrs(a.retained_minutes)}</div>`:""}${a.review_reason?`<div class="sub">${esc(a.review_reason)}</div>`:""}</td>
+      <td>${a.status==="soumis"?(self?`<span class="sub">Vos heures</span>`:`<button class="btn primary sm" data-rv="${a.id}">Contrôler</button>`):""}</td></tr>`}).join("")}
+    </tbody></table>`:`<p class="empty">Aucun émargement dans cette catégorie.</p>`}</div>`;
+  v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
+  v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)));
+}
+
+function reviewDialog(a){
+  const s=a.schedule_sessions;const def=Math.min(a.declared_minutes,a.planned_minutes);
+  openDialog(`<h3>Contrôler l'émargement</h3>
+    <dl class="kv"><dt>Professeur</dt><dd>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</dd>
+      <dt>Cours</dt><dd>${sessionLabel(s)}</dd><dt>Date</dt><dd>${fdate(s.session_date)}</dd>
+      <dt>Prévu</dt><dd class="mono">${hm(s.start_time)}–${hm(s.end_time)} (${hrs(a.planned_minutes)})</dd>
+      <dt>Déclaré</dt><dd class="mono">${hm(a.declared_start)}–${hm(a.declared_end)} (${hrs(a.declared_minutes)})</dd>
+      ${a.teacher_comment?`<dt>Commentaire</dt><dd>${esc(a.teacher_comment)}</dd>`:""}</dl>
+    <label>Durée retenue (minutes)<input id="rMin" type="number" min="0" max="${a.declared_minutes}" step="5" value="${def}"></label>
+    <label>Motif (obligatoire pour un rejet, une correction ou une durée retenue supérieure au prévu)<textarea id="rWhy"></textarea></label>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn" value="cancel" formnovalidate>Fermer</button>
+      <button class="btn danger" value="rejete">Rejeter</button>
+      <button class="btn" value="correction_demandee">Demander une correction</button>
+      <button class="btn primary" value="valide">Valider</button></div>`,
+  async(decision)=>{
+    await q(sb.rpc("review_attendance",{p_id:a.id,p_decision:decision,p_retained_minutes:decision==="valide"?Number(rMin.value):null,p_reason:rWhy.value.trim()||null}));
+    toast({valide:"Émargement validé",rejete:"Émargement rejeté",correction_demandee:"Correction demandée au professeur"}[decision]);rerender();
+  });
+}
+
+/* ---------- emplois du temps ---------- */
+async function viewPlanning(v){
+  const [slots,conf,groups,teachers,rooms]=await Promise.all([
+    q(sb.from("timetable_slots").select("id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
+    q(sb.from("slot_conflicts").select("*")),
+    q(sb.from("student_groups").select("id,code,name").order("code")),
+    q(sb.from("teachers").select("id,first_name,last_name").order("last_name")),
+    q(sb.from("rooms").select("id,code,name").order("code"))]);
+  const lists={group:groups.map(g=>[g.id,g.code]),teacher:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),room:rooms.map(r=>[r.id,r.code])};
+  if(!S.planId||!lists[S.planView].some(x=>x[0]==S.planId))S.planId=lists[S.planView][0]?.[0];
+  const key={group:s=>s.teaching_assignments.group_id,teacher:s=>s.teaching_assignments.teacher_id,room:s=>s.room_id}[S.planView];
+  const mine=slots.filter(s=>key(s)==S.planId);
+  const confIds=new Set(conf.flatMap(c=>[c.slot_a,c.slot_b]));
+  const today=iso(new Date()),in4=iso(addDays(new Date(),28));
+  v.innerHTML=`<h1>Emplois du temps</h1>
+    <p class="lead">Emploi du temps hebdomadaire du semestre 1. Les créneaux publiés servent à créer les séances datées que les professeurs émargent.</p>
+    <div class="stats"><div class="stat"><b>${slots.length}</b><span>Créneaux hebdomadaires</span></div>
+      <div class="stat"><b>${slots.filter(s=>s.published).length}</b><span>Publiés</span></div>
+      <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>Conflits détectés</span></div></div>
+    <div class="row" style="margin-bottom:12px">
+      <label>Afficher par<select id="pView"><option value="group">Groupe</option><option value="teacher">Professeur</option><option value="room">Salle</option></select></label>
+      <label>&nbsp;<select id="pId">${lists[S.planView].map(([id,l])=>`<option value="${id}" ${id==S.planId?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
+    </div>
+    <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
+      <span class="mono">${hm(s.start_time)}–${hm(s.end_time)}</span><b>${esc(s.teaching_assignments.courses.code)} ${esc(s.teaching_assignments.courses.name)}</b>
+      <span class="sub">${esc(s.teaching_assignments.teachers.last_name)} · ${esc(s.teaching_assignments.student_groups.code)} · ${esc(s.rooms.code)}</span>
+      ${s.published?"":`<div><span class="pill p-mute">Brouillon</span></div>`}</div>`).join("")}</div>`).join("")}</div>
+    ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
+    <h2>Créer les séances datées</h2>
+    <div class="panel" style="padding:16px"><form class="row" id="genForm">
+      <label>Du<input id="gFrom" type="date" required value="${today}"></label>
+      <label>Au<input id="gTo" type="date" required value="${in4}"></label>
+      <button class="btn primary" type="submit">Créer les séances</button>
+      <span class="sub" style="flex-basis:100%">Les séances déjà existantes ne sont pas dupliquées. Une séance en conflit avec une autre n'est pas créée et vous est signalée.</span></form></div>`;
+  pView.value=S.planView;
+  pView.onchange=()=>{S.planView=pView.value;S.planId=null;rerender()};
+  pId.onchange=()=>{S.planId=pId.value;rerender()};
+  genForm.onsubmit=async ev=>{ev.preventDefault();
+    try{const r=(await q(sb.rpc("generate_sessions",{p_from:gFrom.value,p_to:gTo.value})))[0];
+      toast(`${r.created} séance(s) créée(s)`+(r.conflicts.length?` · ${r.conflicts.length} non placée(s) pour conflit`:""),r.conflicts.length>0)}
+    catch(e){toast(errMsg(e),true)}};
+}
+
+/* ---------- synthèse ---------- */
+async function viewSummary(v){
+  const rows=await q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,teacher_id,teachers(first_name,last_name,grade,departments(code))"));
+  const by={};
+  rows.forEach(a=>{const k=a.teacher_id;by[k]??={t:a.teachers,val:0,wait:0,n:0,rej:0};const o=by[k];o.n++;
+    if(a.status==="valide")o.val+=a.retained_minutes; if(a.status==="soumis")o.wait+=a.declared_minutes; if(a.status==="rejete")o.rej++});
+  const list=Object.values(by).sort((a,b)=>b.val-a.val);
+  const tot=list.reduce((s,o)=>s+o.val,0),tw=list.reduce((s,o)=>s+o.wait,0);
+  v.innerHTML=`<h1>Heures validées</h1>
+    <p class="lead">Base du futur calcul de rémunération : seules les durées retenues des émargements validés seront payables.</p>
+    <div class="stats"><div class="stat"><b>${hrs(tot)}</b><span>Total validé</span></div><div class="stat"><b>${hrs(tw)}</b><span>En attente</span></div>
+      <div class="stat"><b>${rows.length}</b><span>Émargements</span></div></div>
+    <div class="panel tbl"><table><thead><tr><th>Professeur</th><th>Département</th><th>Statut</th><th>Validé</th><th>En attente</th><th>Rejets</th></tr></thead><tbody>
+    ${list.map(o=>`<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}</td><td>${esc(o.t.departments?.code)}</td><td>${esc(o.t.grade)}</td>
+      <td class="num">${hrs(o.val)}</td><td class="num">${hrs(o.wait)}</td><td class="num">${o.rej}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+/* ---------- référentiel ---------- */
+async function viewRef(v){
+  const [deps,teachers,courses,groups,rooms]=await Promise.all([
+    q(sb.from("departments").select("id,code,name").order("code")),
+    q(sb.from("teachers").select("id,first_name,last_name,email,grade,profile_id,departments(code)").order("last_name")),
+    q(sb.from("courses").select("code,name,course_type,total_hours,departments(code)").order("code")),
+    q(sb.from("student_groups").select("code,name,size,programs(name,level)").order("code")),
+    q(sb.from("rooms").select("code,name,capacity,room_type").order("code"))]);
+  const tbl=(h,rows)=>`<div class="panel tbl"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+  v.innerHTML=`<h1>Référentiel</h1><p class="lead">Données de l'université de démonstration. Les modifications sont enregistrées dans le journal.</p>
+    <div class="row" style="justify-content:space-between"><h2>Enseignants · ${teachers.length}</h2><button class="btn sm" id="addT">Ajouter un enseignant</button></div>
+    ${tbl(["Nom","Département","Statut","E-mail","Compte"],teachers.map(t=>`<tr><td>${esc(t.first_name+" "+t.last_name)}</td><td>${esc(t.departments?.code)}</td><td>${esc(t.grade)}</td><td class="mono">${esc(t.email)}</td><td>${t.profile_id?`<span class="pill p-ok">Lié</span>`:`<span class="pill p-mute">Sans compte</span>`}</td></tr>`))}
+    <h2>Matières · ${courses.length}</h2>
+    ${tbl(["Code","Intitulé","Type","Volume","Département"],courses.map(c=>`<tr><td class="mono">${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.course_type)}</td><td class="num">${c.total_hours} h</td><td>${esc(c.departments?.code)}</td></tr>`))}
+    <h2>Groupes · ${groups.length}</h2>
+    ${tbl(["Code","Groupe","Filière","Effectif"],groups.map(g=>`<tr><td class="mono">${esc(g.code)}</td><td>${esc(g.name)}</td><td>${esc(g.programs?.name)} ${esc(g.programs?.level)}</td><td class="num">${g.size}</td></tr>`))}
+    <div class="row" style="justify-content:space-between"><h2>Salles · ${rooms.length}</h2><button class="btn sm" id="addR">Ajouter une salle</button></div>
+    ${tbl(["Code","Nom","Capacité","Type"],rooms.map(r=>`<tr><td class="mono">${esc(r.code)}</td><td>${esc(r.name)}</td><td class="num">${r.capacity}</td><td>${esc(r.room_type)}</td></tr>`))}`;
+  addT.onclick=()=>openDialog(`<h3>Nouvel enseignant</h3>
+    <div class="row"><label>Prénom<input id="tF" required></label><label>Nom<input id="tL" required></label></div>
+    <label>E-mail (sert à lier son compte)<input id="tE" type="email" required></label>
+    <div class="row"><label>Département<select id="tD">${deps.map(d=>`<option value="${d.id}">${esc(d.code)} · ${esc(d.name)}</option>`).join("")}</select></label>
+    <label>Statut<input id="tG" placeholder="Vacataire, Maître-assistant…"></label></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{await q(sb.from("teachers").insert({first_name:tF.value.trim(),last_name:tL.value.trim(),email:tE.value.trim().toLowerCase(),department_id:Number(tD.value),grade:tG.value.trim()||null}));toast("Enseignant ajouté");rerender()});
+  addR.onclick=()=>openDialog(`<h3>Nouvelle salle</h3>
+    <div class="row"><label>Code<input id="rC" required></label><label>Capacité<input id="rCap" type="number" min="1" required></label></div>
+    <label>Nom<input id="rN" required></label>
+    <label>Type<select id="rT"><option value="standard">Standard</option><option value="labo">Laboratoire</option><option value="amphi">Amphithéâtre</option></select></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{await q(sb.from("rooms").insert({code:rC.value.trim(),name:rN.value.trim(),capacity:Number(rCap.value),room_type:rT.value}));toast("Salle ajoutée");rerender()});
+}
+
+/* ---------- journal ---------- */
+async function viewAudit(v){
+  const rows=await q(sb.from("audit_logs").select("*").order("occurred_at",{ascending:false}).limit(200));
+  const ids=[...new Set(rows.map(r=>r.actor).filter(Boolean))];
+  const people=ids.length?await q(sb.from("profiles").select("id,full_name").in("id",ids)):[];
+  const nm=id=>people.find(p=>p.id===id)?.full_name||"Système";
+  const OP={INSERT:"Création",UPDATE:"Modification",DELETE:"Suppression"};
+  const TB={attendance_records:"Émargement",schedule_sessions:"Séance",timetable_slots:"Créneau",teaching_assignments:"Affectation",user_roles:"Rôle",teachers:"Enseignant",profiles:"Profil"};
+  const detail=r=>{if(r.table_name==="attendance_records"&&r.new_data){const o=r.old_data?.status,n=r.new_data.status;return o&&o!==n?`${ATT[o]?.[0]||o} → ${ATT[n]?.[0]||n}`:(ATT[n]?.[0]||"")}
+    if(r.table_name==="schedule_sessions"&&r.new_data)return `${r.new_data.session_date} ${hm(r.new_data.start_time)} · ${r.new_data.status}`;return ""};
+  v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque création, modification ou suppression sensible est enregistrée avec son auteur et l'heure.</p>
+    <div class="panel tbl">${rows.length?`<table><thead><tr><th>Date</th><th>Auteur</th><th>Opération</th><th>Élément</th><th>Détail</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td class="mono">${new Date(r.occurred_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</td><td>${esc(nm(r.actor))}</td><td>${OP[r.action]||r.action}</td><td>${TB[r.table_name]||r.table_name} <span class="sub mono">#${esc(r.record_id)}</span></td><td>${esc(detail(r))}</td></tr>`).join("")}
+    </tbody></table>`:`<p class="empty">Aucune opération enregistrée pour l'instant. Les émargements et validations apparaîtront ici.</p>`}</div>`;
+}
+
+sb.auth.onAuthStateChange((ev)=>{if(ev==="SIGNED_OUT")renderLogin()});
+boot();
+</script>
+</body>
+</html>
