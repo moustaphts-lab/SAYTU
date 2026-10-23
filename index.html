@@ -55,6 +55,14 @@ main{padding-block:26px 64px}
 h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:-.02em;line-height:1.15;margin:0 0 6px;text-wrap:balance}
 h2{font:600 17px var(--f-display);margin:28px 0 10px}
 .lead{color:var(--muted);margin:0 0 20px;max-width:68ch}
+.weeknav{display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line,#e3e8e6);border-radius:16px;padding:8px;margin:4px 0 18px}
+.weeknav .wbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line,#e3e8e6);background:var(--bg,#f3f5f4);color:inherit;display:grid;place-items:center;cursor:pointer;flex:none}
+.weeknav .wbtn:active{transform:scale(.95)}
+.weeknav .wmid{flex:1;text-align:center;line-height:1.15;min-width:0}
+.weeknav .wmid small{display:block;font-size:12px;opacity:.65}
+.weeknav .wmid b{font-size:17px}
+.weeknav .wnow{border:0;background:var(--accent-soft,#dcefe9);color:var(--accent);font:inherit;font-weight:600;font-size:13px;padding:10px 14px;border-radius:12px;cursor:pointer;white-space:nowrap;flex:none}
+@media(max-width:720px){.weeknav{display:grid;grid-template-columns:44px 1fr 44px;gap:8px 10px}.weeknav .wnow{grid-column:1/-1;text-align:center}}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
@@ -429,11 +437,11 @@ async function viewTeacher(v){
       <div class="stat"><b style="color:${missing?"var(--warn)":"inherit"}">${missing}</b><span>Séances passées à émarger</span></div>
       <div class="stat"><b style="color:${toFix?"var(--accent)":"inherit"}">${toFix}</b><span>Corrections demandées</span></div>
     </div>
-    <div class="row" style="margin-bottom:12px">
-      <button class="btn" id="wPrev">← Semaine précédente</button>
-      <b style="padding:7px 4px">Semaine du ${S.week.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</b>
-      <button class="btn" id="wNext">Semaine suivante →</button>
-      <button class="btn" id="wNow">Cette semaine</button>
+    <div class="weeknav">
+      <button class="wbtn" id="wPrev" aria-label="Semaine précédente"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="wmid"><small>Semaine du</small><b>${S.week.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</b></div>
+      <button class="wbtn" id="wNext" aria-label="Semaine suivante"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="wnow" id="wNow">Cette semaine</button>
     </div>
     ${week.length?(()=>{const days=[...new Set(week.map(s=>s.session_date))];
       return days.map(d=>{const dt=new Date(d+"T12:00:00");const lab=dt.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
