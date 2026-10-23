@@ -292,7 +292,7 @@ function openDialog(html,onSubmit){
 }
 
 /* ---------- professeur ---------- */
-const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name)),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at)";
+const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name)),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at,entered_for_teacher)";
 
 async function viewTeacher(v){
   const from=iso(S.week),to=iso(addDays(S.week,6));
@@ -330,6 +330,7 @@ async function viewTeacher(v){
       <td>${sessionLabel(s)}${s.note?`<div class="sub">${esc(s.note)}</div>`:""}</td>
       <td>${esc(s.student_groups?.code)}<div class="sub">${esc(s.rooms?.code)}</div></td>
       <td>${s.status==="annulee"?"—":pill(a?.status)}${a?`<div class="sub mono">déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.retained_minutes!=null?" · retenu "+hrs(a.retained_minutes):""}</div>`:""}
+        ${a?.entered_for_teacher?`<div class="sub">Saisi par délégation${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>`:""}
         ${a?.review_reason?`<div class="sub">Motif : ${esc(a.review_reason)}</div>`:""}</td>
       <td>${act}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune séance cette semaine.</p>`}</div>`;
   wPrev.onclick=()=>{S.week=addDays(S.week,-7);rerender()};
