@@ -161,6 +161,9 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .slips{padding:0}.slip{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 200px;gap:8px 20px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line)}.slip:last-child{border-bottom:0}
 .sl-net{font:700 18px var(--f-display);margin-bottom:6px}.sl-amt .hbar{margin-bottom:5px}
 .sl-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+.searchbox{flex-direction:row;align-items:center;gap:10px;font-size:inherit;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0 14px;margin-bottom:12px;color:var(--muted)}
+.searchbox:focus-within{border-color:var(--accent)}.searchbox input{flex:1;border:0;background:none;outline:0;font:15px var(--f-body);color:var(--ink);padding:12px 0;min-width:0;min-height:46px;border-radius:0}
+.searchbox svg{flex:none}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -1223,7 +1226,7 @@ async function periodDetail(el,p){
       ${pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
       ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
       ${items.length?`<div class="stats"><div class="stat big"><b>${fcfa(tot)}</b><span>Total à payer (brut = net)</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
-      ${teacherTable(by,false)}`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
+      <div class="sechead"><h2>Enseignants</h2><span class="sub" id="tCount">${by.length}</span></div>${searchBox("tSearch","Rechercher un enseignant…")}<div id="tList">${teacherTable(by)}</div>`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
     if(canPay()){
       calc.onclick=async()=>{try{const r=await q(sb.rpc("calculate_payroll",{p_period:p.id}));
         toast(`${r.lignes} séance(s) payable(s) · ${fcfa(r.total_fcfa)}`+(r.sans_tarif?` · ${r.sans_tarif} sans tarif défini`:""),r.sans_tarif>0);rerender()}catch(e){toast(errMsg(e),true)}};
@@ -1236,7 +1239,12 @@ async function periodDetail(el,p){
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
         async()=>{await q(sb.from("pay_periods").delete().eq("id",p.id));S.periodId=null;toast("Période supprimée");rerender()}));
     }
-    el.querySelectorAll("[data-dt]").forEach(b=>b.onclick=()=>linesDialog(by.find(o=>o.id==b.dataset.dt)));
+    const wireDt=()=>el.querySelectorAll("[data-dt]").forEach(b=>b.onclick=()=>linesDialog(by.find(o=>o.id==b.dataset.dt)));
+    wireDt();
+    const ts=document.getElementById("tSearch");
+    if(ts)ts.oninput=()=>{const k=norm(ts.value.trim()),f=by.filter(o=>norm(o.t.first_name+" "+o.t.last_name+" "+o.t.last_name+" "+o.t.first_name).includes(k));
+      document.getElementById("tList").innerHTML=f.length?teacherTable(f):`<div class="panel"><p class="empty">Aucun enseignant ne correspond à « ${esc(ts.value)} ».</p></div>`;
+      document.getElementById("tCount").textContent=f.length===by.length?by.length:f.length+" sur "+by.length;wireDt()};
     wireExport("pX",()=>({file:"paie_"+slug(p.name)+"_provisoire",title:"Paie : "+p.name+" (calcul provisoire)",subtitle:"Du "+fdl(p.start_date)+" au "+fdl(p.end_date),landscape:true,sheets:[
       {name:"Par enseignant",title:"Total par enseignant (FCFA)",head:["Enseignant","Statut","Séances","Heures","Montant (FCFA)"],
        rows:by.map(o=>[o.t.last_name+" "+o.t.first_name,o.t.teacher_statuses?.label||"",o.lines.length,dh(o.min),o.amt]).concat([["Total","",items.length,dh(by.reduce((s,o)=>s+o.min,0)),tot]])},
@@ -1249,17 +1257,18 @@ async function periodDetail(el,p){
     q(sb.from("payments").select("*,payslips!inner(pay_period_id)").eq("payslips.pay_period_id",p.id).order("paid_on"))]);
   const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
   const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
+  const slipRows=list=>list.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
+      <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
+      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
       ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
-    <h2>Bulletins</h2><div class="panel slips">${slips.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
-      <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
-      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("")}</div>
+    <div class="sechead"><h2>Bulletins</h2><span class="sub" id="sCount">${slips.length}</span></div>${searchBox("sSearch","Rechercher un enseignant ou un n° de bulletin…")}<div class="panel slips" id="sList"></div>
     ${pays.length?`<h2>Règlements enregistrés</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Bulletin</th><th>Mode</th><th>Référence</th><th>Montant</th></tr></thead><tbody>
     ${pays.map(x=>`<tr><td class="mono">${fdl(x.paid_on)}</td><td class="mono">${esc(slips.find(s=>s.id===x.payslip_id)?.number)}</td><td>${esc(x.method)}</td><td class="mono">${esc(x.reference||"—")}</td><td class="num">${fcfa(x.amount_fcfa)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
-  el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  const wireSlips=()=>{el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
   wireExport("pX",()=>({file:"paie_"+slug(p.name),title:"État de paie : "+p.name,subtitle:"Du "+fdl(p.start_date)+" au "+fdl(p.end_date)+" · approuvée le "+fdl(p.approved_at),landscape:true,sheets:[
     {name:"Bulletins",title:"Bulletins (FCFA)",head:["Bulletin","Enseignant","Statut","Heures","Net à payer (FCFA)","Réglé (FCFA)","Reste dû (FCFA)","État"],
      rows:slips.map(s=>[s.number,s.snapshot.enseignant.nom,s.snapshot.enseignant.statut||"",dh(s.total_minutes),s.net_fcfa,paid(s.id),s.net_fcfa-paid(s.id),s.status])
@@ -1273,9 +1282,14 @@ async function periodDetail(el,p){
       <div class="row"><label>Mode<select id="pM"><option>virement</option><option>Wave</option><option>Orange Money</option><option>chèque</option><option>espèces</option></select></label><label>Référence<input id="pR" placeholder="N° de virement, de transaction…"></label></div>
       <p class="sub" style="margin:0">Le paiement est enregistré par le service financier. Il n'exécute aucun virement.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:Number(pA.value),p_paid_on:pD.value,p_method:pM.value,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender()})});
+    async()=>{await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:Number(pA.value),p_paid_on:pD.value,p_method:pM.value,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender()})})};
+  const sl=document.getElementById("sList");
+  const showSlips=k=>{const f=slips.filter(x=>norm(x.snapshot.enseignant.nom+" "+x.number).includes(k));sl.innerHTML=f.length?slipRows(f):`<p class="empty">Aucun bulletin ne correspond à cette recherche.</p>`;document.getElementById("sCount").textContent=f.length===slips.length?slips.length:f.length+" sur "+slips.length;wireSlips()};
+  showSlips("");const ss=document.getElementById("sSearch");if(ss)ss.oninput=()=>showSlips(norm(ss.value.trim()));
 }
 
+const norm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+const searchBox=(id,ph)=>`<label class="searchbox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="${id}" type="search" placeholder="${ph}" autocomplete="off"></label>`;
 function groupBy(items){
   const m={};items.forEach(i=>{m[i.teacher_id]??={id:i.teacher_id,t:i.teachers,lines:[],min:0,amt:0};const o=m[i.teacher_id];o.lines.push(i);o.min+=i.minutes;o.amt+=i.amount_fcfa});
   return Object.values(m).sort((a,b)=>a.t.last_name.localeCompare(b.t.last_name));
