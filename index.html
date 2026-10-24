@@ -474,8 +474,11 @@ function renderShell(){
   document.body.classList.remove("nav-open");
   burger.onclick=()=>setNav(!document.body.classList.contains("nav-open"));
   scrim.onclick=()=>setNav(false);
-  document.onkeydown=e=>{if(e.key==="Escape")setNav(false)};
-  pwBtn.onclick=passwordDialog;
+  const acct=$app.querySelector("details.menu");
+  const closeAcct=()=>{if(acct)acct.open=false};
+  document.onkeydown=e=>{if(e.key==="Escape"){setNav(false);closeAcct()}};
+  document.onclick=e=>{if(acct&&acct.open&&!acct.contains(e.target))closeAcct()};
+  pwBtn.onclick=()=>{closeAcct();passwordDialog()};
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
