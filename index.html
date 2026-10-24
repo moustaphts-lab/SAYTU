@@ -132,6 +132,26 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
 .kv dt{color:var(--muted)} .kv dd{margin:0}
+.tt-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+.tt{display:grid;grid-template-columns:54px repeat(var(--n),minmax(132px,1fr));min-width:calc(54px + var(--n)*132px)}
+.tt-corner,.tt-head{position:sticky;top:0;z-index:4;background:var(--surface);border-bottom:1px solid var(--line);height:44px;display:grid;place-items:center;font:600 13.5px var(--f-body);color:var(--muted)}
+.tt-corner{left:0;z-index:5;border-right:1px solid var(--line)}
+.tt-head{border-left:1px solid var(--line)}.tt-head.today{color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.tt-gut{position:sticky;left:0;z-index:3;background:var(--surface);border-right:1px solid var(--line)}
+.tt-gut span{position:absolute;right:8px;transform:translateY(-50%);font:500 11.5px var(--f-body);color:var(--muted)}.tt-gut span:first-child{transform:none;top:4px!important}
+.tt-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-size:100% 64px}
+.tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
+.tt-av{position:absolute;left:0;right:0;background:var(--ok-soft);opacity:.7;border-left:3px solid var(--ok)}
+.tt-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:2}.tt-now::before{content:"";position:absolute;left:-5px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.tt-ev{position:absolute;z-index:1;overflow:hidden;text-align:left;display:flex;flex-direction:column;gap:1px;padding:6px 8px 6px 10px;border:0;border-left:4px solid var(--c);border-radius:8px;background:color-mix(in srgb,var(--c) 15%,var(--surface));color:var(--ink);font:inherit;font-size:12.5px;line-height:1.25;cursor:pointer}
+.tt-ev:hover{background:color-mix(in srgb,var(--c) 24%,var(--surface))}
+.tt-ev b{font:700 13.5px var(--f-display)}.tt-t{font-size:11.5px;color:var(--muted)}.tt-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tt-m{font-size:11.5px;color:var(--muted);margin-top:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tt-ev.short{flex-direction:row;flex-wrap:wrap;align-items:center;gap:2px 8px;padding-block:3px}.tt-ev.short .tt-n,.tt-ev.short .tt-m{display:none}
+.tt-ev.draft{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 15%,var(--surface)) 0 8px,color-mix(in srgb,var(--c) 7%,var(--surface)) 8px 16px);outline:1.5px dashed var(--c);outline-offset:-1.5px}
+.tt-ev.conf{outline:2px solid var(--bad);outline-offset:-2px;background:var(--bad-soft)}
+.tt-w{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--warn);color:#fff;display:grid;place-items:center;font:700 12px var(--f-body);font-style:normal}
+.tt-leg{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin:10px 2px 20px;font-size:13px;color:var(--muted)}
+.tt-leg i{display:inline-block;width:14px;height:10px;border-radius:3px;margin-right:6px}.tt-leg i.dr{border:1.5px dashed var(--accent);background:var(--accent-soft)}
 .week{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;overflow-x:auto}
 .day{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);min-height:120px}
 .day h4{margin:0;padding:10px 12px;font:600 13px var(--f-body);color:var(--muted);border-bottom:1px solid var(--line)}
@@ -733,10 +753,7 @@ async function viewPlanning(v){
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer automatiquement</button>
       ${drafts?`<button class="btn" id="pubAll">Publier les ${drafts} brouillon(s)</button>`:""}
     </div>
-    <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${S.planView==="teacher"&&avOf(Number(S.planId)).filter(a=>a.day_of_week===d).length?`<div class="avail">Disponible ${avOf(Number(S.planId)).filter(a=>a.day_of_week===d).map(a=>hm(a.start_time)+"–"+hm(a.end_time)).join(", ")}</div>`:""}${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
-      <span class="mono">${hm(s.start_time)}–${hm(s.end_time)}</span><b>${esc(s.teaching_assignments.courses.code)} ${esc(s.teaching_assignments.courses.name)}</b>
-      <span class="sub">${esc(s.teaching_assignments.teachers.last_name)} · ${esc(s.teaching_assignments.student_groups.code)} · ${esc(s.rooms.code)}</span>
-      <div class="row" style="gap:6px;margin-top:6px">${s.published?"":`<span class="pill p-mute">Brouillon</span>`}${outside(s)?`<span class="pill p-warn">Hors disponibilités</span>`:""}<button class="btn sm" data-es="${s.id}">Modifier</button><button class="btn sm danger" data-ds="${s.id}">Supprimer</button></div></div>`).join("")}</div>`).join("")}</div>
+    ${timetableGrid({mine,conf:confIds,view:S.planView,avOf,outside,teacherId:S.planId,hasSat:slots.some(x=>x.day_of_week===6)})}
     ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
 
     <div class="row" style="justify-content:space-between"><h2>Affectations · ${assigns.length}</h2><button class="btn sm" id="addAsg">Ajouter une affectation</button></div>
@@ -788,11 +805,15 @@ async function viewPlanning(v){
   };
   addSlot.onclick=()=>slotDialog(null);
   autoGen.onclick=()=>genDialog({slots,assigns,rooms,groups,avails,sems,weeksOf,rerender});
-  v.querySelectorAll("[data-es]").forEach(b=>b.onclick=()=>slotDialog(slots.find(s=>s.id==b.dataset.es)));
-  v.querySelectorAll("[data-ds]").forEach(b=>b.onclick=()=>{const s=slots.find(x=>x.id==b.dataset.ds);
-    openDialog(`<h3>Supprimer ce créneau ?</h3><p style="margin:0">${esc(s.teaching_assignments.courses.code)}, ${DAYS[s.day_of_week]} ${hm(s.start_time)}–${hm(s.end_time)}. Les séances à venir de ce créneau qui n'ont pas encore été émargées seront supprimées. Les séances passées sont conservées.</p>
+  const delSlot=sl=>openDialog(`<h3>Supprimer ce créneau ?</h3><p style="margin:0">${esc(sl.teaching_assignments.courses.code)}, ${DAYS[sl.day_of_week]} ${hm(sl.start_time)}–${hm(sl.end_time)}. Les séances à venir de ce créneau qui n'ont pas encore été émargées seront supprimées. Les séances passées sont conservées.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
-    async()=>{const r=await q(sb.from("timetable_slots").delete().eq("id",s.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Créneau supprimé");rerender()})});
+    async()=>{const r=await q(sb.from("timetable_slots").delete().eq("id",sl.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Créneau supprimé");rerender()});
+  v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments;
+    openDialog(`<h3>${esc(t.courses.code)} · ${esc(t.courses.name)}</h3>
+      <dl class="kv"><dt>Jour</dt><dd>${DAYS[sl.day_of_week]}</dd><dt>Horaire</dt><dd class="mono">${hm(sl.start_time)}–${hm(sl.end_time)}</dd><dt>Professeur</dt><dd>${esc(t.teachers.first_name+" "+t.teachers.last_name)}</dd><dt>Groupe</dt><dd>${esc(t.student_groups.code)}</dd><dt>Salle</dt><dd>${esc(sl.rooms.code)}</dd></dl>
+      <div class="row" style="gap:6px">${sl.published?'<span class="pill p-ok">Publié</span>':'<span class="pill p-mute">Brouillon</span>'}${confIds.has(sl.id)?'<span class="pill p-bad">Conflit</span>':""}${outside(sl)?'<span class="pill p-warn">Hors disponibilités</span>':""}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button><button class="btn danger" value="del">Supprimer</button><button class="btn primary" value="edit">Modifier</button></div>`,
+    async(act)=>{if(act==="edit"){slotDialog(sl);return "keep"}if(act==="del"){delSlot(sl);return "keep"}})});
 
   /* affectations */
   const asgFields=()=>[
@@ -818,6 +839,41 @@ async function viewPlanning(v){
     async()=>{const r=await q(sb.from("teaching_assignments").delete().eq("id",a.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Affectation supprimée");rerender()})});
 }
 
+
+/* ---------- grille hebdomadaire : jours en colonnes, heures en lignes ---------- */
+const TT_COLORS=["#0b6e5b","#2563a8","#b06a00","#7a4fa3","#b23a5a","#3f7f2a","#0e7490","#9a5b2e"];
+function timetableGrid(o){
+  const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+  const days=[1,2,3,4,5].concat(o.hasSat?[6]:[]);
+  const tid=Number(o.teacherId);
+  const av=o.view==="teacher"?o.avOf(tid):[];
+  let lo=8*60,hi=18*60;
+  o.mine.forEach(x=>{lo=Math.min(lo,Math.floor(T(x.start_time)/60)*60);hi=Math.max(hi,Math.ceil(T(x.end_time)/60)*60)});
+  av.forEach(a=>{lo=Math.min(lo,Math.floor(T(a.start_time)/60)*60);hi=Math.max(hi,Math.ceil(T(a.end_time)/60)*60)});
+  const HH=64,H=(hi-lo)/60*HH,y=m=>(m-lo)/60*HH;
+  const hours=[];for(let m=lo;m<hi;m+=60)hours.push(m);
+  const colorOf=code=>{let h=0;for(const c of String(code))h=(h*31+c.charCodeAt(0))>>>0;return TT_COLORS[h%TT_COLORS.length]};
+  const now=new Date(),todayDow=now.getDay()||7,nowMin=now.getHours()*60+now.getMinutes();
+  const lane=list=>{ /* répartit les créneaux qui se chevauchent côte à côte */
+    const r=list.slice().sort((a,b)=>T(a.start_time)-T(b.start_time)||T(a.end_time)-T(b.end_time)),res=[];let grp=[],gEnd=-1;
+    const flush=()=>{const cols=[];grp.forEach(x=>{let i=cols.findIndex(e=>e<=T(x.start_time));if(i<0){i=cols.length;cols.push(0)}cols[i]=T(x.end_time);x._l=i});grp.forEach(x=>{x._n=cols.length;res.push(x)});grp=[]};
+    r.forEach(x=>{if(grp.length&&T(x.start_time)>=gEnd){flush();gEnd=-1}grp.push(x);gEnd=Math.max(gEnd,T(x.end_time))});flush();return res};
+  const second=x=>{const t=x.teaching_assignments;return o.view==="teacher"?t.student_groups.code:o.view==="room"?t.student_groups.code:t.teachers.last_name};
+  const third=x=>{const t=x.teaching_assignments;return o.view==="room"?t.teachers.last_name:x.rooms.code};
+  const col=d=>{const list=lane(o.mine.filter(x=>x.day_of_week===d));
+    return `<div class="tt-col ${d===todayDow?"today":""}" style="height:${H}px">
+      ${av.filter(a=>a.day_of_week===d).map(a=>`<div class="tt-av" style="top:${y(T(a.start_time))}px;height:${(T(a.end_time)-T(a.start_time))/60*HH}px" title="Disponible ${hm(a.start_time)}–${hm(a.end_time)}"></div>`).join("")}
+      ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" style="top:${y(nowMin)}px"></div>`:""}
+      ${list.map(x=>{const c=colorOf(x.teaching_assignments.courses.code),dur=T(x.end_time)-T(x.start_time),w=100/x._n;
+        return `<button type="button" class="tt-ev ${o.conf.has(x.id)?"conf":""} ${x.published?"":"draft"} ${dur<=60?"short":""}" data-sl="${x.id}" style="--c:${c};top:${y(T(x.start_time))+1}px;height:${dur/60*HH-2}px;left:calc(${x._l*w}% + 2px);width:calc(${w}% - 4px)">
+          <span class="tt-t">${hm(x.start_time)}–${hm(x.end_time)}</span><b>${esc(x.teaching_assignments.courses.code)}</b><span class="tt-n">${esc(x.teaching_assignments.courses.name)}</span>
+          <span class="tt-m">${esc(second(x))} · ${esc(third(x))}</span>${o.outside(x)?'<i class="tt-w" title="Hors disponibilités du professeur">!</i>':""}</button>`}).join("")}</div>`};
+  return `<div class="tt-wrap"><div class="tt" style="--n:${days.length}">
+    <div class="tt-corner"></div>${days.map(d=>`<div class="tt-head ${d===todayDow?"today":""}">${DAYS[d]}</div>`).join("")}
+    <div class="tt-gut" style="height:${H}px">${hours.map(m=>`<span style="top:${y(m)}px">${String(m/60).padStart(2,"0")}:00</span>`).join("")}</div>
+    ${days.map(col).join("")}</div></div>
+  <div class="tt-leg"><span><i style="background:var(--accent)"></i>Publié</span><span><i class="dr"></i>Brouillon</span><span><i style="background:var(--bad)"></i>Conflit</span>${o.view==="teacher"&&av.length?'<span><i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Disponibilités</span>':""}<span class="sub">Touchez un créneau pour le modifier.</span></div>`;
+}
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
 const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,useAvail:true,semester:null};
