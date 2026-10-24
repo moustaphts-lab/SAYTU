@@ -523,13 +523,8 @@ async function viewReview(v){
   const counts=await q(sb.from("attendance_records").select("status"));
   const c=k=>counts.filter(x=>x.status===k).length;
   const F=[["soumis","En attente",c("soumis")],["correction_demandee","Correction demandée",c("correction_demandee")],["valide","Validés",c("valide")],["rejete","Rejetés",c("rejete")],["tous","Tous",counts.length]];
-  v.innerHTML=`<h1>Contrôle des émargements</h1>
-    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
-    <div class="row" style="margin:0 0 6px;align-items:center"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button><span style="margin-left:auto">${xbar("rX")}</span></div>
-    <p class="sub" style="margin:0 0 12px">Saisie pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours). L'export reprend la liste affichée.</p>
-    <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
-    <div class="panel tbl">${rows.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
-    ${rows.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
+  const reviewTable=list=>list.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
+    ${list.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
       return `<tr><td>${fdate(s.session_date)}<div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}</div></td>
       <td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}${a.entered_for_teacher?`<div class="sub">Saisi par délégation</div>`:""}</td>
       <td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
@@ -537,14 +532,25 @@ async function viewReview(v){
       <td class="mono ${d?"gap":""}">${d?(d>0?"+":"−")+Math.abs(d)+" min":"—"}</td>
       <td>${pill(a.status)}${a.retained_minutes!=null?`<div class="sub">retenu ${hrs(a.retained_minutes)}</div>`:""}${a.review_reason?`<div class="sub">${esc(a.review_reason)}</div>`:""}</td>
       <td>${a.status==="soumis"?(self?`<span class="sub">Vos heures</span>`:a.submitted_by===S.user.id?`<span class="sub">Saisi par vous : à valider par un collègue</span>`:`<button class="btn primary sm" data-rv="${a.id}">Contrôler</button>`):""}</td></tr>`}).join("")}
-    </tbody></table>`:`<p class="empty">Aucun émargement dans cette catégorie.</p>`}</div>`;
+    </tbody></table>`:`<p class="empty">${rows.length?"Aucun résultat pour cette recherche.":"Aucun émargement dans cette catégorie."}</p>`;
+  v.innerHTML=`<h1>Contrôle des émargements</h1>
+    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
+    <div class="row" style="margin:0 0 6px;align-items:center"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button><span style="margin-left:auto">${xbar("rX")}</span></div>
+    <p class="sub" style="margin:0 0 12px">Saisie pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours). L'export reprend la liste affichée.</p>
+    <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
+    ${rows.length?searchBox("rSearch","Rechercher un professeur, un cours ou un groupe…"):""}
+    <div class="panel tbl" id="rList"></div>`;
   v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
-  v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)));
+  let shown=rows;
+  const drawRows=()=>{document.getElementById("rList").innerHTML=reviewTable(shown);v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)))};
+  drawRows();
+  const rs=document.getElementById("rSearch");
+  if(rs)rs.oninput=()=>{const k=norm(rs.value.trim());shown=!k?rows:rows.filter(a=>{const s=a.schedule_sessions,c=s.teaching_assignments?.courses;return norm([a.teachers.first_name,a.teachers.last_name,a.teachers.last_name,a.teachers.first_name,c?.code,c?.name,s.student_groups?.code,s.rooms?.code].join(" ")).includes(k)});drawRows()};
   v.querySelector("#delegBtn").onclick=delegDialog;
   const SL={soumis:"En attente",valide:"Validé",rejete:"Rejeté",correction_demandee:"Correction demandée"};
   wireExport("rX",()=>({file:"emargements_"+(S.filter==="tous"?"tous":S.filter)+"_"+iso(new Date()),title:"Contrôle des émargements",subtitle:"Filtre : "+(F.find(f=>f[0]===S.filter)?.[1]||""),landscape:true,sheets:[
     {name:"Émargements",title:"Émargements",keepEmpty:1,head:["Date","Enseignant","Cours","Groupe","Prévu","Déclaré","Écart (min)","État","Heures retenues","Saisi par délégation","Commentaire","Motif"],
-     rows:rows.map(a=>{const s=a.schedule_sessions;const c=s.teaching_assignments?.courses;return [fdl(s.session_date),a.teachers.last_name+" "+a.teachers.first_name,(c?c.code+" "+c.name:""),s.student_groups?.code||"",
+     rows:shown.map(a=>{const s=a.schedule_sessions;const c=s.teaching_assignments?.courses;return [fdl(s.session_date),a.teachers.last_name+" "+a.teachers.first_name,(c?c.code+" "+c.name:""),s.student_groups?.code||"",
        hm(s.start_time)+"-"+hm(s.end_time),hm(a.declared_start)+"-"+hm(a.declared_end),a.declared_minutes-a.planned_minutes,SL[a.status]||a.status,a.retained_minutes!=null?dh(a.retained_minutes):"",a.entered_for_teacher?"Oui":"",a.teacher_comment||"",a.review_reason||""]})}]}));
 }
 
