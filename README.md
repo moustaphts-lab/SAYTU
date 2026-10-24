@@ -44,6 +44,10 @@ Chaque professeur déclare dans « Mes disponibilités » les plages où il peut
 - Net = brut (aucune retenue ni cotisation pour l'instant).
 - Approbation par le responsable financier : les bulletins sont alors figés.
 
+## Générateur d'emploi du temps (version simple)
+
+Dans « Emplois du temps », le bouton « Générer automatiquement » propose des créneaux hebdomadaires pour les affectations qui n'ont pas encore assez de créneaux. Réglages : semestre, jours de cours, début et fin de journée, durée d'un créneau, pause, maximum d'heures par jour (groupe et professeur), respect des disponibilités. Le calcul se fait dans le navigateur : placement glouton qui respecte les conflits de professeur, de groupe et de salle, la capacité des salles et les disponibilités. Une proposition est affichée avec les cours non placés et la raison la plus fréquente ; rien n'est enregistré avant validation, puis les créneaux sont créés en brouillon (la base refuse encore tout conflit). Volume visé par semaine = heures prévues ÷ nombre de semaines du semestre, arrondi au créneau.
+
 ## Comptes de démonstration
 
 Mot de passe commun : `Demo-2026!`

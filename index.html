@@ -164,6 +164,10 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .searchbox{flex-direction:row;align-items:center;gap:10px;font-size:inherit;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0 14px;margin-bottom:12px;color:var(--muted)}
 .searchbox:focus-within{border-color:var(--accent)}.searchbox input{flex:1;border:0;background:none;outline:0;font:15px var(--f-body);color:var(--ink);padding:12px 0;min-width:0;min-height:46px;border-radius:0}
 .searchbox svg{flex:none}
+.gplist{max-height:36vh;overflow:auto;border:1px solid var(--line);border-radius:14px}
+.gp{display:grid;grid-template-columns:104px 1fr;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px}.gp:last-child{border-bottom:0}
+.gp-t,.gp-c{display:flex;flex-direction:column;gap:2px}.gp-c .sub{font-size:12.5px}.gp-t .mono{font-size:13px;color:var(--muted)}
+.gpwarn{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:6px;font-size:13.5px;line-height:1.4}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -440,7 +444,7 @@ function openDialog(html,onSubmit){
     try{btn&&(btn.disabled=true);const r=await onSubmit(btn?btn.value:null,f);if(r!=="keep")dlg.close();}
     catch(e){document.getElementById("dlgErr").textContent=errMsg(e);btn&&(btn.disabled=false)}
   };
-  dlg.showModal();
+  if(!dlg.open)dlg.showModal();
 }
 
 /* ---------- professeur ---------- */
@@ -629,7 +633,7 @@ async function viewPlanning(v){
   const [slots,conf,groups,teachers,rooms,assigns,courses,sems,avails]=await Promise.all([
     q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
     q(sb.from("slot_conflicts").select("*")),
-    q(sb.from("student_groups").select("id,code,name").order("code")),
+    q(sb.from("student_groups").select("id,code,name,size").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
@@ -664,6 +668,7 @@ async function viewPlanning(v){
       <label>Afficher par<select id="pView"><option value="group">Groupe</option><option value="teacher">Professeur</option><option value="room">Salle</option></select></label>
       <label>&nbsp;<select id="pId">${lists[S.planView].map(([id,l])=>`<option value="${id}" ${id==S.planId?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
       <button class="btn primary" id="addSlot" ${assigns.length?"":"disabled"}>Ajouter un créneau</button>
+      <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer automatiquement</button>
       ${drafts?`<button class="btn" id="pubAll">Publier les ${drafts} brouillon(s)</button>`:""}
     </div>
     <div class="week">${[1,2,3,4,5,6].map(d=>`<div class="day"><h4>${DAYS[d]}</h4>${S.planView==="teacher"&&avOf(Number(S.planId)).filter(a=>a.day_of_week===d).length?`<div class="avail">Disponible ${avOf(Number(S.planId)).filter(a=>a.day_of_week===d).map(a=>hm(a.start_time)+"–"+hm(a.end_time)).join(", ")}</div>`:""}${mine.filter(s=>s.day_of_week===d).map(s=>`<div class="slot ${confIds.has(s.id)?"conf":""}">
@@ -720,6 +725,7 @@ async function viewPlanning(v){
       toast((row?"Créneau modifié":"Créneau ajouté")+(off?" · Attention : en dehors des disponibilités du professeur":""),!!off);rerender()});
   };
   addSlot.onclick=()=>slotDialog(null);
+  autoGen.onclick=()=>genDialog({slots,assigns,rooms,groups,avails,sems,weeksOf,rerender});
   v.querySelectorAll("[data-es]").forEach(b=>b.onclick=()=>slotDialog(slots.find(s=>s.id==b.dataset.es)));
   v.querySelectorAll("[data-ds]").forEach(b=>b.onclick=()=>{const s=slots.find(x=>x.id==b.dataset.ds);
     openDialog(`<h3>Supprimer ce créneau ?</h3><p style="margin:0">${esc(s.teaching_assignments.courses.code)}, ${DAYS[s.day_of_week]} ${hm(s.start_time)}–${hm(s.end_time)}. Les séances à venir de ce créneau qui n'ont pas encore été émargées seront supprimées. Les séances passées sont conservées.</p>
@@ -748,6 +754,98 @@ async function viewPlanning(v){
     openDialog(`<h3>Supprimer l'affectation ?</h3><p style="margin:0">${esc(aLabel(a))}. Ses créneaux hebdomadaires seront supprimés aussi. Si des séances existent déjà pour cette affectation, la suppression sera refusée.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
     async()=>{const r=await q(sb.from("teaching_assignments").delete().eq("id",a.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Affectation supprimée");rerender()})});
+}
+
+
+/* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
+const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,useAvail:true,semester:null};
+function generateTimetable(o,D){
+  const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+  const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+  const ov=(a,b)=>a.s<b.e&&b.s<a.e;
+  const busy={g:{},t:{},r:{}};
+  const add=(k,id,day,s,e)=>{((busy[k][id]??={})[day]??=[]).push({s,e})};
+  const free=(k,id,day,s,e)=>!(busy[k][id]?.[day]||[]).some(x=>ov(x,{s,e}));
+  const load=(k,id,day)=>(busy[k][id]?.[day]||[]).reduce((a,x)=>a+x.e-x.s,0);
+  const existing={};
+  D.slots.forEach(x=>{const a=x.teaching_assignments;add("g",a.group_id,x.day_of_week,T(x.start_time),T(x.end_time));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
+    existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
+  const len=o.len,start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
+  const times=[];for(let t=start;t+len<=end;t+=len){if(lf!=null&&lt!=null&&ov({s:t,e:t+len},{s:lf,e:lt}))continue;times.push(t)}
+  const rooms=[...D.rooms].sort((a,b)=>a.capacity-b.capacity);
+  const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size]));
+  const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
+  const jobs=D.assigns.map(a=>{const wk=D.weeksOf(a.semesters);const target=Math.max(1,Math.round(a.planned_hours*60/wk/len));
+    const have=Math.round((existing[a.id]||0)/len);return{a,n:Math.max(0,target-have),target}}).filter(j=>j.n>0&&j.a.planned_hours>0);
+  const availMin=a=>{const x=av(a.teacher_id);return x.length?x.reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9};
+  jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||y.n-x.n);
+  const placed=[],unplaced=[];
+  for(const j of jobs){const a=j.a;let done=0;const why={};const usedDays=new Set(D.slots.filter(x=>x.assignment_id===a.id).map(x=>x.day_of_week));
+    for(let k=0;k<j.n;k++){let best=null;
+      for(const d of o.days)for(const t of times){const e=t+len;
+        const fail=r=>{why[r]=(why[r]||0)+1};
+        const tav=av(a.teacher_id);
+        if(o.useAvail&&tav.length&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail("hors disponibilités du professeur");continue}
+        if(!free("t",a.teacher_id,d,t,e)){fail("professeur déjà occupé");continue}
+        if(!free("g",a.group_id,d,t,e)){fail("groupe déjà occupé");continue}
+        if(load("g",a.group_id,d)+len>o.maxGroup*60){fail("limite d'heures par jour du groupe");continue}
+        if(load("t",a.teacher_id,d)+len>o.maxTeacher*60){fail("limite d'heures par jour du professeur");continue}
+        const need=gsize[a.group_id]||0;const room=rooms.find(r=>r.capacity>=need&&free("r",r.id,d,t,e));
+        if(!room){fail(rooms.some(r=>r.capacity>=need)?"aucune salle libre":"aucune salle assez grande");continue}
+        const score=(usedDays.has(d)?1000:0)+load("g",a.group_id,d)/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01;
+        if(!best||score<best.score)best={score,d,t,e,room}}
+      if(!best)break;
+      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);done++;
+      placed.push({assignment_id:a.id,a,day_of_week:best.d,start_time:F(best.t),end_time:F(best.e),room_id:best.room.id,room_code:best.room.code})}
+    if(done<j.n){const top=Object.entries(why).sort((x,y)=>y[1]-x[1])[0];unplaced.push({a,missing:j.n-done,reason:top?top[0]:"aucun créneau possible avec ces réglages"})}}
+  return{placed,unplaced,len,skipped:D.assigns.length-jobs.length};
+}
+function genDialog(ctx){
+  let cfg={...GEN_DEFAULT};
+  try{cfg={...cfg,...JSON.parse(localStorage.getItem("ucab_gen")||"{}")}}catch(e){}
+  const today=iso(new Date());
+  if(!cfg.semester||!ctx.sems.some(x=>x.id==cfg.semester))cfg.semester=(ctx.sems.find(x=>x.start_date<=today&&x.end_date>=today)||ctx.sems[ctx.sems.length-1]||{}).id;
+  const settings=()=>{
+    openDialog(`<h3>Générer l'emploi du temps</h3>
+      <p class="sub" style="margin:0">Le générateur place, dans la semaine, les cours qui n'ont pas encore assez de créneaux. Il respecte les conflits, les salles et les disponibilités. Vous voyez le résultat avant de l'enregistrer.</p>
+      <label>Semestre<select id="gSem">${ctx.sems.map(x=>`<option value="${x.id}" ${x.id==cfg.semester?"selected":""}>${esc(x.academic_years.label)} · ${esc(x.label)}</option>`).join("")}</select></label>
+      <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="gDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${cfg.days.includes(d)}">${DAYS[d].slice(0,3)}.</button>`).join("")}</div></div>
+      <div class="grid2"><label>Début de journée<input id="gStart" type="time" value="${cfg.start}" required></label><label>Fin de journée<input id="gEnd" type="time" value="${cfg.end}" required></label>
+        <label>Durée d'un créneau<select id="gLen">${[60,90,120,150,180].map(m=>`<option value="${m}" ${m==cfg.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label>
+        <label>Max d'heures par jour (groupe)<input id="gMaxG" type="number" min="1" max="12" step="0.5" value="${cfg.maxGroup}"></label>
+        <label>Pause : de<input id="gLf" type="time" value="${cfg.lunchFrom||""}"></label><label>Pause : à<input id="gLt" type="time" value="${cfg.lunchTo||""}"></label>
+        <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label></div>
+      <label style="flex-direction:row;align-items:center;gap:10px;font-size:14px;color:var(--ink)"><input type="checkbox" id="gAv" ${cfg.useAvail?"checked":""}>Respecter les disponibilités saisies par les professeurs</label>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="go">Voir la proposition</button></div>`,
+    async()=>{
+      cfg={days:[...document.querySelectorAll("#gDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:gStart.value,end:gEnd.value,len:Number(gLen.value),lunchFrom:gLf.value,lunchTo:gLt.value,
+        maxGroup:Number(gMaxG.value)||6,maxTeacher:Number(gMaxT.value)||6,useAvail:gAv.checked,semester:Number(gSem.value)};
+      if(!cfg.days.length)throw new Error("Choisissez au moins un jour.");
+      if(cfg.end<=cfg.start)throw new Error("La fin de journée doit être après le début.");
+      if(!!cfg.lunchFrom!==!!cfg.lunchTo||(cfg.lunchFrom&&cfg.lunchTo<=cfg.lunchFrom))throw new Error("Pause : indiquez une heure de début et une heure de fin (ou laissez les deux vides).");
+      if(toMin(cfg.end)-toMin(cfg.start)<cfg.len)throw new Error("La journée est plus courte qu'un créneau.");
+      try{localStorage.setItem("ucab_gen",JSON.stringify(cfg))}catch(e){}
+      const res=generateTimetable(cfg,{assigns:ctx.assigns.filter(a=>a.semester_id===cfg.semester),slots:ctx.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,weeksOf:ctx.weeksOf});
+      preview(res);return "keep"});
+    document.querySelectorAll("#gDays button").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true"));
+  };
+  const preview=res=>{
+    const P=res.placed.slice().sort((x,y)=>x.day_of_week-y.day_of_week||x.start_time.localeCompare(y.start_time));
+    openDialog(`<h3>Proposition</h3>
+      <div class="stats" style="margin:0"><div class="stat"><b style="color:var(--ok)">${P.length}</b><span>Créneaux proposés</span></div><div class="stat"><b style="color:${res.unplaced.length?"var(--warn)":"inherit"}">${res.unplaced.reduce((s,u)=>s+u.missing,0)}</b><span>Non placés</span></div></div>
+      ${res.unplaced.length?`<div><div class="sub" style="margin-bottom:6px">À placer à la main ou après avoir ajusté les réglages</div>${res.unplaced.map(u=>`<div class="gpwarn"><b>${esc(u.a.courses.code)} · ${esc(u.a.student_groups.code)} · ${esc(u.a.teachers.last_name)}</b> : ${u.missing} créneau${u.missing>1?"x":""} manquant${u.missing>1?"s":""}. Raison la plus fréquente : ${esc(u.reason)}.</div>`).join("")}</div>`:""}
+      ${P.length?`<div class="gplist">${P.map(x=>`<div class="gp"><span class="gp-t"><b>${DAYS[x.day_of_week]}</b><span class="mono">${x.start_time}–${x.end_time}</span></span><span class="gp-c"><span><b>${esc(x.a.courses.code)}</b> · ${esc(x.a.student_groups.code)}</span><span class="sub">${esc(x.a.teachers.last_name)} · salle ${esc(x.room_code)}</span></span></div>`).join("")}</div>
+      <p class="sub" style="margin:0">Les créneaux sont enregistrés en <b>brouillon</b> : rien n'est publié tant que vous ne cliquez pas sur « Publier ». Vous pouvez ensuite modifier ou supprimer chaque créneau.</p>`:`<p class="empty">${res.skipped===ctx.assigns.length?"Toutes les affectations de ce semestre ont déjà leurs créneaux.":"Aucun créneau n'a pu être placé avec ces réglages."}</p>`}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="back" formnovalidate>← Modifier les réglages</button>${P.length?`<button class="btn primary" value="save">Enregistrer ${P.length} brouillon${P.length>1?"s":""}</button>`:""}</div>`,
+    async(act)=>{
+      if(act==="back"){settings();return "keep"}
+      const rows=P.map(x=>({assignment_id:x.assignment_id,day_of_week:x.day_of_week,start_time:x.start_time,end_time:x.end_time,room_id:x.room_id,published:false}));
+      let ok=0,ko=0;
+      try{await q(sb.from("timetable_slots").insert(rows));ok=rows.length}
+      catch(e){for(const r of rows){try{await q(sb.from("timetable_slots").insert(r));ok++}catch(e2){ko++}}}
+      toast(`${ok} créneau${ok>1?"x":""} enregistré${ok>1?"s":""} en brouillon`+(ko?` · ${ko} refusé${ko>1?"s":""} (conflit)`:""),ko>0);ctx.rerender()});
+  };
+  settings();
 }
 
 /* ---------- exports Excel et PDF ---------- */
