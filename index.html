@@ -147,6 +147,20 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .seg button{border:0;background:none;color:var(--muted);font:600 14px var(--f-body);padding:9px 16px;border-radius:10px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(20,32,27,.14)}
 .xbar .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:600}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 10px}.sechead h2{margin:0}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-bottom:22px}
+.pcard{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:16px;font:inherit;color:inherit;cursor:pointer;box-shadow:var(--shadow)}
+.pcard[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.pc-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.pc-top b{font:700 17px var(--f-display)}
+.pc-dates{font-size:14px;color:var(--muted)}
+.pc-bot{display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:4px;padding-top:10px;border-top:1px solid var(--line)}
+.pc-bot .sub{font-size:12.5px}.pc-amt{font:700 18px var(--f-display);white-space:nowrap}
+.phead{padding:18px 20px;margin-bottom:14px}.ph-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.phead h2{margin:2px 0 4px;font-size:22px}
+.ph-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.ph-x{margin-top:14px}.ph-prog{margin-top:14px}.ph-prog .hbar{height:12px;margin-bottom:6px}
+.stat.big b{color:var(--accent)}
+.slips{padding:0}.slip{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 200px;gap:8px 20px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line)}.slip:last-child{border-bottom:0}
+.sl-net{font:700 18px var(--f-display);margin-bottom:6px}.sl-amt .hbar{margin-bottom:5px}
+.sl-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -164,6 +178,9 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .hbar{height:10px;border-radius:99px;background:var(--accent-soft);overflow:hidden;min-width:8px}
 .hbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 @media (max-width:720px){
+  .slip{grid-template-columns:1fr;gap:10px;padding:16px}.sl-act{justify-content:flex-start}.sl-act .btn{flex:1}.sl-act .pill{flex:0 0 auto}
+  .stats .stat:last-child:nth-child(odd){grid-column:1/-1}
+  .plist{grid-template-columns:1fr}.phead{padding:16px}.phead h2{font-size:20px}.ph-act .btn{flex:1 1 100%}
   .dtools{display:grid;gap:12px}.seg{display:grid}.seg button{padding:11px 4px}
   .xbar{width:100%;display:grid;grid-template-columns:1fr 1fr}.xbar .btn{padding:11px 10px}
   .hero{display:grid;grid-template-columns:92px 1fr;column-gap:16px;row-gap:2px;align-items:center;padding:18px}.herotxt{display:contents}
@@ -1150,6 +1167,7 @@ function passwordDialog(){
 /* ---------- paie ---------- */
 const PER={ouverte:["Ouverte","p-mute"],en_verification:["Calculée, à vérifier","p-warn"],approuvee:["Approuvée","p-info"],payee:["Payée","p-ok"]};
 const SLIP={approuve:["À payer","p-warn"],partiellement_paye:["Partiellement payé","p-info"],paye:["Payé","p-ok"]};
+const pct=(a,b)=>b?Math.round(a/b*100):0;
 function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="pill ${c}">${l}</span>`}
 function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
 function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
@@ -1163,15 +1181,15 @@ async function viewPayroll(v){
   if(!periods.some(p=>p.id===S.periodId))S.periodId=(periods.find(p=>p.status==="ouverte"||p.status==="en_verification")||periods[0])?.id;
   const p=periods.find(x=>x.id===S.periodId);
   v.innerHTML=`<h1>Paie</h1>
-    <p class="lead">Rémunération à l'heure, calculée uniquement sur les heures validées. Une fois la période approuvée, les bulletins sont figés et chaque séance payée ne peut plus être reprise dans une autre période.</p>
-    <div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Périodes de rémunération</h2>${canPay()?`<button class="btn sm" id="newP">Nouvelle période</button>`:""}</div>
-    <div class="panel tbl">${periods.length?`<table><thead><tr><th>Période</th><th>Du</th><th>Au</th><th>Limite d'émargement</th><th>État</th><th>Montant</th><th></th></tr></thead><tbody>
-    ${periods.map(x=>`<tr ${x.id===S.periodId?'style="background:var(--accent-soft)"':""}><td><b>${esc(x.name)}</b></td><td class="mono">${fdl(x.start_date)}</td><td class="mono">${fdl(x.end_date)}</td><td class="mono">${fdl(x.attendance_deadline)}</td>
-      <td>${ppill(PER,x.status)}</td><td class="num">${x.status==="ouverte"?"—":fcfa(["approuvee","payee"].includes(x.status)?sum(totals,x.id):sum(items,x.id))}</td>
-      <td><button class="btn sm" data-p="${x.id}">Ouvrir</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucune période. Créez la première période de rémunération.</p>`}</div>
+    <p class="lead">Rémunération à l'heure, calculée uniquement sur les heures validées. Une fois la période approuvée, les bulletins sont figés.</p>
+    <div class="sechead"><h2>Périodes de rémunération</h2>${canPay()?`<button class="btn sm primary" id="newP">+ Nouvelle période</button>`:""}</div>
+    ${periods.length?`<div class="plist">${periods.map(x=>{const amt=x.status==="ouverte"?null:["approuvee","payee"].includes(x.status)?sum(totals,x.id):sum(items,x.id);
+      return `<button type="button" class="pcard" data-p="${x.id}" aria-pressed="${x.id===S.periodId}"><span class="pc-top"><b>${esc(x.name)}</b>${ppill(PER,x.status)}</span>
+      <span class="pc-dates">Du ${fdl(x.start_date)} au ${fdl(x.end_date)}</span>
+      <span class="pc-bot"><span class="sub">${x.attendance_deadline?"Émargement avant le "+fdl(x.attendance_deadline):"Sans limite d'émargement"}</span><span class="pc-amt">${amt==null?"—":fcfa(amt)}</span></span></button>`}).join("")}</div>`:`<div class="panel"><p class="empty">Aucune période. Créez la première période de rémunération.</p></div>`}
     <div id="pDetail"></div>`;
-  v.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{S.periodId=Number(b.dataset.p);rerender()});
-  if(canPay())newP.onclick=periodDialog;
+  v.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{S.periodId=Number(b.dataset.p);rerender();setTimeout(()=>document.getElementById("pDetail")?.scrollIntoView({behavior:"smooth",block:"start"}),60)});
+  if(canPay()&&document.getElementById("newP"))newP.onclick=periodDialog;
   if(p)await periodDetail(document.getElementById("pDetail"),p);
 }
 
@@ -1197,13 +1215,14 @@ async function periodDetail(el,p){
       q(sb.from("attendance_records").select("id,status,schedule_sessions!inner(session_date)").in("status",["soumis","correction_demandee"]).gte("schedule_sessions.session_date",p.start_date).lte("schedule_sessions.session_date",p.end_date))]);
     const by=groupBy(items);
     const tot=items.reduce((s,i)=>s+i.amount_fcfa,0);
-    el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0 0 12px">${esc(p.name)}</h2>${items.length?xbar("pX"):""}</div>
+    el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)}</div></div>${ppill(PER,p.status)}</div>
+      ${canPay()?`<div class="ph-act"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
+        ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
+        ${p.status==="ouverte"?`<button class="btn danger" id="delP">Supprimer</button>`:""}</div>`:""}
+      ${items.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
       ${pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
       ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
-      ${canPay()?`<div class="row" style="margin-bottom:12px"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
-        ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
-        ${p.status==="ouverte"?`<button class="btn danger" id="delP">Supprimer la période</button>`:""}</div>`:""}
-      ${items.length?`<div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Total brut = net</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
+      ${items.length?`<div class="stats"><div class="stat big"><b>${fcfa(tot)}</b><span>Total à payer (brut = net)</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
       ${teacherTable(by,false)}`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
     if(canPay()){
       calc.onclick=async()=>{try{const r=await q(sb.rpc("calculate_payroll",{p_period:p.id}));
@@ -1230,15 +1249,14 @@ async function periodDetail(el,p){
     q(sb.from("payments").select("*,payslips!inner(pay_period_id)").eq("payslips.pay_period_id",p.id).order("paid_on"))]);
   const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
   const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
-  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0 0 12px">${esc(p.name)}</h2>${slips.length?xbar("pX"):""}</div>
-    <p class="sub" style="margin:0 0 12px">Approuvée le ${new Date(p.approved_at).toLocaleString("fr-FR",{dateStyle:"long",timeStyle:"short"})}. Les bulletins ci-dessous sont la version de référence.</p>
+  el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
+      <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
+      ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
-    <div class="panel tbl"><table><thead><tr><th>Bulletin</th><th>Enseignant</th><th>Heures</th><th>Net</th><th>Réglé</th><th>État</th><th></th></tr></thead><tbody>
-    ${slips.map(s=>`<tr><td class="mono">${esc(s.number)}</td><td>${esc(s.snapshot.enseignant.nom)}<div class="sub">${esc(s.snapshot.enseignant.statut)}</div></td>
-      <td class="num">${hrs(s.total_minutes)}</td><td class="num">${fcfa(s.net_fcfa)}</td><td class="num">${fcfa(paid(s.id))}</td><td>${ppill(SLIP,s.status)}</td>
-      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Paiement</button>`:""}</div></td></tr>`).join("")}
-    </tbody></table></div>
+    <h2>Bulletins</h2><div class="panel slips">${slips.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
+      <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
+      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("")}</div>
     ${pays.length?`<h2>Règlements enregistrés</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Bulletin</th><th>Mode</th><th>Référence</th><th>Montant</th></tr></thead><tbody>
     ${pays.map(x=>`<tr><td class="mono">${fdl(x.paid_on)}</td><td class="mono">${esc(slips.find(s=>s.id===x.payslip_id)?.number)}</td><td>${esc(x.method)}</td><td class="mono">${esc(x.reference||"—")}</td><td class="num">${fcfa(x.amount_fcfa)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
   el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
