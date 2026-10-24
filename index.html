@@ -168,6 +168,18 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .gp{display:grid;grid-template-columns:104px 1fr;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px}.gp:last-child{border-bottom:0}
 .gp-t,.gp-c{display:flex;flex-direction:column;gap:2px}.gp-c .sub{font-size:12.5px}.gp-t .mono{font-size:13px;color:var(--muted)}
 .gpwarn{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:6px;font-size:13.5px;line-height:1.4}
+.setup{padding:18px 20px;margin-bottom:16px}.su-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.su-n{font:700 22px var(--f-display);color:var(--accent)}
+.su-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.su{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:9px 10px;font:inherit;font-size:13.5px;cursor:pointer;text-align:left;min-width:0}
+.su-i{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--bg);color:var(--muted)}
+.su.done .su-i{background:var(--ok-soft);color:var(--ok)}.su.next{border-color:var(--accent);background:var(--accent-soft)}.su.next .su-i{background:var(--accent);color:var(--accent-ink)}
+.su-l{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.su-c{font-size:12px;color:var(--muted);white-space:nowrap}
+.secnav{margin-bottom:18px}.cnt{font:600 13px var(--f-body);background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:2px 9px;vertical-align:2px;margin-left:4px}
+.rlist{padding:0;margin-bottom:22px}.ritem{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr) auto;gap:8px 18px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}.ritem:last-child{border-bottom:0}.ritem[hidden]{display:none}
+.rmain{display:flex;flex-direction:column;gap:2px;min-width:0}.rmain b{overflow-wrap:anywhere}
+.rmeta{display:flex;flex-wrap:wrap;gap:6px 22px}.rm{display:flex;flex-direction:column;font-size:14px;min-width:0}.rm small{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ract{display:flex;gap:8px;align-items:center}
+.iconbtn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--bad);display:grid;place-items:center;cursor:pointer}.iconbtn:hover{background:var(--bad-soft)}
 .xbar{display:flex;gap:8px;flex-wrap:wrap}
 .dhead{display:flex;align-items:center;gap:10px;margin:24px 0 8px}
 .srow{display:grid;grid-template-columns:64px 1fr auto;gap:6px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start}
@@ -187,6 +199,9 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 @media (max-width:720px){
   .slip{grid-template-columns:1fr;gap:10px;padding:16px}.sl-act{justify-content:flex-start}.sl-act .btn{flex:1}.sl-act .pill{flex:0 0 auto}
   .stats .stat:last-child:nth-child(odd){grid-column:1/-1}
+  .su-steps{grid-template-columns:1fr 1fr}.setup{padding:16px}
+  .secnav{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding:2px 16px 6px;scrollbar-width:none}.secnav::-webkit-scrollbar{display:none}.secnav button{flex:none}
+  .ritem{grid-template-columns:1fr auto;padding:14px 16px}.rmeta{grid-column:1/-1;grid-row:2;gap:8px 20px}.ract{grid-row:1;grid-column:2}
   .plist{grid-template-columns:1fr}.phead{padding:16px}.phead h2{font-size:20px}.ph-act .btn{flex:1 1 100%}
   .dtools{display:grid;gap:12px}.seg{display:grid}.seg button{padding:11px 4px}
   .xbar{width:100%;display:grid;grid-template-columns:1fr 1fr}.xbar .btn{padding:11px 10px}
@@ -335,7 +350,12 @@ function hrs(min){if(min==null)return "—";const h=Math.floor(min/60),m=min%60;
 function has(r){return S.roles.some(x=>x.role===r)}
 function pill(st){const [l,c]=ATT[st]||["Non émargé","p-mute"];return `<span class="pill ${c}">${l}</span>`}
 function toast(msg,bad){const t=document.createElement("div");t.className="toast"+(bad?" bad":"");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),bad?6000:3000)}
+const CONS={departments_code_key:"Ce code de département existe déjà.",programs_code_key:"Ce code de filière existe déjà.",student_groups_code_key:"Ce code de groupe existe déjà.",courses_code_key:"Ce code de matière existe déjà.",rooms_code_key:"Ce code de salle existe déjà.",
+  academic_years_label_key:"Cette année universitaire existe déjà.",semesters_academic_year_id_label_key:"Ce semestre existe déjà pour cette année.",semesters_check:"La date de fin doit être après la date de début.",academic_years_check:"La date de fin doit être après la date de début.",
+  student_groups_size_check:"L'effectif ne peut pas être négatif.",rooms_capacity_check:"La capacité doit être d'au moins 1 place.",
+  programs_department_id_fkey:"Ce département contient encore des filières : supprimez-les ou déplacez-les d'abord.",courses_department_id_fkey:"Ce département contient encore des matières.",student_groups_program_id_fkey:"Cette filière contient encore des groupes : supprimez-les d'abord.",semesters_academic_year_id_fkey:"Cette année contient encore des semestres : supprimez-les d'abord."};
 function errMsg(e){let m=e?.message||String(e);
+  for(const k in CONS)if(m.includes(k))return CONS[k];
   if(m.includes("no_room_overlap"))m="Conflit : la salle est déjà occupée sur ce créneau.";
   if(m.includes("no_teacher_overlap"))m="Conflit : le professeur a déjà un cours sur ce créneau.";
   if(m.includes("no_group_overlap"))m="Conflit : le groupe a déjà un cours sur ce créneau.";
@@ -1044,14 +1064,15 @@ async function viewSummary(v){
 }
 
 /* ---------- référentiel ---------- */
-const SEC_LABEL={enseignants:"Enseignants",matieres:"Matières",groupes:"Groupes et filières",salles:"Salles",structure:"Structure",comptes:"Comptes et rôles"};
-const BLOCKS_BY_SEC={enseignants:["enseignants","statuts"],matieres:["matieres"],groupes:["groupes","filieres"],salles:["salles"],structure:["departements","annees","semestres"]};
+const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
+const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
+const SETUP_STEPS=[["Départements","departments","structure"],["Filières","programs","structure"],["Groupes","student_groups","structure"],["Année","academic_years","calendrier"],["Semestres","semesters","calendrier"],["Matières","courses","matieres"],["Salles","rooms","salles"],["Enseignants","teachers","enseignants"]];
 
 async function refLookups(){
   const [deps,programs,years,statuses]=await Promise.all([
     q(sb.from("departments").select("id,code,name").order("code")),
     q(sb.from("programs").select("id,code,name,level").order("code")),
-    q(sb.from("academic_years").select("id,label").order("label")),
+    q(sb.from("academic_years").select("id,label,start_date,end_date").order("label")),
     q(sb.from("teacher_statuses").select("id,label").order("id"))]);
   return {deps,programs,years,statuses};
 }
@@ -1060,41 +1081,45 @@ function refDefs(L){
   const dep=L.deps.map(d=>[d.id,d.code+" · "+d.name]);
   const code=r=>`<span class="mono">${esc(r.code)}</span>`;
   return {
-    enseignants:{title:"Enseignants",one:"enseignant",table:"teachers",select:"*,departments(code),teacher_statuses(label)",order:"last_name",
+    enseignants:{title:"Enseignants",one:"enseignant",hint:"Le statut détermine le tarif horaire. L'e-mail sert à relier le compte de l'enseignant.",table:"teachers",select:"*,departments(code),teacher_statuses(label)",order:"last_name",
       cols:[["Nom",r=>esc(r.last_name+" "+r.first_name)],["Département",r=>esc(r.departments?.code)],["Statut",r=>esc(r.teacher_statuses?.label)],["E-mail",r=>`<span class="mono">${esc(r.email)}</span>`],
         ["Compte",r=>r.profile_id?'<span class="pill p-ok">Lié</span>':'<span class="pill p-mute">Sans compte</span>'],["Actif",r=>r.active?"Oui":'<span class="pill p-mute">Non</span>']],
       fields:[{k:"first_name",l:"Prénom",req:1},{k:"last_name",l:"Nom",req:1},{k:"email",l:"E-mail (sert à lier son compte)",t:"email",req:1},{k:"phone",l:"Téléphone"},
         {k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},{k:"status_id",l:"Statut (détermine le tarif)",t:"select",num:1,opt:L.statuses.map(s=>[s.id,s.label]),req:1},{k:"active",l:"Enseignant actif",t:"bool"}],
       defaults:{active:true},normalize:o=>{o.email=o.email.toLowerCase();return o},name:r=>r.first_name+" "+r.last_name},
-    statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",
+    statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",head:[1,0],
       cols:[["Code",code],["Libellé",r=>esc(r.label)]],
       fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
-    matieres:{title:"Matières",one:"matière",table:"courses",select:"*,departments(code)",order:"code",
+    matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code)",order:"code",
       cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Intitulé",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},
         {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}]},
-    groupes:{title:"Groupes d'étudiants",one:"groupe",table:"student_groups",select:"*,programs(name,level)",order:"code",
+    groupes:{title:"Groupes d'étudiants",one:"groupe",head:[1,0],hint:"Un groupe appartient à une filière. L'effectif sert à choisir une salle assez grande.",table:"student_groups",select:"*,programs(name,level)",order:"code",
       cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1}]},
-    filieres:{title:"Filières",one:"filière",table:"programs",select:"*,departments(code)",order:"code",
+    filieres:{title:"Filières",one:"filière",head:[1,0],hint:"Une filière appartient à un département (ex. Informatique L1).",table:"programs",select:"*,departments(code)",order:"code",
       cols:[["Code",code],["Filière",r=>esc(r.name)],["Niveau",r=>esc(r.level)],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"level",l:"Niveau (L1, L2, M1…)",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1}]},
-    salles:{title:"Salles",one:"salle",table:"rooms",order:"code",
+    salles:{title:"Salles",one:"salle",head:[1,0],hint:"La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",
       cols:[["Code",code],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(r.room_type)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
         {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"]],req:1}]},
-    departements:{title:"Départements",one:"département",table:"departments",order:"code",
+    departements:{title:"Départements",one:"département",head:[1,0],hint:"Commencez par les départements : filières, matières et enseignants en dépendent.",table:"departments",order:"code",
       cols:[["Code",code],["Nom",r=>esc(r.name)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1}]},
-    annees:{title:"Années universitaires",one:"année universitaire",table:"academic_years",order:"label",
+    annees:{title:"Années universitaires",one:"année universitaire",hint:"Une seule année est « en cours ». Les semestres se créent dans l'année.",table:"academic_years",order:"label",
       cols:[["Année",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`],["En cours",r=>r.is_current?'<span class="pill p-ok">Oui</span>':""]],
       fields:[{k:"label",l:"Libellé (ex. 2027-2028)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1},{k:"is_current",l:"Année en cours",t:"bool"}],
       name:r=>r.label,
-      before:async(o,row)=>{if(o.is_current)await q(sb.from("academic_years").update({is_current:false}).neq("id",row?row.id:-1))}},
-    semestres:{title:"Semestres",one:"semestre",table:"semesters",select:"*,academic_years(label)",order:"start_date",
+      check:o=>{if(o.end_date<=o.start_date)throw new Error("La date de fin doit être après la date de début.")},
+      after:async(o,saved)=>{if(o.is_current)await q(sb.from("academic_years").update({is_current:false}).neq("id",saved.id))}},
+    semestres:{title:"Semestres",one:"semestre",head:[1,0],hint:"Les dates du semestre servent à calculer le nombre de semaines de cours.",table:"semesters",select:"*,academic_years(label)",order:"start_date",
       cols:[["Année",r=>esc(r.academic_years?.label)],["Semestre",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`]],
       fields:[{k:"academic_year_id",l:"Année",t:"select",num:1,opt:L.years.map(y=>[y.id,y.label]),req:1},{k:"label",l:"Libellé (ex. Semestre 1)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1}],
-      name:r=>r.label}
+      name:r=>r.label,
+      check:o=>{if(o.end_date<=o.start_date)throw new Error("La date de fin doit être après la date de début.");
+        const y=L.years.find(x=>x.id===o.academic_year_id);
+        if(y&&(o.start_date<y.start_date||o.end_date>y.end_date))throw new Error("Les dates du semestre doivent rester dans l'année "+y.label+" (du "+fdl(y.start_date)+" au "+fdl(y.end_date)+").")}}
   };
 }
 
@@ -1116,27 +1141,42 @@ function readFields(fields){
   return o;
 }
 
+const TRASH=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg>`;
 async function renderBlock(def,el){
   const rows=await q(sb.from(def.table).select(def.select||"*").order(def.order||"id"));
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2>${esc(def.title)} · ${rows.length}</h2><button class="btn sm" data-add>Ajouter</button></div>
-    <div class="panel tbl">${rows.length?`<table><thead><tr>${def.cols.map(c=>`<th>${c[0]}</th>`).join("")}<th></th></tr></thead><tbody>
-    ${rows.map((r,i)=>`<tr>${def.cols.map(c=>`<td>${c[1](r)}</td>`).join("")}<td style="white-space:nowrap"><button class="btn sm" data-e="${i}">Modifier</button> <button class="btn sm danger" data-d="${i}">Supprimer</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Rien pour l'instant. Utilisez « Ajouter » pour commencer.</p>`}</div>`;
-  el.querySelector("[data-add]").onclick=()=>formDialog(def,null);
+  const hd=def.head||[0],used=new Set(hd);
+  const item=(r,i)=>`<div class="ritem"><div class="rmain"><b>${def.cols[hd[0]][1](r)}</b>${hd[1]!=null?`<span class="sub">${def.cols[hd[1]][1](r)}</span>`:""}</div>
+    <div class="rmeta">${def.cols.map((c,k)=>used.has(k)?"":`<span class="rm"><small>${c[0]}</small>${c[1](r)||"—"}</span>`).join("")}</div>
+    <div class="ract"><button class="btn sm" data-e="${i}">Modifier</button><button class="iconbtn" data-d="${i}" aria-label="Supprimer">${TRASH}</button></div></div>`;
+  el.innerHTML=`<div class="sechead"><h2>${esc(def.title)} <span class="cnt">${rows.length}</span></h2><button class="btn sm primary" data-add>+ Ajouter</button></div>
+    ${def.hint?`<p class="sub" style="margin:-4px 0 10px">${esc(def.hint)}</p>`:""}
+    ${rows.length>6?searchBox("s_"+def.table,"Rechercher dans "+def.title.toLowerCase()+"…"):""}
+    <div class="panel rlist">${rows.length?rows.map(item).join(""):`<div class="rempty"><p class="empty" style="padding:22px 12px 10px">Rien pour l'instant.</p><div style="text-align:center;padding-bottom:20px"><button class="btn primary" data-add>+ Ajouter ${/^(filière|matière|salle|année)/.test(def.one)?"une":"un"} ${esc(def.one)}</button></div></div>`}</div>`;
+  el.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>formDialog(def,null));
   el.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>formDialog(def,rows[b.dataset.e]));
   el.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>deleteDialog(def,rows[b.dataset.d]));
+  const si=document.getElementById("s_"+def.table);
+  if(si)si.oninput=()=>{const k=norm(si.value.trim());el.querySelectorAll(".ritem").forEach(it=>it.hidden=!!k&&!norm(it.textContent).includes(k))};
 }
 
+const NEED={department_id:"Créez d'abord un département (onglet Structure).",program_id:"Créez d'abord une filière (onglet Structure).",academic_year_id:"Créez d'abord une année universitaire (onglet Années et semestres).",status_id:"Aucun statut d'enseignant : ajoutez-en un dans « Statuts des enseignants »."};
 function formDialog(def,row){
   const vals=row||def.defaults||{};
+  const missing=def.fields.filter(f=>f.t==="select"&&f.req&&!f.opt.length);
   openDialog(`<h3>${row?"Modifier":"Ajouter"} : ${esc(def.one)}</h3>
+    ${missing.length?`<div class="gpwarn">${missing.map(f=>esc(NEED[f.k]||"Aucun choix disponible pour « "+f.l+" ».")).join(" ")}</div>`:""}
     <div class="grid2">${def.fields.map(f=>fieldHtml(f,vals[f.k])).join("")}</div>
-    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok" ${missing.length?"disabled":""}>Enregistrer</button></div>`,
   async()=>{
     let o=readFields(def.fields);
     if(def.normalize)o=def.normalize(o);
+    if(def.check)def.check(o);
     if(def.before)await def.before(o,row);
+    let saved=row;
     if(row)await q(sb.from(def.table).update(o).eq("id",row.id));
+    else if(def.after)saved=await q(sb.from(def.table).insert(o).select().single());
     else await q(sb.from(def.table).insert(o));
+    if(def.after)await def.after(o,saved);
     toast("Enregistré");rerender();
   });
 }
@@ -1152,10 +1192,18 @@ function deleteDialog(def,row){
 async function viewRef(v){
   const allowed=Object.keys(SEC_LABEL).filter(k=>k==="comptes"?has("admin"):has("planificateur"));
   const sec=allowed.includes(S.refSec)?S.refSec:allowed[0];S.refSec=sec;
+  const isPl=has("planificateur");
+  let counts=null;
+  if(isPl)try{counts=await Promise.all(SETUP_STEPS.map(([,t])=>q(sb.from(t).select("id")).then(r=>r.length)))}catch(e){counts=null}
+  const nextIdx=counts?counts.findIndex(n=>!n):-1,doneN=counts?counts.filter(n=>n>0).length:0;
   v.innerHTML=`<h1>Référentiel</h1>
-    <p class="lead">Les données de l'université : enseignants, matières, groupes, salles et comptes. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>
-    <div class="chips" style="margin-bottom:16px">${allowed.length>1?allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join(""):""}</div>
+    <p class="lead">Les données de l'université. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>
+    ${counts?`<div class="panel setup"><div class="su-top"><div><b>Mise en place</b><div class="sub">${doneN===SETUP_STEPS.length?"Tout est renseigné.":"Suivez l'ordre : chaque étape dépend de la précédente."}</div></div><span class="su-n">${doneN}/${SETUP_STEPS.length}</span></div>
+      <div class="hbar" style="width:100%;height:8px;margin:12px 0 ${doneN===SETUP_STEPS.length?0:12}px"><i style="width:${Math.round(doneN/SETUP_STEPS.length*100)}%"></i></div>
+      ${doneN===SETUP_STEPS.length?"":`<div class="su-steps">${SETUP_STEPS.map(([l,,sc],i)=>`<button type="button" class="su ${counts[i]?"done":""} ${i===nextIdx?"next":""}" data-su="${sc}"><span class="su-i">${counts[i]?"✓":i+1}</span><span class="su-l">${l}</span><span class="su-c">${counts[i]||""}</span></button>`).join("")}</div>`}</div>`:""}
+    <div class="chips secnav">${allowed.length>1?allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join(""):""}</div>
     <div id="refBody"></div>`;
+  v.querySelectorAll("[data-su]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.su;rerender()});
   v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.sec;rerender()});
   const body=document.getElementById("refBody");
   if(sec==="comptes"){await viewAccounts(body);return}
