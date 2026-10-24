@@ -242,6 +242,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 @media (max-width:720px){
   .slip{grid-template-columns:1fr;gap:10px;padding:16px}.sl-act{justify-content:flex-start}.sl-act .btn{flex:1}.sl-act .pill{flex:0 0 auto}
   .stats .stat:last-child:nth-child(odd){grid-column:1/-1}
+  .tt{grid-template-columns:44px repeat(var(--n),minmax(106px,1fr));min-width:calc(44px + var(--n)*106px)}.tt-ev{padding:5px 6px 5px 8px}.tt-gut span{right:5px;font-size:10.5px}
   .su-steps{grid-template-columns:1fr 1fr}.setup{padding:16px}
   .secnav{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding:2px 16px 6px;scrollbar-width:none}.secnav::-webkit-scrollbar{display:none}.secnav button{flex:none}
   .ritem{grid-template-columns:1fr auto;padding:14px 16px}.rmeta{grid-column:1/-1;grid-row:2;gap:8px 20px}.ract{grid-row:1;grid-column:2}
@@ -455,6 +456,7 @@ async function boot(){
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  monplanning:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 17.5h3"/>',
   seances:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   dispos:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   bulletins:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
@@ -469,6 +471,7 @@ const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" s
 function availableTabs(){
   const t=[];
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
+  if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable});
   if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
   if(isProf())t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
@@ -840,6 +843,30 @@ async function viewPlanning(v){
 }
 
 
+/* ---------- professeur : son emploi du temps hebdomadaire (créneaux publiés) ---------- */
+async function viewMyTimetable(v){
+  const tid=S.teacher.id;
+  const [slots,assigns,avails]=await Promise.all([
+    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code,name),teaching_assignments!inner(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").eq("published",true).eq("teaching_assignments.teacher_id",tid).order("start_time")),
+    q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),student_groups(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
+    q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("teacher_id",tid))]);
+  const mins=x=>{const t=s=>{const [h,m]=s.slice(0,5).split(":").map(Number);return h*60+m};return t(x.end_time)-t(x.start_time)};
+  const total=slots.reduce((a,x)=>a+mins(x),0);
+  const byA={};slots.forEach(x=>byA[x.assignment_id]=(byA[x.assignment_id]||0)+mins(x));
+  const days=new Set(slots.map(x=>x.day_of_week)).size;
+  v.innerHTML=`<h1>Mon emploi du temps</h1>
+    <p class="lead">Vos cours de la semaine, tels qu'ils ont été publiés par le directeur des études ou sa secrétaire. Les heures payées restent celles que vous émargez et que le responsable valide.</p>
+    ${slots.length?`<div class="stats"><div class="stat big"><b>${hrs(total)}</b><span>par semaine</span></div><div class="stat"><b>${slots.length}</b><span>Créneaux</span></div><div class="stat"><b>${days}</b><span>Jours de cours</span></div></div>
+      ${timetableGrid({mine:slots,conf:new Set(),view:"teacher",avOf:()=>avails,outside:()=>false,teacherId:tid,hasSat:slots.some(x=>x.day_of_week===6),readonly:1})}
+      <h2>Mes cours</h2><div class="panel rlist">${assigns.map(a=>`<div class="ritem"><div class="rmain"><b>${esc(a.courses.code)} · ${esc(a.courses.name)}</b><span class="sub">${esc(a.student_groups.code)} · ${esc(a.semesters.label)}</span></div>
+        <div class="rmeta"><span class="rm"><small>Par semaine</small>${hrs(byA[a.id]||0)}</span><span class="rm"><small>Volume prévu</small>${Number(a.planned_hours)} h</span></div><div></div></div>`).join("")}</div>`
+    :`<div class="panel"><p class="empty">Votre emploi du temps n'est pas encore publié.<br>Il apparaîtra ici dès que le directeur des études ou sa secrétaire l'aura publié.</p></div>`}`;
+  v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments;
+    openDialog(`<h3>${esc(t.courses.code)} · ${esc(t.courses.name)}</h3>
+      <dl class="kv"><dt>Jour</dt><dd>${DAYS[sl.day_of_week]}</dd><dt>Horaire</dt><dd class="mono">${hm(sl.start_time)}–${hm(sl.end_time)} (${hrs(mins(sl))})</dd><dt>Groupe</dt><dd>${esc(t.student_groups.code)}</dd><dt>Salle</dt><dd>${esc(sl.rooms.code)}${sl.rooms.name?" · "+esc(sl.rooms.name):""}</dd></dl>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{})});
+}
+
 /* ---------- grille hebdomadaire : jours en colonnes, heures en lignes ---------- */
 const TT_COLORS=["#0b6e5b","#2563a8","#b06a00","#7a4fa3","#b23a5a","#3f7f2a","#0e7490","#9a5b2e"];
 function timetableGrid(o){
@@ -872,7 +899,7 @@ function timetableGrid(o){
     <div class="tt-corner"></div>${days.map(d=>`<div class="tt-head ${d===todayDow?"today":""}">${DAYS[d]}</div>`).join("")}
     <div class="tt-gut" style="height:${H}px">${hours.map(m=>`<span style="top:${y(m)}px">${String(m/60).padStart(2,"0")}:00</span>`).join("")}</div>
     ${days.map(col).join("")}</div></div>
-  <div class="tt-leg"><span><i style="background:var(--accent)"></i>Publié</span><span><i class="dr"></i>Brouillon</span><span><i style="background:var(--bad)"></i>Conflit</span>${o.view==="teacher"&&av.length?'<span><i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Disponibilités</span>':""}<span class="sub">Touchez un créneau pour le modifier.</span></div>`;
+  <div class="tt-leg">${o.readonly?"":'<span><i style="background:var(--accent)"></i>Publié</span><span><i class="dr"></i>Brouillon</span><span><i style="background:var(--bad)"></i>Conflit</span>'}${o.view==="teacher"&&av.length?'<span><i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Disponibilités</span>':""}<span class="sub">${o.readonly?"Touchez un créneau pour voir le détail.":"Touchez un créneau pour le modifier."}</span></div>`;
 }
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
