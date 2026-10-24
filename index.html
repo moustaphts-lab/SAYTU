@@ -56,7 +56,7 @@ nav.tabs button svg{flex:none;opacity:.8}
 .yr{display:none}
 @media (min-width:721px){
   :root{--sbw:224px}
-  #app{padding-left:var(--sbw)}
+  #app.hasnav{padding-left:var(--sbw)}
   nav.tabs{position:fixed;left:0;top:0;bottom:0;width:var(--sbw);flex-direction:column;overflow-y:auto;gap:3px;padding:18px 12px 24px;background:var(--surface);border-right:1px solid var(--line);z-index:6}
   nav.tabs .drawer-top{display:block;padding:2px 8px 16px;margin-bottom:10px;border-bottom:1px solid var(--line)}
   nav.tabs .drawer-top .brand{font-size:17px}
@@ -112,9 +112,13 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500;
 input,select,textarea{font:15px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-height:42px;max-width:100%}
 textarea{min-height:76px;resize:vertical}
 input[type=checkbox]{min-height:0;width:18px;height:18px;padding:0;accent-color:var(--accent)}
-.login{max-width:420px;margin:7vh auto 0}
-.login .brand{margin-bottom:22px}
-.login .panel{padding:24px;display:flex;flex-direction:column;gap:14px}
+.loginpage{min-height:100dvh;display:grid;place-items:center;padding-block:32px}
+.login{width:100%;max-width:420px;margin:0 auto;text-align:center}
+.login .brand{margin:0 auto 22px;justify-content:center;text-align:left}
+.login h1{margin:0 0 6px}.login .lead{margin:0 0 22px}
+.login .panel{padding:26px;display:flex;flex-direction:column;gap:16px;text-align:left;box-shadow:var(--shadow)}
+.login .panel .btn{min-height:48px;font-size:16px}
+.login .demo{margin-top:18px;text-align:left}.login .demo summary{text-align:center;list-style-position:inside}
 .demo{margin-top:18px;font-size:13px}
 .demo summary{cursor:pointer;color:var(--muted);padding:6px 0}
 .demo button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 2px;color:var(--ink);font:13px var(--f-body);cursor:pointer}
@@ -391,7 +395,8 @@ function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c
 
 /* ---------- connexion ---------- */
 function renderLogin(msg){
-  $app.innerHTML=`<div class="wrap"><div class="login">
+  $app.classList.remove("hasnav");
+  $app.innerHTML=`<div class="wrap loginpage"><div class="login">
     <div class="brand"><i>U</i><div>UCAB Touba<small>Enseignements</small></div></div>
     <h1>Connexion</h1>
     <p class="lead">Emplois du temps, émargement et paie des enseignants.</p>
@@ -459,6 +464,7 @@ function availableTabs(){
 }
 
 function renderShell(){
+  $app.classList.add("hasnav");
   const tabs=availableTabs();
   const name=S.user.user_metadata?.full_name||S.user.email;
   const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
