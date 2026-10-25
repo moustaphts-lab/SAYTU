@@ -1,0 +1,4 @@
+-- UCAB Touba : jours sans cours (déjà appliqué sur la base de production le 25/10/2026)
+-- Table no_class_days (périodes de 1 à 61 jours, lecture pour tous, écriture réservée aux planificateurs, auditée)
+-- et generate_sessions() qui ne crée aucune séance ces jours-là.
+-- Voir la migration « jours_sans_cours » dans Supabase pour le détail.
