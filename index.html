@@ -141,6 +141,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-gut span{position:absolute;right:8px;transform:translateY(-50%);font:500 11.5px var(--f-body);color:var(--muted)}.tt-gut span:first-child{transform:none;top:4px!important}
 .tt-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-size:100% 64px}
 .tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
+.tt-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--muted) 10%,transparent) 7px 14px);display:grid;place-items:center;pointer-events:none}.tt-lunch span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
 .tt-av{position:absolute;left:0;right:0;background:var(--ok-soft);opacity:.7;border-left:3px solid var(--ok)}
 .tt-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:2}.tt-now::before{content:"";position:absolute;left:-5px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
 .tt-ev{position:absolute;z-index:1;overflow:hidden;text-align:left;display:flex;flex-direction:column;gap:1px;padding:6px 8px 6px 10px;border:0;border-left:4px solid var(--c);border-radius:8px;background:color-mix(in srgb,var(--c) 15%,var(--surface));color:var(--ink);font:inherit;font-size:12.5px;line-height:1.25;cursor:pointer}
@@ -232,7 +233,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .avnote{padding:14px 16px;margin-bottom:12px;font-size:14px;background:var(--accent-soft);border-color:transparent}.avnote[hidden]{display:none}
 .avbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}.avbar .stat{padding:10px 16px;min-width:0}.avbar .stat b{font-size:20px;color:var(--accent)}.avbtns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}.avnote.off{background:var(--warn-soft);color:var(--warn)}
 .avg-wrap{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
-.avg{display:grid;grid-template-columns:54px repeat(6,minmax(0,1fr));user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.avg{display:grid;grid-template-columns:54px repeat(var(--n,6),minmax(0,1fr));user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .avg-c0{border-bottom:1px solid var(--line)}
 .avg-h{height:44px;border:0;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 13.5px var(--f-body);cursor:pointer}.avg-h:hover{color:var(--accent);background:var(--accent-soft)}
 .avg-h .abbr{display:none}
@@ -240,7 +241,8 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .avg-c{height:42px;border:0;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:0;cursor:pointer;position:relative;font:inherit}
 .avg-c.on{background:color-mix(in srgb,var(--ok) 20%,var(--surface))}.avg-c.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:var(--ok);font-weight:700;font-size:15px}
 .avg-c.off{background:repeating-linear-gradient(135deg,var(--bg) 0 6px,var(--surface) 6px 12px)}
-.avg-c:hover{filter:brightness(.96)}.avg-c:focus-visible,.avg-h:focus-visible,.avg-r:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.avg-c.pause{background:var(--bg);cursor:default}.avg-c.pause::after{content:"pause";position:absolute;inset:0;display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.avg-c:hover:not(.pause){filter:brightness(.96)}.avg-c:focus-visible,.avg-h:focus-visible,.avg-r:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .avl{width:16px!important;height:12px!important;border-radius:3px;border:1px solid var(--line)}.avl.on{background:color-mix(in srgb,var(--ok) 20%,var(--surface));border-color:var(--ok)}.avl.off{background:repeating-linear-gradient(135deg,var(--bg) 0 3px,var(--surface) 3px 6px)}
 .avrow{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
 .avrow:last-child{border-bottom:0}
@@ -267,7 +269,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
   .bigline{font-size:18px;margin:0}.hero .sub,.hero .late{font-size:13.5px}
   .drow{grid-template-columns:1fr;gap:4px}.rank{grid-template-columns:minmax(0,1fr) 58px}.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;width:100%}.rank .rbar{grid-column:1/-1;grid-row:2}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
-  .avg{grid-template-columns:44px repeat(6,minmax(0,1fr))}.avg-h .full{display:none}.avg-h .abbr{display:inline}.avg-h{font-size:12.5px}.avbtns{margin-left:0;width:100%;display:grid;grid-template-columns:1fr}.avbtns .btn{width:100%}
+  .avg{grid-template-columns:44px repeat(var(--n,6),minmax(0,1fr))}.avg-h .full{display:none}.avg-h .abbr{display:inline}.avg-h{font-size:12.5px}.avbtns{margin-left:0;width:100%;display:grid;grid-template-columns:1fr}.avbtns .btn{width:100%}
   body{font-size:16px}
   main{padding-block:18px calc(40px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
@@ -457,6 +459,7 @@ async function boot(){
     S.roles=await q(sb.rpc("my_roles"));
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
+    await loadSchedule();
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
@@ -466,6 +469,14 @@ async function boot(){
   renderShell();
 }
 
+const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00"};
+const hmin=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+async function loadSchedule(){
+  try{const r=await q(sb.from("school_schedule").select("*").eq("id",1).maybeSingle());
+    S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):""}:{...SCHED_DEFAULT}}
+  catch(e){S.sched={...SCHED_DEFAULT}}
+  return S.sched;
+}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
@@ -703,17 +714,20 @@ function reviewDialog(a){
 
 /* ---------- disponibilités (professeur) ---------- */
 async function viewAvailability(v){
-  const tid=S.teacher.id,H0=7,H1=20,N=H1-H0,D=[1,2,3,4,5,6];
+  const sch=S.sched||SCHED_DEFAULT,tid=S.teacher.id,H0=Math.floor(hmin(sch.start)/60),H1=Math.ceil(hmin(sch.end)/60),N=H1-H0,D=sch.days;
+  const lf=sch.lunchFrom?hmin(sch.lunchFrom):null,lt=sch.lunchTo?hmin(sch.lunchTo):null;
+  const pause=Array.from({length:N},(_,i)=>lf!=null&&lt!=null&&Math.min(lt,(H0+i+1)*60)-Math.max(lf,(H0+i)*60)>=30);
   const [rows,me]=await Promise.all([
     q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time").eq("teacher_id",tid).order("start_time")),
     q(sb.from("teachers").select("availability_declared").eq("id",tid).single())]);
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
   let declared=!!me.availability_declared||rows.length>0,touched=false;
-  const on={};D.forEach(d=>{on[d]=Array(N).fill(!declared)});
-  if(declared)D.forEach(d=>rows.filter(r=>r.day_of_week===d).forEach(r=>{for(let h=H0;h<H1;h++){const ov=Math.min(T(r.end_time),(h+1)*60)-Math.max(T(r.start_time),h*60);if(ov>=30)on[d][h-H0]=true}}));
+  const on={};D.forEach(d=>{on[d]=Array.from({length:N},(_,i)=>!declared&&!pause[i])});
+  if(declared)D.forEach(d=>rows.filter(r=>r.day_of_week===d).forEach(r=>{for(let h=H0;h<H1;h++){const ov=Math.min(T(r.end_time),(h+1)*60)-Math.max(T(r.start_time),h*60);if(ov>=30&&!pause[h-H0])on[d][h-H0]=true}}));
   let tm=0,saving=Promise.resolve();
   const count=()=>D.reduce((a,d)=>a+on[d].filter(Boolean).length,0);
+  const free=(arr)=>arr.every((x,i)=>x||pause[i]);
   const ranges=d=>{const out=[];let st=null;on[d].forEach((x,i)=>{if(x&&st==null)st=i;if((!x||i===N-1)&&st!=null){const en=x&&i===N-1?i+1:i;out.push([(H0+st)*60,(H0+en)*60]);st=null}});return out};
   const stateEl=()=>document.getElementById("avState");
   const flush=async()=>{
@@ -722,11 +736,11 @@ async function viewAvailability(v){
     catch(e){toast(/Could not find the function|PGRST202/.test(e.message||"")?"La base n'est pas à jour : le script « disponibilites_declarees.sql » doit être exécuté.":errMsg(e),true);rerender()}
   };
   const queue=()=>{touched=true;if(stateEl())stateEl().textContent="Enregistrement…";clearTimeout(tm);tm=setTimeout(()=>{saving=saving.then(flush)},450)};
-  const set=(d,h,val)=>{if(on[d][h]===val)return;on[d][h]=val;queue()};
+  const set=(d,h,val)=>{if(pause[h]||on[d][h]===val)return;on[d][h]=val;queue()};
   const draw=()=>{
     const g=document.getElementById("avGrid"),n=count();
     g.innerHTML=`<div class="avg-c0"></div>${D.map(d=>`<button type="button" class="avg-h" data-day="${d}" aria-label="${DAYS[d]} : tout changer"><span class="full">${DAYS[d]}</span><span class="abbr">${DAYS[d].slice(0,3)}.</span></button>`).join("")}
-      ${Array.from({length:N},(_,i)=>`<button type="button" class="avg-r" data-row="${i}" aria-label="${F((H0+i)*60)} : tout changer">${F((H0+i)*60)}</button>${D.map(d=>`<button type="button" class="avg-c ${on[d][i]?"on":"off"}" data-d="${d}" data-h="${i}" aria-pressed="${on[d][i]}" aria-label="${DAYS[d]} ${F((H0+i)*60)}–${F((H0+i+1)*60)}, ${on[d][i]?"disponible":"indisponible"}"></button>`).join("")}`).join("")}`;
+      ${Array.from({length:N},(_,i)=>`<button type="button" class="avg-r" data-row="${i}" aria-label="${F((H0+i)*60)} : tout changer">${F((H0+i)*60)}</button>${D.map(d=>`<button type="button" class="avg-c ${pause[i]?"pause":on[d][i]?"on":"off"}" data-d="${d}" data-h="${i}" ${pause[i]?"disabled":""} aria-pressed="${on[d][i]}" aria-label="${DAYS[d]} ${F((H0+i)*60)}–${F((H0+i+1)*60)}, ${pause[i]?"pause":on[d][i]?"disponible":"indisponible"}"></button>`).join("")}`).join("")}`;
     document.getElementById("avTotal").textContent=hrs(n*60);
     const nb=document.getElementById("avNote");
     nb.hidden=false;
@@ -741,7 +755,7 @@ async function viewAvailability(v){
     <div class="panel avnote" id="avNote" hidden></div>
     <div class="avbar"><div class="stat"><b id="avTotal">—</b><span>disponible par semaine</span></div><span class="sub" id="avState" aria-live="polite"></span>
       <div class="avbtns"><button class="btn sm" id="avAll">Indisponible toute la semaine</button><button class="btn sm" id="avReset">Tout remettre disponible</button></div></div>
-    <div class="avg-wrap"><div class="avg" id="avGrid"></div></div>
+    <div class="avg-wrap"><div class="avg" id="avGrid" style="--n:${D.length}"></div></div>
     <div class="tt-leg"><span><i class="avl on"></i>Disponible</span><span><i class="avl off"></i>Indisponible</span><span class="sub">Vos disponibilités sont visibles par le directeur des études et la secrétaire.</span></div>`;
   draw();
   const grid=document.getElementById("avGrid");
@@ -757,9 +771,9 @@ async function viewAvailability(v){
     const c=cellOf(e);
     if(c){const d=Number(c.dataset.d),h=Number(c.dataset.h);set(d,h,!on[d][h]);draw();return}
     const hd=e.target.closest("[data-day]");
-    if(hd){const d=Number(hd.dataset.day),val=!on[d].every(Boolean);on[d].forEach((_,i)=>set(d,i,val));draw();return}
+    if(hd){const d=Number(hd.dataset.day),val=!free(on[d]);on[d].forEach((_,i)=>set(d,i,val));draw();return}
     const rw=e.target.closest("[data-row]");
-    if(rw){const i=Number(rw.dataset.row),val=!D.every(d=>on[d][i]);D.forEach(d=>set(d,i,val));draw()}});
+    if(rw){const i=Number(rw.dataset.row);if(pause[i])return;const val=!D.every(d=>on[d][i]);D.forEach(d=>set(d,i,val));draw()}});
   avAll.onclick=()=>openDialog(`<h3>Indisponible toute la semaine ?</h3><p style="margin:0">Aucun cours ne pourra être placé pour vous tant que vous n'aurez pas rouvert des créneaux. Le directeur des études verra que vous êtes indisponible.</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Confirmer</button></div>`,
     async()=>{D.forEach(d=>on[d].fill(false));declared=true;touched=true;draw();clearTimeout(tm);await flush();draw()});
@@ -928,10 +942,11 @@ async function viewMyTimetable(v){
 const TT_COLORS=["#0b6e5b","#2563a8","#b06a00","#7a4fa3","#b23a5a","#3f7f2a","#0e7490","#9a5b2e"];
 function timetableGrid(o){
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
-  const days=[1,2,3,4,5].concat(o.hasSat?[6]:[]);
+  const sc=S.sched||SCHED_DEFAULT;
+  const days=[...new Set([...sc.days,...o.mine.map(x=>x.day_of_week)])].sort();
   const tid=Number(o.teacherId);
   const av=o.view==="teacher"?o.avOf(tid):[];
-  let lo=8*60,hi=18*60;
+  let lo=Math.floor(T(sc.start)/60)*60,hi=Math.ceil(T(sc.end)/60)*60;
   o.mine.forEach(x=>{lo=Math.min(lo,Math.floor(T(x.start_time)/60)*60);hi=Math.max(hi,Math.ceil(T(x.end_time)/60)*60)});
   av.forEach(a=>{lo=Math.min(lo,Math.floor(T(a.start_time)/60)*60);hi=Math.max(hi,Math.ceil(T(a.end_time)/60)*60)});
   const HH=64,H=(hi-lo)/60*HH,y=m=>(m-lo)/60*HH;
@@ -946,6 +961,7 @@ function timetableGrid(o){
   const third=x=>{const t=x.teaching_assignments;return o.view==="room"?t.teachers.last_name:x.rooms.code};
   const col=d=>{const list=lane(o.mine.filter(x=>x.day_of_week===d));
     return `<div class="tt-col ${d===todayDow?"today":""}" style="height:${H}px">
+      ${sc.lunchFrom&&sc.lunchTo&&T(sc.lunchTo)>lo&&T(sc.lunchFrom)<hi?`<div class="tt-lunch" style="top:${y(Math.max(lo,T(sc.lunchFrom)))}px;height:${(Math.min(hi,T(sc.lunchTo))-Math.max(lo,T(sc.lunchFrom)))/60*HH}px" title="Pause"><span>Pause</span></div>`:""}
       ${av.filter(a=>a.day_of_week===d).map(a=>`<div class="tt-av" style="top:${y(T(a.start_time))}px;height:${(T(a.end_time)-T(a.start_time))/60*HH}px" title="Disponible ${hm(a.start_time)}–${hm(a.end_time)}"></div>`).join("")}
       ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" style="top:${y(nowMin)}px"></div>`:""}
       ${list.map(x=>{const c=colorOf(x.teaching_assignments.courses.code),dur=T(x.end_time)-T(x.start_time),w=100/x._n;
@@ -1004,17 +1020,17 @@ function generateTimetable(o,D){
   return{placed,unplaced,len,skipped:D.assigns.length-jobs.length};
 }
 function genDialog(ctx){
-  let cfg={...GEN_DEFAULT};
-  try{cfg={...cfg,...JSON.parse(localStorage.getItem("ucab_gen")||"{}")}}catch(e){}
+  let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
+  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","useAvail","semester"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
   const today=iso(new Date());
   if(!cfg.semester||!ctx.sems.some(x=>x.id==cfg.semester))cfg.semester=(ctx.sems.find(x=>x.start_date<=today&&x.end_date>=today)||ctx.sems[ctx.sems.length-1]||{}).id;
   const settings=()=>{
     openDialog(`<h3>Générer l'emploi du temps</h3>
-      <p class="sub" style="margin:0">Le générateur place, dans la semaine, les cours qui n'ont pas encore assez de créneaux. Il respecte les conflits, les salles et les disponibilités. Vous voyez le résultat avant de l'enregistrer.</p>
+      <p class="sub" style="margin:0">Le générateur place, dans la semaine, les cours qui n'ont pas encore assez de créneaux. Il respecte les conflits, les salles et les disponibilités. Jours, heures et pause sont repris de « Jours et horaires » du Référentiel (modifiables ici pour cette génération seulement). Vous voyez le résultat avant de l'enregistrer.</p>
       <label>Semestre<select id="gSem">${ctx.sems.map(x=>`<option value="${x.id}" ${x.id==cfg.semester?"selected":""}>${esc(x.academic_years.label)} · ${esc(x.label)}</option>`).join("")}</select></label>
       <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="gDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${cfg.days.includes(d)}">${DAYS[d].slice(0,3)}.</button>`).join("")}</div></div>
       <div class="grid2"><label>Début de journée<input id="gStart" type="time" value="${cfg.start}" required></label><label>Fin de journée<input id="gEnd" type="time" value="${cfg.end}" required></label>
-        <label>Durée d'un créneau<select id="gLen">${[60,90,120,150,180].map(m=>`<option value="${m}" ${m==cfg.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label>
+        <label>Durée d'un créneau<select id="gLen">${[...new Set([60,90,120,150,180,240,cfg.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m==cfg.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label>
         <label>Max d'heures par jour (groupe)<input id="gMaxG" type="number" min="1" max="12" step="0.5" value="${cfg.maxGroup}"></label>
         <label>Pause : de<input id="gLf" type="time" value="${cfg.lunchFrom||""}"></label><label>Pause : à<input id="gLt" type="time" value="${cfg.lunchTo||""}"></label>
         <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label></div>
@@ -1027,7 +1043,7 @@ function genDialog(ctx){
       if(cfg.end<=cfg.start)throw new Error("La fin de journée doit être après le début.");
       if(!!cfg.lunchFrom!==!!cfg.lunchTo||(cfg.lunchFrom&&cfg.lunchTo<=cfg.lunchFrom))throw new Error("Pause : indiquez une heure de début et une heure de fin (ou laissez les deux vides).");
       if(toMin(cfg.end)-toMin(cfg.start)<cfg.len)throw new Error("La journée est plus courte qu'un créneau.");
-      try{localStorage.setItem("ucab_gen",JSON.stringify(cfg))}catch(e){}
+      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,useAvail:cfg.useAvail,semester:cfg.semester}))}catch(e){}
       const res=generateTimetable(cfg,{assigns:ctx.assigns.filter(a=>a.semester_id===cfg.semester),slots:ctx.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,weeksOf:ctx.weeksOf});
       preview(res);return "keep"});
     document.querySelectorAll("#gDays button").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true"));
@@ -1247,7 +1263,7 @@ async function viewSummary(v){
 }
 
 /* ---------- référentiel ---------- */
-const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
+const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",horaires:"Jours et horaires",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
 const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
 const SETUP_STEPS=[["Départements","departments","structure"],["Filières","programs","structure"],["Groupes","student_groups","structure"],["Année","academic_years","calendrier"],["Semestres","semesters","calendrier"],["Matières","courses","matieres"],["Salles","rooms","salles"],["Enseignants","teachers","enseignants"]];
 
@@ -1390,9 +1406,44 @@ async function viewRef(v){
   v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.sec;rerender()});
   const body=document.getElementById("refBody");
   if(sec==="comptes"){await viewAccounts(body);return}
+  if(sec==="horaires"){await viewSchedule(body);return}
   const defs=refDefs(await refLookups());
   body.innerHTML=BLOCKS_BY_SEC[sec].map(k=>`<div id="blk-${k}"></div>`).join("");
   await Promise.all(BLOCKS_BY_SEC[sec].map(k=>renderBlock(defs[k],document.getElementById("blk-"+k))));
+}
+
+
+/* ---------- jours et horaires (réglage unique pour toute l'université) ---------- */
+function slotsOf(sc){const out=[];const len=sc.len,st=hmin(sc.start),en=hmin(sc.end),lf=sc.lunchFrom?hmin(sc.lunchFrom):null,lt=sc.lunchTo?hmin(sc.lunchTo):null;
+  const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+  for(let t=st;t+len<=en;t+=len){if(lf!=null&&lt!=null&&t<lt&&lf<t+len)continue;out.push(F(t)+"–"+F(t+len))}return out}
+async function viewSchedule(el){
+  const sc=await loadSchedule();
+  el.innerHTML=`<div class="sechead"><h2>Jours et horaires</h2></div>
+    <p class="sub" style="margin:-4px 0 12px">Définissez la semaine type de l'université. Ces réglages s'appliquent à la grille de disponibilités des professeurs, à la grille de l'emploi du temps et au générateur automatique.</p>
+    <div class="panel" style="padding:20px"><form id="schForm" style="display:grid;gap:16px">
+      <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="shDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${sc.days.includes(d)}">${DAYS[d]}</button>`).join("")}</div></div>
+      <div class="grid2"><label>Début de journée<input id="shStart" type="time" required value="${sc.start}"></label><label>Fin de journée<input id="shEnd" type="time" required value="${sc.end}"></label>
+        <label>Durée d'un créneau<select id="shLen">${[...new Set([60,90,120,150,180,240,sc.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===sc.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label><span></span>
+        <label>Pause : de<input id="shLf" type="time" value="${sc.lunchFrom}"></label><label>Pause : à<input id="shLt" type="time" value="${sc.lunchTo}"></label></div>
+      <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
+      <div class="err" id="shErr"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
+    <p class="sub">Une date particulière sans cours (jour férié, activité) ne se règle pas ici (réglage « jours sans cours » à venir).</p>`;
+  const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),lunchFrom:shLf.value,lunchTo:shLt.value});
+  const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
+  document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
+  ["shStart","shEnd","shLen","shLf","shLt"].forEach(i=>document.getElementById(i).oninput=prev);prev();
+  schForm.onsubmit=async ev=>{ev.preventDefault();shErr.textContent="";
+    try{const c=read();
+      if(!c.days.length)throw new Error("Choisissez au moins un jour.");
+      if(c.end<=c.start)throw new Error("La fin de journée doit être après le début.");
+      if(!!c.lunchFrom!==!!c.lunchTo||(c.lunchFrom&&c.lunchTo<=c.lunchFrom))throw new Error("Pause : indiquez une heure de début et de fin (ou laissez les deux vides).");
+      if(hmin(c.end)-hmin(c.start)<c.len)throw new Error("La journée est plus courte qu'un créneau.");
+      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
+      if(!r.length)throw new Error("Enregistrement refusé.");
+      await loadSchedule();toast("Jours et horaires enregistrés")}
+    catch(e){shErr.textContent=errMsg(e)}};
 }
 
 /* ---------- comptes et rôles ---------- */
