@@ -463,7 +463,9 @@ async function boot(){
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
-  if(!tabs.length){$app.innerHTML=`<div class="wrap"><p class="empty">Aucun rôle n'est attribué à ce compte. Contactez l'administrateur.</p></div>`;return}
+  if(!tabs.length){const sansFiche=(S.roles||[]).some(r=>r.role==="professeur")&&!S.teacher;
+    $app.innerHTML=`<div class="wrap"><p class="empty">${sansFiche?"Ce compte a le rôle Professeur mais aucune fiche enseignant n'y est rattachée. Contactez l'administrateur.":"Aucun rôle n'est attribué à ce compte. Contactez l'administrateur."}</p><p class="empty"><button class="btn" id="outBtn">Se déconnecter</button></p></div>`;
+    const ob=document.getElementById("outBtn");if(ob)ob.onclick=async()=>{await sb.auth.signOut();location.reload()};return}
   let h=location.hash.slice(1);
   S.tab=tabs.find(t=>t.id===h)?h:tabs[0].id;
   renderShell();
