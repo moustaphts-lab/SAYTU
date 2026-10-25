@@ -229,6 +229,19 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .srow:last-child{border-bottom:0}
 .stime{font-weight:600;line-height:1.3}.stime span{display:block;color:var(--muted);font-weight:400}
 .sact{align-self:center}
+.avnote{padding:14px 16px;margin-bottom:12px;font-size:14px;background:var(--accent-soft);border-color:transparent}.avnote[hidden]{display:none}
+.avbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}.avbar .stat{padding:10px 16px;min-width:0}.avbar .stat b{font-size:20px;color:var(--accent)}.avbar .btn{margin-left:auto}
+.avg-wrap{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+.avg{display:grid;grid-template-columns:54px repeat(6,minmax(0,1fr));user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.avg-c0{border-bottom:1px solid var(--line)}
+.avg-h{height:44px;border:0;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 13.5px var(--f-body);cursor:pointer}.avg-h:hover{color:var(--accent);background:var(--accent-soft)}
+.avg-h .abbr{display:none}
+.avg-r{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--muted);font:500 11.5px var(--f-body);text-align:right;padding:0 8px 0 0;height:42px;cursor:pointer;display:flex;align-items:flex-start;justify-content:flex-end;padding-top:4px}.avg-r:hover{color:var(--accent)}
+.avg-c{height:42px;border:0;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:0;cursor:pointer;position:relative;font:inherit}
+.avg-c.on{background:color-mix(in srgb,var(--ok) 20%,var(--surface))}.avg-c.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:var(--ok);font-weight:700;font-size:15px}
+.avg-c.off{background:repeating-linear-gradient(135deg,var(--bg) 0 6px,var(--surface) 6px 12px)}
+.avg-c:hover{filter:brightness(.96)}.avg-c:focus-visible,.avg-h:focus-visible,.avg-r:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.avl{width:16px!important;height:12px!important;border-radius:3px;border:1px solid var(--line)}.avl.on{background:color-mix(in srgb,var(--ok) 20%,var(--surface));border-color:var(--ok)}.avl.off{background:repeating-linear-gradient(135deg,var(--bg) 0 3px,var(--surface) 3px 6px)}
 .avrow{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
 .avrow:last-child{border-bottom:0}
 .avday{width:96px;font-weight:600;flex:0 0 auto}
@@ -254,7 +267,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
   .bigline{font-size:18px;margin:0}.hero .sub,.hero .late{font-size:13.5px}
   .drow{grid-template-columns:1fr;gap:4px}.rank{grid-template-columns:minmax(0,1fr) 58px}.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;width:100%}.rank .rbar{grid-column:1/-1;grid-row:2}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
-  .avrow{flex-wrap:wrap}.avday{width:100%}.avchips{flex-basis:100%}
+  .avg{grid-template-columns:44px repeat(6,minmax(0,1fr))}.avg-h .full{display:none}.avg-h .abbr{display:inline}.avg-h{font-size:12.5px}.avbar .btn{margin-left:0;width:100%}
   body{font-size:16px}
   main{padding-block:18px calc(40px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
@@ -690,27 +703,65 @@ function reviewDialog(a){
 
 /* ---------- disponibilités (professeur) ---------- */
 async function viewAvailability(v){
-  const rows=await q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time,note").eq("teacher_id",S.teacher.id).order("start_time"));
+  const tid=S.teacher.id,H0=7,H1=20,N=H1-H0,D=[1,2,3,4,5,6];
+  const rows=await q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time,note").eq("teacher_id",tid).order("start_time"));
+  const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+  const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+  let declared=rows.length>0,touched=false;
+  const on={};D.forEach(d=>{on[d]=Array(N).fill(!declared)});
+  if(declared)D.forEach(d=>rows.filter(r=>r.day_of_week===d).forEach(r=>{for(let h=H0;h<H1;h++){const ov=Math.min(T(r.end_time),(h+1)*60)-Math.max(T(r.start_time),h*60);if(ov>=30)on[d][h-H0]=true}}));
+  const dirty=new Set();let tm=0,saving=Promise.resolve();
+  const count=()=>D.reduce((a,d)=>a+on[d].filter(Boolean).length,0);
+  const ranges=d=>{const out=[];let st=null;on[d].forEach((x,i)=>{if(x&&st==null)st=i;if((!x||i===N-1)&&st!=null){const en=x&&i===N-1?i+1:i;out.push([(H0+st)*60,(H0+en)*60]);st=null}});return out};
+  const stateEl=()=>document.getElementById("avState");
+  const flush=async()=>{
+    const days=[...dirty];dirty.clear();if(!days.length)return;
+    try{
+      for(const d of days){
+        await q(sb.from("teacher_availability").delete().eq("teacher_id",tid).eq("day_of_week",d));
+        const rs=ranges(d);
+        if(rs.length)await q(sb.from("teacher_availability").insert(rs.map(([x,y])=>({teacher_id:tid,day_of_week:d,start_time:F(x),end_time:F(y)}))));
+      }
+      declared=true;if(stateEl())stateEl().textContent="Enregistré ✓";
+    }catch(e){toast(errMsg(e),true);rerender()}
+  };
+  const queue=d=>{dirty.add(d);if(!declared)D.forEach(x=>dirty.add(x));touched=true;if(stateEl())stateEl().textContent="Enregistrement…";clearTimeout(tm);tm=setTimeout(()=>{saving=saving.then(flush)},450)};
+  const set=(d,h,val)=>{if(on[d][h]===val)return false;on[d][h]=val;queue(d);return true};
+  const guard=fn=>{const snap=D.map(d=>on[d].slice());fn();if(count()===0){D.forEach((d,i)=>{on[d]=snap[i]});dirty.clear();toast("Gardez au moins une heure disponible. Si vous êtes indisponible toute la semaine, prévenez le directeur des études.",true);return false}return true};
+  const draw=()=>{
+    const g=document.getElementById("avGrid");
+    g.innerHTML=`<div class="avg-c0"></div>${D.map(d=>`<button type="button" class="avg-h" data-day="${d}" aria-label="${DAYS[d]} : tout changer"><span class="full">${DAYS[d]}</span><span class="abbr">${DAYS[d].slice(0,3)}.</span></button>`).join("")}
+      ${Array.from({length:N},(_,i)=>`<button type="button" class="avg-r" data-row="${i}" aria-label="${F((H0+i)*60)} : tout changer">${F((H0+i)*60)}</button>${D.map(d=>`<button type="button" class="avg-c ${on[d][i]?"on":"off"}" data-d="${d}" data-h="${i}" aria-pressed="${on[d][i]}" aria-label="${DAYS[d]} ${F((H0+i)*60)}–${F((H0+i+1)*60)}, ${on[d][i]?"disponible":"indisponible"}"></button>`).join("")}`).join("")}`;
+    document.getElementById("avTotal").textContent=hrs(count()*60);
+    const nb=document.getElementById("avNote");if(nb)nb.hidden=declared||touched;
+  };
   v.innerHTML=`<h1>Mes disponibilités</h1>
-    <p class="lead">Indiquez les plages où vous pouvez enseigner chaque semaine. Le directeur des études les consulte pour construire l'emploi du temps et signale tout cours placé en dehors. Sans plage déclarée, vous êtes considéré disponible à tout moment.</p>
-    <p style="margin:0 0 16px"><button class="btn primary" id="avAdd">Ajouter une plage</button></p>
-    <div class="panel">${[1,2,3,4,5,6].map(d=>{const r=rows.filter(x=>x.day_of_week===d);
-      return `<div class="avrow"><div class="avday">${DAYS[d]}</div><div class="avchips">${r.length?r.map(x=>`<span class="avchip"><b>${hm(x.start_time)}–${hm(x.end_time)}</b>${x.note?` <span class="sub">${esc(x.note)}</span>`:""}<button class="avx" data-del="${x.id}" aria-label="Supprimer la plage ${hm(x.start_time)}–${hm(x.end_time)}">✕</button></span>`).join(""):`<span class="sub">Non renseigné</span>`}</div><button class="btn sm" data-add="${d}">Ajouter</button></div>`}).join("")}</div>
-    <p class="sub" style="margin-top:12px">${rows.length?"Vos disponibilités sont visibles par le directeur des études et la secrétaire.":"Aucune plage déclarée pour le moment."}</p>`;
-  const dlg=pre=>openDialog(`<h3>Ajouter une plage de disponibilité</h3>
-    <fieldset style="border:0;padding:0;margin:0"><legend style="font-size:13px;font-weight:500;color:var(--muted);padding:0 0 6px">Jours</legend><div class="chips">${[1,2,3,4,5,6].map(d=>`<label style="flex-direction:row;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:7px 12px;color:var(--ink)"><input type="checkbox" id="av${d}" ${d===pre?"checked":""}> ${DAYS[d]}</label>`).join("")}</div></fieldset>
-    <div class="row"><label>De<input id="avS" type="time" required value="08:00"></label><label>À<input id="avE" type="time" required value="12:00"></label></div>
-    <label>Précision (facultatif)<input id="avN" placeholder="Ex. : enseigne ailleurs l'après-midi"></label>
-    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-  async()=>{
-    const days=[1,2,3,4,5,6].filter(d=>document.getElementById("av"+d).checked);
-    if(!days.length)throw new Error("Choisissez au moins un jour.");
-    if(avE.value<=avS.value)throw new Error("L'heure de fin doit être après l'heure de début.");
-    await q(sb.from("teacher_availability").insert(days.map(d=>({teacher_id:S.teacher.id,day_of_week:d,start_time:avS.value,end_time:avE.value,note:avN.value.trim()||null}))));
-    toast("Disponibilités enregistrées");rerender()});
-  avAdd.onclick=()=>dlg(null);
-  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>dlg(Number(b.dataset.add)));
-  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{try{await q(sb.from("teacher_availability").delete().eq("id",b.dataset.del));toast("Plage supprimée");rerender()}catch(e){toast(errMsg(e),true)}});
+    <p class="lead">Touchez un créneau pour le marquer disponible ou indisponible. Touchez un jour (en haut) ou une heure (à gauche) pour changer toute la colonne ou toute la ligne. Le directeur des études s'en sert pour construire l'emploi du temps.</p>
+    <div class="panel avnote" id="avNote" ${declared?"hidden":""}><b>Vous n'avez encore rien indiqué.</b> Vous êtes considéré disponible tout le temps. Touchez les créneaux où vous n'êtes <b>pas</b> disponible.</div>
+    <div class="avbar"><div class="stat"><b id="avTotal">—</b><span>disponible par semaine</span></div><span class="sub" id="avState" aria-live="polite"></span>
+      <button class="btn sm" id="avReset" ${declared?"":"disabled"}>Tout remettre disponible</button></div>
+    <div class="avg-wrap"><div class="avg" id="avGrid"></div></div>
+    <div class="tt-leg"><span><i class="avl on"></i>Disponible</span><span><i class="avl off"></i>Indisponible</span><span class="sub">Vos disponibilités sont visibles par le directeur des études et la secrétaire.</span></div>`;
+  draw();
+  const grid=document.getElementById("avGrid");
+  let paint=null,swallow=false;
+  const cellOf=e=>e.target.closest("[data-d]");
+  grid.addEventListener("pointerdown",e=>{const c=cellOf(e);if(!c||e.pointerType!=="mouse")return;
+    const d=Number(c.dataset.d),h=Number(c.dataset.h);paint=!on[d][h];swallow=true;guard(()=>set(d,h,paint));draw()});
+  grid.addEventListener("pointerover",e=>{if(paint==null||e.buttons!==1)return;const c=cellOf(e);if(!c)return;
+    const d=Number(c.dataset.d),h=Number(c.dataset.h);if(on[d][h]!==paint){guard(()=>set(d,h,paint));draw()}});
+  window.addEventListener("pointerup",()=>{paint=null},{once:false});
+  grid.addEventListener("click",e=>{
+    if(swallow){swallow=false;if(cellOf(e))return}
+    const c=cellOf(e);
+    if(c){const d=Number(c.dataset.d),h=Number(c.dataset.h);guard(()=>set(d,h,!on[d][h]));draw();return}
+    const hd=e.target.closest("[data-day]");
+    if(hd){const d=Number(hd.dataset.day),val=!on[d].every(Boolean);guard(()=>on[d].forEach((_,i)=>set(d,i,val)));draw();return}
+    const rw=e.target.closest("[data-row]");
+    if(rw){const i=Number(rw.dataset.row),val=!D.every(d=>on[d][i]);guard(()=>D.forEach(d=>set(d,i,val)));draw()}});
+  avReset.onclick=()=>openDialog(`<h3>Tout remettre disponible ?</h3><p style="margin:0">Vos plages seront effacées. Vous serez de nouveau considéré disponible à tout moment.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Remettre</button></div>`,
+    async()=>{await q(sb.from("teacher_availability").delete().eq("teacher_id",tid));toast("Disponibilités effacées");rerender()});
 }
 
 /* ---------- emplois du temps ---------- */
