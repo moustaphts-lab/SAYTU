@@ -978,7 +978,7 @@ function timetableGrid(o){
 }
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
-const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,useAvail:true,semester:null};
+const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,maxDays:0,compact:true,useAvail:true,semester:null};
 function generateTimetable(o,D){
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
@@ -987,10 +987,10 @@ function generateTimetable(o,D){
   const add=(k,id,day,s,e)=>{((busy[k][id]??={})[day]??=[]).push({s,e})};
   const free=(k,id,day,s,e)=>!(busy[k][id]?.[day]||[]).some(x=>ov(x,{s,e}));
   const load=(k,id,day)=>(busy[k][id]?.[day]||[]).reduce((a,x)=>a+x.e-x.s,0);
-  const existing={};
-  D.slots.forEach(x=>{const a=x.teaching_assignments;add("g",a.group_id,x.day_of_week,T(x.start_time),T(x.end_time));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
+  const existing={};const aslots={};const asl=(id,d)=>((aslots[id]??={})[d]??=[]);const tdays={};const tday=id=>(tdays[id]??=new Set());
+  D.slots.forEach(x=>{const a=x.teaching_assignments;add("g",a.group_id,x.day_of_week,T(x.start_time),T(x.end_time));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));tday(a.teacher_id).add(x.day_of_week);asl(x.assignment_id,x.day_of_week).push({s:T(x.start_time),e:T(x.end_time)});if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
     existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
-  const len=o.len,start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
+  const len=o.len,maxChain=Math.max(1,Math.floor(360/o.len)),start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
   const times=[];for(let t=start;t+len<=end;t+=len){if(lf!=null&&lt!=null&&ov({s:t,e:t+len},{s:lf,e:lt}))continue;times.push(t)}
   const rooms=[...D.rooms].sort((a,b)=>a.capacity-b.capacity);
   const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size]));
@@ -999,7 +999,8 @@ function generateTimetable(o,D){
     const have=Math.round((existing[a.id]||0)/len);return{a,n:Math.max(0,target-have),target}}).filter(j=>j.n>0&&j.a.planned_hours>0);
   const restricted=tid=>av(tid).length>0||!!D.declared?.has(tid);
   const availMin=a=>{const x=av(a.teacher_id);return restricted(a.teacher_id)?x.reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9};
-  jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||y.n-x.n);
+  const tTotal={};jobs.forEach(j=>{tTotal[j.a.teacher_id]=(tTotal[j.a.teacher_id]||0)+j.n});
+  jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||(tTotal[y.a.teacher_id]-tTotal[x.a.teacher_id])||(x.a.teacher_id-y.a.teacher_id)||y.n-x.n);
   const placed=[],unplaced=[];
   for(const j of jobs){const a=j.a;let done=0;const why={};const usedDays=new Set(D.slots.filter(x=>x.assignment_id===a.id).map(x=>x.day_of_week));
     for(let k=0;k<j.n;k++){let best=null;
@@ -1009,21 +1010,28 @@ function generateTimetable(o,D){
         if(o.useAvail&&restricted(a.teacher_id)&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail("hors disponibilités du professeur");continue}
         if(!free("t",a.teacher_id,d,t,e)){fail("professeur déjà occupé");continue}
         if(!free("g",a.group_id,d,t,e)){fail("groupe déjà occupé");continue}
+        if(o.maxDays>0&&!tday(a.teacher_id).has(d)&&tday(a.teacher_id).size>=o.maxDays){fail("limite de jours de présence du professeur");continue}
+        const same=asl(a.id,d);
+        if(same.length){let run=1,cur=t,ch=true;while(ch){ch=false;for(const x of same){if(x.e===cur){run++;cur=x.s;ch=true;break}}}
+          cur=e;ch=true;while(ch){ch=false;for(const x of same){if(x.s===cur){run++;cur=x.e;ch=true;break}}}
+          if(run>maxChain){fail("trop d'heures de suite pour la même matière");continue}}
         if(load("g",a.group_id,d)+len>o.maxGroup*60){fail("limite d'heures par jour du groupe");continue}
         if(load("t",a.teacher_id,d)+len>o.maxTeacher*60){fail("limite d'heures par jour du professeur");continue}
         const need=gsize[a.group_id]||0;const room=rooms.find(r=>r.capacity>=need&&free("r",r.id,d,t,e));
         if(!room){fail(rooms.some(r=>r.capacity>=need)?"aucune salle libre":"aucune salle assez grande");continue}
-        const score=(usedDays.has(d)?1000:0)+load("g",a.group_id,d)/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01;
+        const adj=(busy.t[a.teacher_id]?.[d]||[]).some(x=>x.e===t||x.s===e);
+        const score=o.compact?((tday(a.teacher_id).has(d)?0:500)+(usedDays.has(d)?10:0)+(asl(a.id,d).some(x=>x.e===t||x.s===e)?60:0)+(adj&&!asl(a.id,d).some(x=>x.e===t||x.s===e)?-4:0)+load("g",a.group_id,d)/6+times.indexOf(t)*0.5+d*0.01)
+          :((usedDays.has(d)?1000:0)+load("g",a.group_id,d)/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01);
         if(!best||score<best.score)best={score,d,t,e,room}}
       if(!best)break;
-      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);done++;
+      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);tday(a.teacher_id).add(best.d);asl(a.id,best.d).push({s:best.t,e:best.e});done++;
       placed.push({assignment_id:a.id,a,day_of_week:best.d,start_time:F(best.t),end_time:F(best.e),room_id:best.room.id,room_code:best.room.code})}
     if(done<j.n){const top=Object.entries(why).sort((x,y)=>y[1]-x[1])[0];unplaced.push({a,missing:j.n-done,reason:top?top[0]:"aucun créneau possible avec ces réglages"})}}
   return{placed,unplaced,len,skipped:D.assigns.length-jobs.length};
 }
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
-  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","useAvail","semester"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","maxDays","compact","useAvail","semester"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
   const today=iso(new Date());
   if(!cfg.semester||!ctx.sems.some(x=>x.id==cfg.semester))cfg.semester=(ctx.sems.find(x=>x.start_date<=today&&x.end_date>=today)||ctx.sems[ctx.sems.length-1]||{}).id;
   const settings=()=>{
@@ -1035,26 +1043,33 @@ function genDialog(ctx){
         <label>Durée d'un créneau<select id="gLen">${[...new Set([60,90,120,150,180,240,cfg.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m==cfg.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label>
         <label>Max d'heures par jour (groupe)<input id="gMaxG" type="number" min="1" max="12" step="0.5" value="${cfg.maxGroup}"></label>
         <label>Pause : de<input id="gLf" type="time" value="${cfg.lunchFrom||""}"></label><label>Pause : à<input id="gLt" type="time" value="${cfg.lunchTo||""}"></label>
-        <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label></div>
+        <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label>
+        <label>Jours de présence max par professeur<input id="gMaxD" type="number" min="0" max="6" step="1" value="${cfg.maxDays||0}"><small class="sub">0 = sans limite</small></label></div>
+      <label style="flex-direction:row;align-items:center;gap:10px;font-size:14px;color:var(--ink)"><input type="checkbox" id="gCp" ${cfg.compact?"checked":""}>Regrouper les cours d'un professeur sur peu de jours, enchaînés</label>
       <label style="flex-direction:row;align-items:center;gap:10px;font-size:14px;color:var(--ink)"><input type="checkbox" id="gAv" ${cfg.useAvail?"checked":""}>Respecter les disponibilités saisies par les professeurs</label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="go">Voir la proposition</button></div>`,
     async()=>{
       cfg={days:[...document.querySelectorAll("#gDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:gStart.value,end:gEnd.value,len:Number(gLen.value),lunchFrom:gLf.value,lunchTo:gLt.value,
-        maxGroup:Number(gMaxG.value)||6,maxTeacher:Number(gMaxT.value)||6,useAvail:gAv.checked,semester:Number(gSem.value)};
+        maxGroup:Number(gMaxG.value)||6,maxTeacher:Number(gMaxT.value)||6,maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,semester:Number(gSem.value)};
       if(!cfg.days.length)throw new Error("Choisissez au moins un jour.");
       if(cfg.end<=cfg.start)throw new Error("La fin de journée doit être après le début.");
       if(!!cfg.lunchFrom!==!!cfg.lunchTo||(cfg.lunchFrom&&cfg.lunchTo<=cfg.lunchFrom))throw new Error("Pause : indiquez une heure de début et une heure de fin (ou laissez les deux vides).");
       if(toMin(cfg.end)-toMin(cfg.start)<cfg.len)throw new Error("La journée est plus courte qu'un créneau.");
-      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,useAvail:cfg.useAvail,semester:cfg.semester}))}catch(e){}
+      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,compact:cfg.compact,useAvail:cfg.useAvail,semester:cfg.semester}))}catch(e){}
       const res=generateTimetable(cfg,{assigns:ctx.assigns.filter(a=>a.semester_id===cfg.semester),slots:ctx.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,weeksOf:ctx.weeksOf});
       preview(res);return "keep"});
     document.querySelectorAll("#gDays button").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true"));
   };
+  const tsum=P=>{const m={};
+    ctx.slots.filter(x=>x.teaching_assignments&&ctx.assigns.some(a=>a.id===x.assignment_id&&a.semester_id===cfg.semester)).forEach(x=>{const a=ctx.assigns.find(y=>y.id===x.assignment_id);((m[a.teacher_id]??={name:a.teachers.last_name,d:{}}).d[x.day_of_week]=(m[a.teacher_id].d[x.day_of_week]||0)+toMin(x.end_time)-toMin(x.start_time))});
+    P.forEach(x=>{const t=x.a.teacher_id;((m[t]??={name:x.a.teachers.last_name,d:{}}).d[x.day_of_week]=(m[t].d[x.day_of_week]||0)+toMin(x.end_time)-toMin(x.start_time))});
+    return Object.values(m).sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<span class="pill p-info" title="${Object.keys(t.d).sort().map(d=>DAYS[d]+" "+hrs(t.d[d])).join(" · ")}">${esc(t.name)} · ${Object.keys(t.d).length} j · ${hrs(Object.values(t.d).reduce((a,b)=>a+b,0))}</span>`).join("")};
   const preview=res=>{
     const P=res.placed.slice().sort((x,y)=>x.day_of_week-y.day_of_week||x.start_time.localeCompare(y.start_time));
     openDialog(`<h3>Proposition</h3>
       <div class="stats" style="margin:0"><div class="stat"><b style="color:var(--ok)">${P.length}</b><span>Créneaux proposés</span></div><div class="stat"><b style="color:${res.unplaced.length?"var(--warn)":"inherit"}">${res.unplaced.reduce((s,u)=>s+u.missing,0)}</b><span>Non placés</span></div></div>
       ${res.unplaced.length?`<div><div class="sub" style="margin-bottom:6px">À placer à la main ou après avoir ajusté les réglages</div>${res.unplaced.map(u=>`<div class="gpwarn"><b>${esc(u.a.courses.code)} · ${esc(u.a.student_groups.code)} · ${esc(u.a.teachers.last_name)}</b> : ${u.missing} créneau${u.missing>1?"x":""} manquant${u.missing>1?"s":""}. Raison la plus fréquente : ${esc(u.reason)}.</div>`).join("")}</div>`:""}
+      ${P.length?`<div><div class="sub" style="margin-bottom:6px">Présence par professeur (avec les créneaux déjà enregistrés)</div><div class="chips">${tsum(P)}</div></div>`:""}
       ${P.length?`<div class="gplist">${P.map(x=>`<div class="gp"><span class="gp-t"><b>${DAYS[x.day_of_week]}</b><span class="mono">${x.start_time}–${x.end_time}</span></span><span class="gp-c"><span><b>${esc(x.a.courses.code)}</b> · ${esc(x.a.student_groups.code)}</span><span class="sub">${esc(x.a.teachers.last_name)} · salle ${esc(x.room_code)}</span></span></div>`).join("")}</div>
       <p class="sub" style="margin:0">Les créneaux sont enregistrés en <b>brouillon</b> : rien n'est publié tant que vous ne cliquez pas sur « Publier ». Vous pouvez ensuite modifier ou supprimer chaque créneau.</p>`:`<p class="empty">${res.skipped===ctx.assigns.length?"Toutes les affectations de ce semestre ont déjà leurs créneaux.":"Aucun créneau n'a pu être placé avec ces réglages."}</p>`}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="back" formnovalidate>← Modifier les réglages</button>${P.length?`<button class="btn primary" value="save">Enregistrer ${P.length} brouillon${P.length>1?"s":""}</button>`:""}</div>`,

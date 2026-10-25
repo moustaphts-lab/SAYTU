@@ -124,3 +124,6 @@ select d.name as departement,
        (select count(*) from public.teachers t where t.department_id=d.id) as enseignants,
        (select count(*) from public.teaching_assignments a join public.courses c on c.id=a.course_id where c.department_id=d.id) as affectations
 from public.departments d order by d.code;
+
+-- Note : les niveaux L2 et L3 (8 matières chacun, affectées aux mêmes 7 enseignants) ont été ajoutés ensuite
+-- directement dans la base le 25/10/2026 ; ils ne sont pas repris dans ce script.
