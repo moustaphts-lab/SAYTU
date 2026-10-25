@@ -846,7 +846,7 @@ async function viewPlanning(v){
       <label>Du<input id="gFrom" type="date" required value="${today}"></label>
       <label>Au<input id="gTo" type="date" required value="${in4}"></label>
       <button class="btn primary" type="submit">Créer les séances</button>
-      <span class="sub" style="flex-basis:100%">Seuls les créneaux publiés sont utilisés, hors « jours sans cours » (Référentiel > Années et semestres). Les séances déjà existantes ne sont pas dupliquées. Une séance en conflit avec une autre n'est pas créée et vous est signalée.</span></form></div>`;
+      <span class="sub" style="flex-basis:100%">Seuls les créneaux publiés sont utilisés. Les séances déjà existantes ne sont pas dupliquées. Une séance en conflit avec une autre n'est pas créée et vous est signalée.</span></form></div>`;
 
   pView.value=S.planView;
   pView.onchange=()=>{S.planView=pView.value;S.planId=null;rerender()};
@@ -1266,7 +1266,7 @@ async function viewSummary(v){
 
 /* ---------- référentiel ---------- */
 const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",horaires:"Jours et horaires",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
-const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres","fermetures"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
+const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
 const SETUP_STEPS=[["Départements","departments","structure"],["Filières","programs","structure"],["Groupes","student_groups","structure"],["Année","academic_years","calendrier"],["Semestres","semesters","calendrier"],["Matières","courses","matieres"],["Salles","rooms","salles"],["Enseignants","teachers","enseignants"]];
 
 async function refLookups(){
@@ -1314,12 +1314,6 @@ function refDefs(L){
       name:r=>r.label,
       check:o=>{if(o.end_date<=o.start_date)throw new Error("La date de fin doit être après la date de début.")},
       after:async(o,saved)=>{if(o.is_current)await q(sb.from("academic_years").update({is_current:false}).neq("id",saved.id))}},
-    fermetures:{title:"Jours sans cours",one:"jour sans cours",hint:"Jours fériés, activités, examens, vacances. « Créer les séances datées » ne crée aucune séance ces jours-là. Les séances déjà créées ne sont pas supprimées.",table:"no_class_days",order:"start_date",
-      cols:[["Motif",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>r.end_date===r.start_date?"—":`<span class="mono">${fdl(r.end_date)}</span>`]],
-      fields:[{k:"label",l:"Motif (ex. Tabaski, Magal de Touba)",req:1},{k:"start_date",l:"Premier jour",t:"date",req:1},{k:"end_date",l:"Dernier jour (vide si un seul jour)",t:"date"}],
-      name:r=>r.label,
-      normalize:o=>({...o,end_date:o.end_date||o.start_date}),
-      check:o=>{const e=o.end_date||o.start_date;if(e<o.start_date)throw new Error("Le dernier jour doit être après le premier.");if((new Date(e)-new Date(o.start_date))/864e5>60)throw new Error("Une période sans cours ne peut pas dépasser 61 jours.")}},
     semestres:{title:"Semestres",one:"semestre",head:[1,0],hint:"Les dates du semestre servent à calculer le nombre de semaines de cours.",table:"semesters",select:"*,academic_years(label)",order:"start_date",
       cols:[["Année",r=>esc(r.academic_years?.label)],["Semestre",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`]],
       fields:[{k:"academic_year_id",l:"Année",t:"select",num:1,opt:L.years.map(y=>[y.id,y.label]),req:1},{k:"label",l:"Libellé (ex. Semestre 1)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1}],
@@ -1437,7 +1431,7 @@ async function viewSchedule(el){
       <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
-    <p class="sub">Une date particulière sans cours (jour férié, activité) ne se règle pas ici (voir « jours sans cours » dans « Années et semestres »).</p>`;
+    <p class="sub">Une date particulière sans cours (jour férié, activité) ne se règle pas ici (réglage « jours sans cours » à venir).</p>`;
   const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
