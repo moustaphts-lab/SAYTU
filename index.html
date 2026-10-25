@@ -230,7 +230,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .stime{font-weight:600;line-height:1.3}.stime span{display:block;color:var(--muted);font-weight:400}
 .sact{align-self:center}
 .avnote{padding:14px 16px;margin-bottom:12px;font-size:14px;background:var(--accent-soft);border-color:transparent}.avnote[hidden]{display:none}
-.avbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}.avbar .stat{padding:10px 16px;min-width:0}.avbar .stat b{font-size:20px;color:var(--accent)}.avbar .btn{margin-left:auto}
+.avbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}.avbar .stat{padding:10px 16px;min-width:0}.avbar .stat b{font-size:20px;color:var(--accent)}.avbtns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}.avnote.off{background:var(--warn-soft);color:var(--warn)}
 .avg-wrap{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
 .avg{display:grid;grid-template-columns:54px repeat(6,minmax(0,1fr));user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .avg-c0{border-bottom:1px solid var(--line)}
@@ -267,7 +267,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
   .bigline{font-size:18px;margin:0}.hero .sub,.hero .late{font-size:13.5px}
   .drow{grid-template-columns:1fr;gap:4px}.rank{grid-template-columns:minmax(0,1fr) 58px}.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;width:100%}.rank .rbar{grid-column:1/-1;grid-row:2}
   .srow{grid-template-columns:56px 1fr}.sact{grid-column:1/-1}.sact .btn{width:100%}
-  .avg{grid-template-columns:44px repeat(6,minmax(0,1fr))}.avg-h .full{display:none}.avg-h .abbr{display:inline}.avg-h{font-size:12.5px}.avbar .btn{margin-left:0;width:100%}
+  .avg{grid-template-columns:44px repeat(6,minmax(0,1fr))}.avg-h .full{display:none}.avg-h .abbr{display:inline}.avg-h{font-size:12.5px}.avbtns{margin-left:0;width:100%;display:grid;grid-template-columns:1fr}.avbtns .btn{width:100%}
   body{font-size:16px}
   main{padding-block:18px calc(40px + env(safe-area-inset-bottom,0px))}
   h1{font-size:23px}
@@ -704,42 +704,43 @@ function reviewDialog(a){
 /* ---------- disponibilités (professeur) ---------- */
 async function viewAvailability(v){
   const tid=S.teacher.id,H0=7,H1=20,N=H1-H0,D=[1,2,3,4,5,6];
-  const rows=await q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time,note").eq("teacher_id",tid).order("start_time"));
+  const [rows,me]=await Promise.all([
+    q(sb.from("teacher_availability").select("id,day_of_week,start_time,end_time").eq("teacher_id",tid).order("start_time")),
+    q(sb.from("teachers").select("availability_declared").eq("id",tid).single())]);
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
-  let declared=rows.length>0,touched=false;
+  let declared=!!me.availability_declared||rows.length>0,touched=false;
   const on={};D.forEach(d=>{on[d]=Array(N).fill(!declared)});
   if(declared)D.forEach(d=>rows.filter(r=>r.day_of_week===d).forEach(r=>{for(let h=H0;h<H1;h++){const ov=Math.min(T(r.end_time),(h+1)*60)-Math.max(T(r.start_time),h*60);if(ov>=30)on[d][h-H0]=true}}));
-  const dirty=new Set();let tm=0,saving=Promise.resolve();
+  let tm=0,saving=Promise.resolve();
   const count=()=>D.reduce((a,d)=>a+on[d].filter(Boolean).length,0);
   const ranges=d=>{const out=[];let st=null;on[d].forEach((x,i)=>{if(x&&st==null)st=i;if((!x||i===N-1)&&st!=null){const en=x&&i===N-1?i+1:i;out.push([(H0+st)*60,(H0+en)*60]);st=null}});return out};
   const stateEl=()=>document.getElementById("avState");
   const flush=async()=>{
-    const days=[...dirty];dirty.clear();if(!days.length)return;
-    try{
-      for(const d of days){
-        await q(sb.from("teacher_availability").delete().eq("teacher_id",tid).eq("day_of_week",d));
-        const rs=ranges(d);
-        if(rs.length)await q(sb.from("teacher_availability").insert(rs.map(([x,y])=>({teacher_id:tid,day_of_week:d,start_time:F(x),end_time:F(y)}))));
-      }
-      declared=true;if(stateEl())stateEl().textContent="Enregistré ✓";
-    }catch(e){toast(errMsg(e),true);rerender()}
+    const all=D.flatMap(d=>ranges(d).map(([x,y])=>({day:d,start:F(x),end:F(y)})));
+    try{await q(sb.rpc("save_availability",{p_ranges:all}));declared=true;if(stateEl())stateEl().textContent="Enregistré ✓"}
+    catch(e){toast(/Could not find the function|PGRST202/.test(e.message||"")?"La base n'est pas à jour : le script « disponibilites_declarees.sql » doit être exécuté.":errMsg(e),true);rerender()}
   };
-  const queue=d=>{dirty.add(d);if(!declared)D.forEach(x=>dirty.add(x));touched=true;if(stateEl())stateEl().textContent="Enregistrement…";clearTimeout(tm);tm=setTimeout(()=>{saving=saving.then(flush)},450)};
-  const set=(d,h,val)=>{if(on[d][h]===val)return false;on[d][h]=val;queue(d);return true};
-  const guard=fn=>{const snap=D.map(d=>on[d].slice());fn();if(count()===0){D.forEach((d,i)=>{on[d]=snap[i]});dirty.clear();toast("Gardez au moins une heure disponible. Si vous êtes indisponible toute la semaine, prévenez le directeur des études.",true);return false}return true};
+  const queue=()=>{touched=true;if(stateEl())stateEl().textContent="Enregistrement…";clearTimeout(tm);tm=setTimeout(()=>{saving=saving.then(flush)},450)};
+  const set=(d,h,val)=>{if(on[d][h]===val)return;on[d][h]=val;queue()};
   const draw=()=>{
-    const g=document.getElementById("avGrid");
+    const g=document.getElementById("avGrid"),n=count();
     g.innerHTML=`<div class="avg-c0"></div>${D.map(d=>`<button type="button" class="avg-h" data-day="${d}" aria-label="${DAYS[d]} : tout changer"><span class="full">${DAYS[d]}</span><span class="abbr">${DAYS[d].slice(0,3)}.</span></button>`).join("")}
       ${Array.from({length:N},(_,i)=>`<button type="button" class="avg-r" data-row="${i}" aria-label="${F((H0+i)*60)} : tout changer">${F((H0+i)*60)}</button>${D.map(d=>`<button type="button" class="avg-c ${on[d][i]?"on":"off"}" data-d="${d}" data-h="${i}" aria-pressed="${on[d][i]}" aria-label="${DAYS[d]} ${F((H0+i)*60)}–${F((H0+i+1)*60)}, ${on[d][i]?"disponible":"indisponible"}"></button>`).join("")}`).join("")}`;
-    document.getElementById("avTotal").textContent=hrs(count()*60);
-    const nb=document.getElementById("avNote");if(nb)nb.hidden=declared||touched;
+    document.getElementById("avTotal").textContent=hrs(n*60);
+    const nb=document.getElementById("avNote");
+    nb.hidden=false;
+    if(!declared&&!touched){nb.className="panel avnote";nb.innerHTML="<b>Vous n'avez encore rien indiqué.</b> Vous êtes considéré disponible tout le temps. Touchez les créneaux où vous n'êtes <b>pas</b> disponible, ou le bouton « Indisponible toute la semaine »."}
+    else if(n===0){nb.className="panel avnote off";nb.innerHTML="<b>Vous avez indiqué être indisponible toute la semaine.</b> Aucun cours ne sera placé pour vous. Touchez un créneau pour redevenir disponible."}
+    else nb.hidden=true;
+    document.getElementById("avAll").disabled=n===0;
+    document.getElementById("avReset").disabled=!declared&&!touched;
   };
   v.innerHTML=`<h1>Mes disponibilités</h1>
     <p class="lead">Touchez un créneau pour le marquer disponible ou indisponible. Touchez un jour (en haut) ou une heure (à gauche) pour changer toute la colonne ou toute la ligne. Le directeur des études s'en sert pour construire l'emploi du temps.</p>
-    <div class="panel avnote" id="avNote" ${declared?"hidden":""}><b>Vous n'avez encore rien indiqué.</b> Vous êtes considéré disponible tout le temps. Touchez les créneaux où vous n'êtes <b>pas</b> disponible.</div>
+    <div class="panel avnote" id="avNote" hidden></div>
     <div class="avbar"><div class="stat"><b id="avTotal">—</b><span>disponible par semaine</span></div><span class="sub" id="avState" aria-live="polite"></span>
-      <button class="btn sm" id="avReset" ${declared?"":"disabled"}>Tout remettre disponible</button></div>
+      <div class="avbtns"><button class="btn sm" id="avAll">Indisponible toute la semaine</button><button class="btn sm" id="avReset">Tout remettre disponible</button></div></div>
     <div class="avg-wrap"><div class="avg" id="avGrid"></div></div>
     <div class="tt-leg"><span><i class="avl on"></i>Disponible</span><span><i class="avl off"></i>Indisponible</span><span class="sub">Vos disponibilités sont visibles par le directeur des études et la secrétaire.</span></div>`;
   draw();
@@ -747,21 +748,24 @@ async function viewAvailability(v){
   let paint=null,swallow=false;
   const cellOf=e=>e.target.closest("[data-d]");
   grid.addEventListener("pointerdown",e=>{const c=cellOf(e);if(!c||e.pointerType!=="mouse")return;
-    const d=Number(c.dataset.d),h=Number(c.dataset.h);paint=!on[d][h];swallow=true;guard(()=>set(d,h,paint));draw()});
+    const d=Number(c.dataset.d),h=Number(c.dataset.h);paint=!on[d][h];swallow=true;set(d,h,paint);draw()});
   grid.addEventListener("pointerover",e=>{if(paint==null||e.buttons!==1)return;const c=cellOf(e);if(!c)return;
-    const d=Number(c.dataset.d),h=Number(c.dataset.h);if(on[d][h]!==paint){guard(()=>set(d,h,paint));draw()}});
-  window.addEventListener("pointerup",()=>{paint=null},{once:false});
+    const d=Number(c.dataset.d),h=Number(c.dataset.h);if(on[d][h]!==paint){set(d,h,paint);draw()}});
+  window.addEventListener("pointerup",()=>{paint=null});
   grid.addEventListener("click",e=>{
     if(swallow){swallow=false;if(cellOf(e))return}
     const c=cellOf(e);
-    if(c){const d=Number(c.dataset.d),h=Number(c.dataset.h);guard(()=>set(d,h,!on[d][h]));draw();return}
+    if(c){const d=Number(c.dataset.d),h=Number(c.dataset.h);set(d,h,!on[d][h]);draw();return}
     const hd=e.target.closest("[data-day]");
-    if(hd){const d=Number(hd.dataset.day),val=!on[d].every(Boolean);guard(()=>on[d].forEach((_,i)=>set(d,i,val)));draw();return}
+    if(hd){const d=Number(hd.dataset.day),val=!on[d].every(Boolean);on[d].forEach((_,i)=>set(d,i,val));draw();return}
     const rw=e.target.closest("[data-row]");
-    if(rw){const i=Number(rw.dataset.row),val=!D.every(d=>on[d][i]);guard(()=>D.forEach(d=>set(d,i,val)));draw()}});
-  avReset.onclick=()=>openDialog(`<h3>Tout remettre disponible ?</h3><p style="margin:0">Vos plages seront effacées. Vous serez de nouveau considéré disponible à tout moment.</p>
+    if(rw){const i=Number(rw.dataset.row),val=!D.every(d=>on[d][i]);D.forEach(d=>set(d,i,val));draw()}});
+  avAll.onclick=()=>openDialog(`<h3>Indisponible toute la semaine ?</h3><p style="margin:0">Aucun cours ne pourra être placé pour vous tant que vous n'aurez pas rouvert des créneaux. Le directeur des études verra que vous êtes indisponible.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Confirmer</button></div>`,
+    async()=>{D.forEach(d=>on[d].fill(false));declared=true;touched=true;draw();clearTimeout(tm);await flush();draw()});
+  avReset.onclick=()=>openDialog(`<h3>Tout remettre disponible ?</h3><p style="margin:0">Vos plages seront effacées : vous serez de nouveau considéré disponible à tout moment, comme au début.</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Remettre</button></div>`,
-    async()=>{await q(sb.from("teacher_availability").delete().eq("teacher_id",tid));toast("Disponibilités effacées");rerender()});
+    async()=>{await q(sb.rpc("reset_availability"));toast("Disponibilités remises à zéro");rerender()});
 }
 
 /* ---------- emplois du temps ---------- */
@@ -770,7 +774,7 @@ async function viewPlanning(v){
     q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").order("start_time")),
     q(sb.from("slot_conflicts").select("*")),
     q(sb.from("student_groups").select("id,code,name,size").order("code")),
-    q(sb.from("teachers").select("id,first_name,last_name").order("last_name")),
+    q(sb.from("teachers").select("id,first_name,last_name,availability_declared").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
     q(sb.from("courses").select("id,code,name").order("code")),
@@ -784,7 +788,8 @@ async function viewPlanning(v){
   const today=iso(new Date()),in4=iso(addDays(new Date(),28));
   const drafts=slots.filter(s=>!s.published).length;
   const avOf=tid=>avails.filter(a=>a.teacher_id===tid);
-  const outside=s=>{const av=avOf(s.teaching_assignments.teacher_id);if(!av.length)return false;
+  const decl=tid=>!!teachers.find(t=>t.id===tid)?.availability_declared||avOf(tid).length>0;
+  const outside=s=>{const av=avOf(s.teaching_assignments.teacher_id);if(!decl(s.teaching_assignments.teacher_id))return false;
     return !av.some(a=>a.day_of_week===s.day_of_week&&a.start_time<=s.start_time&&a.end_time>=s.end_time)};
   const outCount=slots.filter(outside).length;
 
@@ -807,6 +812,7 @@ async function viewPlanning(v){
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer automatiquement</button>
       ${drafts?`<button class="btn" id="pubAll">Publier les ${drafts} brouillon(s)</button>`:""}
     </div>
+    ${S.planView==="teacher"&&decl(Number(S.planId))&&!avOf(Number(S.planId)).length?`<div class="gpwarn" style="margin-bottom:10px">Ce professeur a indiqué être <b>indisponible toute la semaine</b>.</div>`:""}
     ${timetableGrid({mine,conf:confIds,view:S.planView,avOf,outside,teacherId:S.planId,hasSat:slots.some(x=>x.day_of_week===6)})}
     ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
 
@@ -854,11 +860,11 @@ async function viewPlanning(v){
       if(o.end_time<=o.start_time)throw new Error("L'heure de fin doit être après l'heure de début.");
       if(row)await q(sb.from("timetable_slots").update(o).eq("id",row.id));else await q(sb.from("timetable_slots").insert(o));
       const as=assigns.find(a=>a.id===o.assignment_id),av=as?avOf(as.teacher_id):[];
-      const off=av.length&&!av.some(a=>a.day_of_week===o.day_of_week&&hm(a.start_time)<=o.start_time&&hm(a.end_time)>=o.end_time);
+      const off=as&&decl(as.teacher_id)&&!av.some(a=>a.day_of_week===o.day_of_week&&hm(a.start_time)<=o.start_time&&hm(a.end_time)>=o.end_time);
       toast((row?"Créneau modifié":"Créneau ajouté")+(off?" · Attention : en dehors des disponibilités du professeur":""),!!off);rerender()});
   };
   addSlot.onclick=()=>slotDialog(null);
-  autoGen.onclick=()=>genDialog({slots,assigns,rooms,groups,avails,sems,weeksOf,rerender});
+  autoGen.onclick=()=>genDialog({slots,assigns,rooms,groups,avails,sems,weeksOf,rerender,declared:new Set(teachers.filter(t=>t.availability_declared).map(t=>t.id))});
   const delSlot=sl=>openDialog(`<h3>Supprimer ce créneau ?</h3><p style="margin:0">${esc(sl.teaching_assignments.courses.code)}, ${DAYS[sl.day_of_week]} ${hm(sl.start_time)}–${hm(sl.end_time)}. Les séances à venir de ce créneau qui n'ont pas encore été émargées seront supprimées. Les séances passées sont conservées.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
     async()=>{const r=await q(sb.from("timetable_slots").delete().eq("id",sl.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Créneau supprimé");rerender()});
@@ -973,7 +979,8 @@ function generateTimetable(o,D){
   const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
   const jobs=D.assigns.map(a=>{const wk=D.weeksOf(a.semesters);const target=Math.max(1,Math.round(a.planned_hours*60/wk/len));
     const have=Math.round((existing[a.id]||0)/len);return{a,n:Math.max(0,target-have),target}}).filter(j=>j.n>0&&j.a.planned_hours>0);
-  const availMin=a=>{const x=av(a.teacher_id);return x.length?x.reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9};
+  const restricted=tid=>av(tid).length>0||!!D.declared?.has(tid);
+  const availMin=a=>{const x=av(a.teacher_id);return restricted(a.teacher_id)?x.reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9};
   jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||y.n-x.n);
   const placed=[],unplaced=[];
   for(const j of jobs){const a=j.a;let done=0;const why={};const usedDays=new Set(D.slots.filter(x=>x.assignment_id===a.id).map(x=>x.day_of_week));
@@ -981,7 +988,7 @@ function generateTimetable(o,D){
       for(const d of o.days)for(const t of times){const e=t+len;
         const fail=r=>{why[r]=(why[r]||0)+1};
         const tav=av(a.teacher_id);
-        if(o.useAvail&&tav.length&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail("hors disponibilités du professeur");continue}
+        if(o.useAvail&&restricted(a.teacher_id)&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail("hors disponibilités du professeur");continue}
         if(!free("t",a.teacher_id,d,t,e)){fail("professeur déjà occupé");continue}
         if(!free("g",a.group_id,d,t,e)){fail("groupe déjà occupé");continue}
         if(load("g",a.group_id,d)+len>o.maxGroup*60){fail("limite d'heures par jour du groupe");continue}
@@ -1021,7 +1028,7 @@ function genDialog(ctx){
       if(!!cfg.lunchFrom!==!!cfg.lunchTo||(cfg.lunchFrom&&cfg.lunchTo<=cfg.lunchFrom))throw new Error("Pause : indiquez une heure de début et une heure de fin (ou laissez les deux vides).");
       if(toMin(cfg.end)-toMin(cfg.start)<cfg.len)throw new Error("La journée est plus courte qu'un créneau.");
       try{localStorage.setItem("ucab_gen",JSON.stringify(cfg))}catch(e){}
-      const res=generateTimetable(cfg,{assigns:ctx.assigns.filter(a=>a.semester_id===cfg.semester),slots:ctx.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,weeksOf:ctx.weeksOf});
+      const res=generateTimetable(cfg,{assigns:ctx.assigns.filter(a=>a.semester_id===cfg.semester),slots:ctx.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,weeksOf:ctx.weeksOf});
       preview(res);return "keep"});
     document.querySelectorAll("#gDays button").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true"));
   };

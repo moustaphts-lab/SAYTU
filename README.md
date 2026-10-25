@@ -28,7 +28,7 @@ Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. P
 
 ## Disponibilités des professeurs
 
-Chaque professeur déclare dans « Mes disponibilités » les plages où il peut enseigner chaque semaine (plusieurs jours à la fois, précision facultative). Le directeur et la secrétaire les voient dans « Emplois du temps » : affichées par professeur, comptées dans un indicateur, et un créneau placé hors de ces plages est signalé « Hors disponibilités » (avertissement, pas un blocage). Sans plage déclarée, le professeur est considéré disponible à tout moment.
+Dans « Mes disponibilités », chaque professeur voit une grille jours × heures (7 h à 20 h, du lundi au samedi). Un toucher sur un créneau le marque disponible ou indisponible ; toucher un jour ou une heure change toute la colonne ou la ligne ; un bouton marque « indisponible toute la semaine » et un autre remet tout disponible. L'enregistrement est automatique et atomique (fonction `save_availability`). Colonne `teachers.availability_declared` : tant que le professeur n'a rien indiqué, il est considéré disponible partout ; dès qu'il a rempli sa grille, ses plages font foi (aucune plage = indisponible toute la semaine). Script à exécuter une fois : `supabase/disponibilites_declarees.sql`. Le directeur et la secrétaire voient les disponibilités dans « Emplois du temps » ; un créneau placé hors plages est signalé « Hors disponibilités », et le générateur automatique les respecte.
 
 ## Tableau de bord et exports
 
