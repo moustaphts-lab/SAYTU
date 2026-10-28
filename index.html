@@ -104,6 +104,8 @@ table.gt td{padding:0}.gc{width:100%;height:34px;border-radius:9px;border:1px so
 .dh button[aria-pressed="false"]{text-decoration:line-through;background:repeating-linear-gradient(135deg,var(--surface) 0 5px,var(--bg) 5px 10px)}
 @media(max-width:560px){.dhgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .pwwrap{position:relative;display:block}.pwwrap input{width:100%;padding-right:48px!important}.pweye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;background:none;color:var(--muted);display:grid;place-items:center;border-radius:10px;cursor:pointer}.pweye:hover{color:var(--accent);background:var(--accent-soft)}
+.pw{padding:16px 18px}.pw-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.pw-r{display:grid;gap:4px;font-size:14px}
+.rl{display:grid;gap:6px;max-height:42vh;overflow:auto}.rlrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--bg)}.rlact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .pbar{height:5px;border-radius:9px;background:var(--line,#e3e8e6);overflow:hidden;margin-top:5px;min-width:70px}.pbar i{display:block;height:100%;background:var(--accent)}
 .weeknav{display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line,#e3e8e6);border-radius:16px;padding:8px;margin:4px 0 18px}
 .weeknav .wbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line,#e3e8e6);background:var(--bg,#f3f5f4);color:inherit;display:grid;place-items:center;cursor:pointer;flex:none}
@@ -175,7 +177,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
 .tt-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--muted) 10%,transparent) 7px 14px);display:grid;place-items:center;pointer-events:none}.tt-lunch span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
 .tt-av{position:absolute;left:0;right:0;background:var(--ok-soft);opacity:.7;border-left:3px solid var(--ok)}
-.tt-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:2}.tt-now::before{content:"";position:absolute;left:-5px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.tt-now{position:absolute;left:0;right:0;height:0;border-top:1.5px dashed color-mix(in srgb,var(--bad) 70%,transparent);z-index:0;pointer-events:none}.tt-now::before{content:attr(data-t);position:absolute;left:2px;top:-9px;font:600 10px/1 var(--f-body);color:#fff;background:var(--bad);border-radius:6px;padding:2px 5px}
 .tt-ghost{position:fixed;z-index:60;pointer-events:none;opacity:.9;box-shadow:0 12px 28px rgba(0,0,0,.22);transform:rotate(-1deg)}
 .tt-drop{position:absolute;left:2px;right:2px;z-index:3;border:2px dashed var(--accent);border-radius:8px;background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;display:grid;place-items:start center;padding-top:4px;font:600 12px/1 inherit;color:var(--accent)}
 .tt-drop.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);color:var(--bad)}
@@ -510,11 +512,11 @@ async function boot(){
   renderShell();
 }
 
-const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00"};
+const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",groupMax:8};
 const hmin=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
 async function loadSchedule(){
   try{const r=await q(sb.from("school_schedule").select("*").eq("id",1).maybeSingle());
-    S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):""}:{...SCHED_DEFAULT}}
+    S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):"",groupMax:Number(r.group_max_hours)||8}:{...SCHED_DEFAULT}}
   catch(e){S.sched={...SCHED_DEFAULT}}
   return S.sched;
 }
@@ -898,7 +900,7 @@ async function viewPlanning(v){
     q(sb.from("schedule_sessions").select("id,slot_id,status,note,session_date,start_time,attendance_records(id,status)").gte("session_date",wk).lte("session_date",wEnd)),
     q(sb.from("slot_conflicts").select("*").eq("week_start",wk)),
     q(sb.from("student_groups").select("id,code,name,size,programs(code,department_id,departments(code,name))").order("code")),
-    q(sb.from("teachers").select("id,first_name,last_name,active").order("last_name")),
+    q(sb.from("teachers").select("id,first_name,last_name,active,phone").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
     q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
@@ -937,7 +939,10 @@ async function viewPlanning(v){
   const finished=assigns.filter(a=>remaining[a.id]<=0).length;
   const pubDate=pub?new Date(pub.published_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long"}):"";
   const dayLong=d=>{const s=addDays(W,d-1).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return s.charAt(0).toUpperCase()+s.slice(1)};
-  const TABS=[["grille","Grille"],["ensemble","Vue d'ensemble"],["dispos",`Disponibilités · ${answered}/${tList.length}`],["avancement","Avancement"]];
+  const today=iso(new Date());
+  const risks=assigns.map(a=>({a,r:semesterRisk(a,Math.max(0,done[a.id]||0),today)})).filter(x=>x.r&&x.r.risk).sort((x,y)=>(y.r.missing??y.r.need)-(x.r.missing??x.r.need));
+  const noAnsT=tList.filter(t=>!declared.has(t.id));
+  const TABS=[["grille","Grille"],["ensemble","Vue d'ensemble"],["dispos",`Disponibilités · ${answered}/${tList.length}`],["salles","Salles"],["avancement",`Avancement${risks.length?" · "+risks.length+" en retard":""}`]];
 
   /* ----- contenu des onglets ----- */
   const tStatus=t=>{if(!declared.has(t.id))return '<span class="pill p-warn">Pas de réponse</span>';const m=avOf(t.id).reduce((a,x)=>a+mins(x),0);
@@ -960,18 +965,35 @@ async function viewPlanning(v){
     ${gs.map(g=>{const m=live.filter(s=>s.teaching_assignments._g.includes(g.id)).reduce((a,x)=>a+mins(x),0);
       return `<tr><th><b>${esc(g.code)}</b><div class="sub">${m?hrs(m):"aucun cours"}</div></th>${sc.days.map(d=>`<td>${cell(g,d)}</td>`).join("")}</tr>`}).join("")||`<tr><td colspan="${sc.days.length+1}"><p class="empty">Aucun groupe.</p></td></tr>`}</tbody></table></div>
     <p class="sub">Touchez un cours pour le modifier, l'annuler ou le reporter. Cours barrés : annulés.</p>`};
-  const paneDispos=()=>`<div class="panel tbl">${tList.length?`<table><thead><tr><th>Professeur</th><th>Réponse pour la semaine</th><th>Placé</th><th></th></tr></thead><tbody>
+  const paneDispos=()=>`${noAnsT.length?`<div class="row" style="margin-bottom:10px"><button class="btn primary" id="relBtn">Relancer les ${noAnsT.length} professeur(s) sans réponse</button></div>`:""}<div class="panel tbl">${tList.length?`<table><thead><tr><th>Professeur</th><th>Réponse pour la semaine</th><th>Placé</th><th></th></tr></thead><tbody>
       ${tList.map(t=>`<tr><td>${esc(t.first_name+" "+t.last_name)}</td><td>${tStatus(t)}</td><td class="num">${tWeek(t)}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-avf="${t.id}">${declared.has(t.id)?"Voir / modifier":"Saisir"}</button>${declared.has(t.id)?"":` <button class="btn sm" data-avall="${t.id}">Disponible toute la semaine</button>`}</td></tr>`).join("")}</tbody></table>`:'<p class="empty">Aucun professeur n\'a de matière en cours.</p>'}</div>
       <p class="sub">Un professeur sans réponse n'est pas placé par le générateur. Si ses disponibilités vous ont été données en dehors de la plateforme, saisissez-les ici.</p>`;
-  const paneAvancement=()=>`${assigns.length>8?searchBox("asgSearch","Rechercher une matière, un groupe, un professeur…"):""}
+  const paneAvancement=()=>`${risks.length?`<h2 style="margin-top:0">Risque de fin de semestre · ${risks.length}</h2>
+      <p class="sub" style="margin:-4px 0 10px">Au rythme suivi jusqu'ici, ces matières n'atteindraient pas leur volume avant la fin du semestre.</p>
+      <div class="panel tbl" style="margin-bottom:16px"><table><thead><tr><th>Matière</th><th>Groupe</th><th>Professeur</th><th>Reste</th><th>Projection</th><th>Rythme nécessaire</th></tr></thead><tbody>
+      ${risks.map(({a,r})=>`<tr><td>${esc(a.courses.code)}<div class="sub">${esc(a.courses.name)}</div></td><td>${esc(a.student_groups.code)}</td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td>
+        <td class="num">${hrs(r.need)}</td><td>${r.missing!=null?`<span class="pill p-warn">il manquerait ~${hrs(Math.round(r.missing/30)*30)}</span>`:'<span class="pill p-mute">pas encore commencée</span>'}</td>
+        <td class="num">${r.left>0.5?hrs(Math.round(r.pace/30)*30)+" / semaine · "+Math.round(r.left)+" sem. restantes":"semestre terminé"}</td></tr>`).join("")}</tbody></table></div>`:""}
+    <h2 ${risks.length?"":'style="margin-top:0"'}>Toutes les matières</h2>
+    ${assigns.length>8?searchBox("asgSearch","Rechercher une matière, un groupe, un professeur…"):""}
     <div class="panel tbl">${assigns.length?`<table id="asgTable"><thead><tr><th>Matière</th><th>Groupe</th><th>Professeur</th><th>Programmé / prévu</th><th>Cette semaine</th><th>État</th></tr></thead><tbody>
     ${assigns.map(a=>{const d=Math.max(0,done[a.id]||0),p=a.planned_hours*60,w=live.filter(x=>x.assignment_id===a.id).reduce((s,x)=>s+mins(x),0);
       const st=d>=p?'<span class="pill p-ok">Terminée</span>':d>0?'<span class="pill p-info">En cours</span>':'<span class="pill p-mute">Pas commencée</span>';
       return `<tr><td>${esc(a.courses.code)}<div class="sub">${esc(a.courses.name)}</div></td><td>${esc(a.student_groups.code)}</td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td>
       <td class="num">${hrs(d)} / ${num(a.planned_hours)} h<div class="pbar"><i style="width:${Math.min(100,Math.round(d/p*100))}%"></i></div></td><td class="num">${w?hrs(w):"—"}</td><td>${st}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune affectation pour le semestre de cette semaine.</p>`}</div>
     <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sm" id="goAsg">Gérer les affectations →</button></div>`;
-  const PANES={grille:paneGrille,ensemble:paneEnsemble,dispos:paneDispos,avancement:paneAvancement};
+  const paneSalles=()=>{const stds=dayStarts(toMin(sc.start),toMin(sc.end),sc.len,sc.lunchFrom?toMin(sc.lunchFrom):null,sc.lunchTo?toMin(sc.lunchTo):null);
+    const cap=stds.length*sc.len;
+    const occ=(r,d)=>live.filter(s=>s.room_id===r.id&&s.day_of_week===d);
+    const freeOf=(r,d)=>stds.filter(t=>!occ(r,d).some(s=>toMin(s.start_time)<t+sc.len&&t<toMin(s.end_time))).map(t=>F(t));
+    const rows=rooms.map(r=>{const tot=sc.days.reduce((a,d)=>a+occ(r,d).reduce((x,s)=>x+mins(s),0),0);return{r,tot,pct:Math.round(tot/(cap*sc.days.length||1)*100)}});
+    return `<p class="sub" style="margin:0 0 10px">Occupation de chaque salle sur la semaine (cours non annulés) et créneaux encore libres, utiles pour placer un rattrapage.</p>
+    <div class="panel ovwrap"><table class="ov"><thead><tr><th>Salle</th>${sc.days.map(d=>`<th>${DAYS[d]} <small>${dayDate(W,d)}</small></th>`).join("")}</tr></thead><tbody>
+    ${rows.map(({r,pct})=>`<tr><th><b>${esc(r.code)}</b><div class="sub">${r.capacity} places · ${pct} %</div><div class="pbar"><i style="width:${Math.min(100,pct)}%"></i></div></th>${sc.days.map(d=>{const m=occ(r,d).reduce((x,s)=>x+mins(s),0),p=Math.round(m/(cap||1)*100),fr=freeOf(r,d);
+      return `<td><div class="sub" style="margin-bottom:4px">${p} % occupée</div>${fr.length?fr.map(t=>`<span class="pill p-ok" style="margin:0 4px 4px 0">${t}</span>`).join(""):'<span class="pill p-mute">complète</span>'}</td>`}).join("")}</tr>`).join("")||`<tr><td><p class="empty">Aucune salle.</p></td></tr>`}</tbody></table></div>
+    <p class="sub">Les créneaux en vert sont libres dans cette salle. Pour placer un cours, utilisez « Ajouter un cours » ou le glisser-déposer dans la grille.</p>`};
+  const PANES={grille:paneGrille,ensemble:paneEnsemble,dispos:paneDispos,salles:paneSalles,avancement:paneAvancement};
 
   v.innerHTML=`<h1>Emplois du temps</h1>
     ${weekNavHtml(W,pub?`<span class="pill p-ok">Publiée le ${pubDate}</span>`:(slots.length?'<span class="pill p-warn">Brouillon, non publiée</span>':'<span class="pill p-mute">Vide</span>'))}
@@ -1001,6 +1023,7 @@ async function viewPlanning(v){
   if(as)as.oninput=()=>{const k=norm(as.value.trim());document.querySelectorAll("#asgTable tbody tr").forEach(r=>r.hidden=!!k&&!norm(r.textContent).includes(k))};
   const ga=document.getElementById("goAsg");if(ga)ga.onclick=()=>{S.tab="affect";try{history.replaceState(null,"","#affect")}catch(e){}renderShell()};
   v.querySelectorAll("[data-avf]").forEach(b=>b.onclick=()=>{S.avFor=Number(b.dataset.avf);rerender()});
+  const rlb=document.getElementById("relBtn");if(rlb)rlb.onclick=()=>relanceDialog(W,noAnsT);
   v.querySelectorAll("[data-avall]").forEach(b=>b.onclick=async()=>{
     const r=[];sc.days.forEach(d=>{if(sc.lunchFrom&&sc.lunchTo){if(sc.lunchFrom>sc.start)r.push({day:d,start:sc.start,end:sc.lunchFrom});if(sc.end>sc.lunchTo)r.push({day:d,start:sc.lunchTo,end:sc.end})}else r.push({day:d,start:sc.start,end:sc.end})});
     try{await q(sb.rpc("save_week_availability",{p_week:wk,p_ranges:r,p_teacher:Number(b.dataset.avall)}));toast("Marqué disponible toute la semaine");rerender()}
@@ -1201,6 +1224,70 @@ function ttExportWeek(fmt,by,ents,slots,c){
   }catch(e){toast(errMsg(e),true)}
 }
 
+
+/* ---------- outils du directeur : copie, relance, risque de fin de semestre ---------- */
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copié")}catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast("Copié")}catch(_){toast("Copie impossible : sélectionnez le texte",true)}ta.remove()}}
+function relanceDialog(W,list){
+  const url=location.origin+location.pathname;
+  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${url}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, la Direction des études.`;
+  const tel=p=>String(p||"").replace(/[^\d+]/g,"").replace(/^00/,"+");
+  const wa=p=>{let n=tel(p).replace(/^\+/,"");if(n.length===9)n="221"+n;return n};
+  const noPhone=list.filter(t=>!t.phone).length;
+  openDialog(`<h3>Relancer ${list.length} professeur${list.length>1?"s":""} sans réponse</h3>
+    <p class="sub" style="margin:0">Semaine du ${weekRange(W)}. Envoyez le message par WhatsApp ou SMS (le téléphone s'ouvre avec le texte prêt), ou copiez-le pour un groupe WhatsApp.</p>
+    <label>Message commun<textarea id="rlMsg" rows="4" style="font:inherit;padding:10px;border:1px solid var(--line);border-radius:12px">${esc(msg(null))}</textarea></label>
+    <div class="row"><button type="button" class="btn sm" id="rlCopy">Copier le message commun</button></div>
+    <div class="rl">${list.map(t=>`<div class="rlrow"><div><b>${esc(t.first_name+" "+t.last_name)}</b><div class="sub">${t.phone?esc(t.phone):"pas de numéro (Référentiel > Enseignants)"}</div></div>
+      <div class="rlact">${t.phone?`<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/${wa(t.phone)}?text=${encodeURIComponent(msg(t))}">WhatsApp</a><a class="btn sm" href="sms:${tel(t.phone)}?&body=${encodeURIComponent(msg(t))}">SMS</a>`:""}<button type="button" class="btn sm" data-cp="${t.id}">Copier</button></div></div>`).join("")}</div>
+    ${noPhone?`<p class="sub" style="margin:0">${noPhone} professeur(s) sans numéro de téléphone : ajoutez-le dans Référentiel > Enseignants pour les boutons WhatsApp et SMS.</p>`:""}
+    <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{});
+  rlCopy.onclick=()=>copyText(rlMsg.value);
+  document.querySelectorAll("[data-cp]").forEach(b=>b.onclick=()=>copyText(msg(list.find(t=>t.id==b.dataset.cp))));
+}
+/* projection : au rythme déjà suivi, la matière atteindra-t-elle son volume avant la fin du semestre ? */
+function semesterRisk(a,doneMin,today){
+  if(!a.semesters)return null;
+  const s=new Date(a.semesters.start_date+"T12:00:00"),e=new Date(a.semesters.end_date+"T12:00:00"),t=new Date(today+"T12:00:00");
+  const total=Math.max(1,(e-s)/864e5/7),elapsed=Math.max(0,Math.min(total,(t-s)/864e5/7)),left=Math.max(0,total-elapsed);
+  const need=a.planned_hours*60-doneMin;if(need<=0)return null;
+  const rate=elapsed>=1&&doneMin>0?doneMin/elapsed:null;
+  const missing=rate!=null?Math.max(0,a.planned_hours*60-(doneMin+rate*left)):null;
+  const pace=left>0.5?need/left:need;
+  return{need,left,rate,missing,pace,risk:left<=0.5||(missing!=null&&missing>=60)||(doneMin<=0&&elapsed>=2)};
+}
+/* carte « semaine à préparer » du tableau de bord (directeur, secrétaire) */
+async function plannerWeekCard(el){
+  let W=planDefaultWeek();
+  try{if(await q(sb.from("published_weeks").select("week_start").eq("week_start",iso(W)).maybeSingle()))W=addDays(W,7)}catch(e){}
+  const wk=iso(W),wEnd=iso(addDays(W,6)),today=iso(new Date());
+  const [pub,answers,assigns,slots,canc,conf,teachers]=await Promise.all([
+    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).maybeSingle()),
+    q(sb.from("availability_weeks").select("teacher_id").eq("week_start",wk)),
+    q(sb.from("teaching_assignments").select("id,teacher_id,planned_hours,semester_id,semesters(start_date,end_date),courses(code,name),student_groups!teaching_assignments_group_id_fkey(code)")),
+    q(sb.from("timetable_slots").select("assignment_id,start_time,end_time,week_start")),
+    q(sb.from("schedule_sessions").select("assignment_id,start_time,end_time").in("status",["annulee","reportee"])),
+    q(sb.from("slot_conflicts").select("slot_a").eq("week_start",wk)),
+    q(sb.from("teachers").select("id,first_name,last_name,phone"))]);
+  const mins=x=>toMin(x.end_time)-toMin(x.start_time);
+  const done={};slots.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)+mins(x)});canc.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)-mins(x)});
+  const act=assigns.filter(a=>a.semesters&&a.semesters.start_date<=wEnd&&a.semesters.end_date>=wk&&a.planned_hours*60>(done[a.id]||0));
+  const tIds=[...new Set(act.map(a=>a.teacher_id))],ans=new Set(answers.map(a=>a.teacher_id));
+  const noAns=teachers.filter(t=>tIds.includes(t.id)&&!ans.has(t.id));
+  const wSlots=slots.filter(x=>x.week_start===wk),wMin=wSlots.reduce((s,x)=>s+mins(x),0);
+  const risks=assigns.map(a=>({a,r:semesterRisk(a,Math.max(0,done[a.id]||0),today)})).filter(x=>x.r&&x.r.risk).sort((x,y)=>(y.r.missing??y.r.need)-(x.r.missing??x.r.need));
+  el.innerHTML=`<div class="panel pw">
+    <div class="pw-h"><div><small class="sub">Semaine à préparer</small><h2 style="margin:2px 0 0">Semaine du ${weekRange(W)}</h2></div>
+      ${pub?'<span class="pill p-ok">Publiée</span>':wSlots.length?'<span class="pill p-warn">Brouillon, non publiée</span>':'<span class="pill p-mute">Pas commencée</span>'}</div>
+    <div class="stats mini" style="margin:12px 0"><div class="stat"><b style="color:${noAns.length?"var(--warn)":"var(--ok)"}">${tIds.length-noAns.length}/${tIds.length}</b><span>réponses reçues</span></div>
+      <div class="stat"><b>${wSlots.length}</b><span>cours · ${hrs(wMin)}</span></div>
+      <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>conflits</span></div>
+      <div class="stat"><b style="color:${risks.length?"var(--warn)":"var(--ok)"}">${risks.length}</b><span>matières en retard</span></div></div>
+    ${risks.length?`<div class="sub" style="margin-bottom:6px">Matières qui risquent de ne pas atteindre leur volume avant la fin du semestre</div>
+      <div class="pw-r">${risks.slice(0,5).map(({a,r})=>`<div><b>${esc(a.courses?.code)}</b> · ${esc(a.student_groups?.code)} <span class="sub">— ${r.missing!=null?"il manquerait environ "+hrs(Math.round(r.missing/30)*30):"pas encore commencée, "+hrs(r.need)+" à faire"} · ${r.left>0.5?"il faut "+hrs(Math.round(r.pace/30)*30)+" par semaine":"semestre terminé"}</span></div>`).join("")}${risks.length>5?`<div class="sub">… et ${risks.length-5} autre(s), voir Emplois du temps > Avancement</div>`:""}</div>`:""}
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="pwOpen">Ouvrir l'emploi du temps</button>${noAns.length?`<button class="btn" id="pwRel">Relancer ${noAns.length} professeur(s) sans réponse</button>`:""}</div></div>`;
+  pwOpen.onclick=()=>{S.ttWeek=W;S.ttTab="grille";S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell()};
+  const rb=document.getElementById("pwRel");if(rb)rb.onclick=()=>relanceDialog(W,noAns);
+}
 
 /* ---------- affectations : par groupe, avec la charge des professeurs ---------- */
 async function viewAssign(v){
@@ -1436,7 +1523,7 @@ function timetableGrid(o){
     return `<div class="tt-col ${d===todayDow?"today":""}" data-day="${d}" style="height:${H}px">
       ${sc.lunchFrom&&sc.lunchTo&&T(sc.lunchTo)>lo&&T(sc.lunchFrom)<hi?`<div class="tt-lunch" style="top:${y(Math.max(lo,T(sc.lunchFrom)))}px;height:${(Math.min(hi,T(sc.lunchTo))-Math.max(lo,T(sc.lunchFrom)))/60*HH}px" title="Pause"><span>Pause</span></div>`:""}
       ${av.filter(a=>a.day_of_week===d).map(a=>`<div class="tt-av" style="top:${y(T(a.start_time))}px;height:${(T(a.end_time)-T(a.start_time))/60*HH}px" title="Disponible ${hm(a.start_time)}–${hm(a.end_time)}"></div>`).join("")}
-      ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" style="top:${y(nowMin)}px"></div>`:""}
+      ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" data-t="${String(Math.floor(nowMin/60)).padStart(2,"0")}:${String(nowMin%60).padStart(2,"0")}" style="top:${y(nowMin)}px"></div>`:""}
       ${list.map(x=>{const c=colorOf(x.teaching_assignments.courses.code),dur=T(x.end_time)-T(x.start_time),w=100/x._n;
         return `<button type="button" class="tt-ev ${o.conf.has(x.id)?"conf":""} ${x.published?"":"draft"} ${o.cancelled&&o.cancelled.has(x.id)?"cancel":""} ${dur<=60?"short":""}" data-sl="${x.id}" style="--c:${c};top:${y(T(x.start_time))+1}px;height:${dur/60*HH-2}px;left:calc(${x._l*w}% + 2px);width:calc(${w}% - 4px)">
           <span class="tt-t">${hm(x.start_time)}–${hm(x.end_time)}</span><b>${esc(x.teaching_assignments.courses.code)}</b><span class="tt-n">${esc(x.teaching_assignments.courses.name)}</span>
@@ -1516,7 +1603,8 @@ function generateTimetable(o,D){
 }
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
-  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxTeacher","maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  cfg.maxGroup=(S.sched||SCHED_DEFAULT).groupMax||8;
   cfg.off=[];
   /* jours et créneaux de la semaine type (Référentiel > Jours et horaires) */
   const T2=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
@@ -1677,12 +1765,14 @@ async function viewDashboard(v){
   const presets=DPRESETS.filter(([k])=>k!=="semestre"||sem);
   v.innerHTML=`<h1>Tableau de bord</h1>
     <p class="lead">${fdl(S.dFrom)} au ${fdl(S.dTo)}${S.dPreset==="semestre"&&sem?" · "+esc(sem.label):""}</p>
+    ${has("planificateur")?'<div id="dPlan" style="margin-bottom:18px"></div>':""}
     <div class="dtools" style="margin-bottom:${S.dPreset==="perso"?"10":"18"}px">
       <div class="seg" role="group" aria-label="Période">${presets.map(([k,l])=>`<button data-pre="${k}" aria-pressed="${S.dPreset===k}">${l}</button>`).join("")}</div>
       ${xbar("dX")}</div>
     ${S.dPreset==="perso"?`<div class="row" style="margin-bottom:18px"><label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label><button class="btn" id="dOk">Afficher</button></div>`:""}
     <div id="dBody"><p class="empty">Chargement…</p></div>`;
   v.querySelectorAll("[data-pre]").forEach(b=>b.onclick=()=>{S.dPreset=b.dataset.pre;rerender()});
+  const dpl=document.getElementById("dPlan");if(dpl)plannerWeekCard(dpl).catch(e=>{dpl.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
   if(S.dPreset==="perso")dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
 
   const sess=await qAll(()=>sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teachers(first_name,last_name,departments(code)),teaching_assignments(courses(code,name,departments(code))),student_groups(code),attendance_records(status,retained_minutes,declared_minutes,entered_for_teacher)").gte("session_date",S.dFrom).lte("session_date",S.dTo).order("session_date"));
@@ -1962,13 +2052,13 @@ async function viewSchedule(el){
     <div class="panel" style="padding:20px"><form id="schForm" style="display:grid;gap:16px">
       <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="shDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${sc.days.includes(d)}">${DAYS[d]}</button>`).join("")}</div></div>
       <div class="grid2"><label>Début de journée<input id="shStart" type="time" required value="${sc.start}"></label><label>Fin de journée<input id="shEnd" type="time" required value="${sc.end}"></label>
-        <label>Durée d'un créneau<select id="shLen">${[...new Set([60,90,120,150,180,240,sc.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===sc.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label><span></span>
+        <label>Durée d'un créneau<select id="shLen">${[...new Set([60,90,120,150,180,240,sc.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===sc.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label><label>Heures de cours max par jour pour un groupe<input id="shGm" type="number" min="1" max="12" step="0.5" value="${sc.groupMax||8}"></label>
         <label>Pause : de<input id="shLf" type="time" value="${sc.lunchFrom}"></label><label>Pause : à<input id="shLt" type="time" value="${sc.lunchTo}"></label></div>
       <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
     <p class="sub">Une journée ou un créneau sans cours (jour férié, activité) se marque semaine par semaine, dans « Générer la semaine ».</p>`;
-  const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),lunchFrom:shLf.value,lunchTo:shLt.value});
+  const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),groupMax:Number(shGm.value)||8,lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
   ["shStart","shEnd","shLen","shLf","shLt"].forEach(i=>document.getElementById(i).oninput=prev);prev();
@@ -1978,7 +2068,7 @@ async function viewSchedule(el){
       if(c.end<=c.start)throw new Error("La fin de journée doit être après le début.");
       if(!!c.lunchFrom!==!!c.lunchTo||(c.lunchFrom&&c.lunchTo<=c.lunchFrom))throw new Error("Pause : indiquez une heure de début et de fin (ou laissez les deux vides).");
       if(hmin(c.end)-hmin(c.start)<c.len)throw new Error("La journée est plus courte qu'un créneau.");
-      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
+      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,group_max_hours:c.groupMax,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");
       await loadSchedule();toast("Jours et horaires enregistrés")}
     catch(e){shErr.textContent=errMsg(e)}};
