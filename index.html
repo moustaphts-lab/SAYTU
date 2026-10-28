@@ -1373,9 +1373,15 @@ function generateTimetable(o,D){
   const availMin=a=>o.useAvail?av(a.teacher_id).reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9;
   const tTotal={};jobs.forEach(j=>{tTotal[j.a.teacher_id]=(tTotal[j.a.teacher_id]||0)+j.n});
   jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||(tTotal[y.a.teacher_id]-tTotal[x.a.teacher_id])||(x.a.teacher_id-y.a.teacher_id)||y.n-x.n);
-  const placed=[],unplaced=[];
-  for(const j of jobs){const a=j.a;let done=0;const why={};const usedDays=new Set(D.slots.filter(x=>x.assignment_id===a.id).map(x=>x.day_of_week));
-    for(let k=0;k<j.n;k++){let best=null;
+  /* rythme attendu : heures restantes réparties sur les semaines restantes du semestre (sert à signaler les retards, pas à limiter) */
+  const wk0=D.week?new Date(D.week):null;
+  jobs.forEach(j=>{const sem=j.a.semesters;let left=1;
+    if(wk0&&sem?.end_date){left=Math.max(1,Math.ceil(((new Date(sem.end_date+"T12:00:00")-wk0)/864e5+1)/7))}
+    j.pace=Math.min(j.n,Math.max(1,Math.ceil(Math.max(0,D.remaining[j.a.id]||0)/left/len)));j.done=0;j.why={};
+    j.usedDays=new Set(D.slots.filter(x=>x.assignment_id===j.a.id).map(x=>x.day_of_week))});
+  const placed=[];
+  /* placement par tours : à chaque tour, chaque matière reçoit au plus un créneau ; on recommence tant qu'il reste de la place */
+  const placeOne=j=>{const a=j.a,why=j.why,usedDays=j.usedDays;let best=null;
       for(const d of o.days)for(const t of times){const e=t+len;if(blocked(d,t))continue;
         const fail=r=>{why[r]=(why[r]||0)+1};
         const tav=av(a.teacher_id);
@@ -1395,10 +1401,13 @@ function generateTimetable(o,D){
         const score=o.compact?((tday(a.teacher_id).has(d)?0:500)+(usedDays.has(d)?10:0)+(asl(a.id,d).some(x=>x.e===t||x.s===e)?60:0)+(adj&&!asl(a.id,d).some(x=>x.e===t||x.s===e)?-4:0)+load("g",a.group_id,d)/6+times.indexOf(t)*0.5+d*0.01)
           :((usedDays.has(d)?1000:0)+load("g",a.group_id,d)/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01);
         if(!best||score<best.score)best={score,d,t,e,room}}
-      if(!best)break;
-      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);tday(a.teacher_id).add(best.d);asl(a.id,best.d).push({s:best.t,e:best.e});done++;
-      placed.push({assignment_id:a.id,a,day_of_week:best.d,start_time:F(best.t),end_time:F(best.e),room_id:best.room.id,room_code:best.room.code})}
-    if(done<j.n){const top=Object.entries(why).sort((x,y)=>y[1]-x[1])[0];unplaced.push({a,missing:j.n-done,reason:top?top[0]:"aucun créneau possible avec ces réglages"})}}
+      if(!best)return false;
+      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);tday(a.teacher_id).add(best.d);asl(a.id,best.d).push({s:best.t,e:best.e});j.done++;
+      placed.push({assignment_id:a.id,a,day_of_week:best.d,start_time:F(best.t),end_time:F(best.e),room_id:best.room.id,room_code:best.room.code});return true};
+  let active=jobs.slice();
+  while(active.length){const next=[];for(const j of active){if(placeOne(j)&&j.done<j.n)next.push(j)}active=next}
+  /* « non placé » = en retard sur le rythme du semestre (ce qui dépasse le rythme n'est pas un manque) */
+  const unplaced=jobs.filter(j=>j.done<j.pace).map(j=>{const top=Object.entries(j.why).sort((x,y)=>y[1]-x[1])[0];return{a:j.a,missing:j.pace-j.done,reason:top?top[0]:"aucun créneau possible avec ces réglages"}});
   return{placed,unplaced,len,skipped:D.assigns.length-jobs.length,finished:D.assigns.filter(a=>(D.remaining[a.id]||0)<=0).length};
 }
 function genDialog(ctx){
@@ -1442,7 +1451,7 @@ function genDialog(ctx){
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
       try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,maxCourse:cfg.maxCourse,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
-      const res=generateTimetable(cfg,{assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
+      const res=generateTimetable(cfg,{week:iso(ctx.week)+"T12:00:00",assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
       preview(res);return "keep"});
     const cells=[...document.querySelectorAll("#gGrid [data-gc]")],isOn=b=>b.getAttribute("aria-pressed")==="true";
     const offTxt=()=>{const L=[];SD.forEach(d=>{const c=cells.filter(b=>b.dataset.gc.startsWith(d+"|")),off=c.filter(b=>!isOn(b));
@@ -1464,8 +1473,8 @@ function genDialog(ctx){
   const preview=res=>{
     const P=res.placed.slice().sort((x,y)=>x.day_of_week-y.day_of_week||x.start_time.localeCompare(y.start_time));
     openDialog(`<h3>Proposition</h3>
-      <div class="stats" style="margin:0"><div class="stat"><b style="color:var(--ok)">${P.length}</b><span>Créneaux proposés</span></div><div class="stat"><b style="color:${res.unplaced.length?"var(--warn)":"inherit"}">${res.unplaced.reduce((s,u)=>s+u.missing,0)}</b><span>Non placés</span></div></div>
-      ${res.unplaced.length?`<div><div class="sub" style="margin-bottom:6px">À placer à la main ou après avoir ajusté les réglages</div>${res.unplaced.map(u=>`<div class="gpwarn"><b>${esc(u.a.courses.code)} · ${esc(u.a.student_groups.code)} · ${esc(u.a.teachers.last_name)}</b> : ${u.missing} créneau${u.missing>1?"x":""} manquant${u.missing>1?"s":""}. Raison la plus fréquente : ${esc(u.reason)}.</div>`).join("")}</div>`:""}
+      <div class="stats" style="margin:0"><div class="stat"><b style="color:var(--ok)">${P.length}</b><span>Créneaux proposés</span></div><div class="stat"><b style="color:${res.unplaced.length?"var(--warn)":"inherit"}">${res.unplaced.reduce((s,u)=>s+u.missing,0)}</b><span>En retard sur le rythme</span></div></div>
+      ${res.unplaced.length?`<div><div class="sub" style="margin-bottom:6px">Matières en retard sur le rythme du semestre (heures restantes ÷ semaines restantes) : à placer à la main ou après avoir ajusté les réglages</div>${res.unplaced.map(u=>`<div class="gpwarn"><b>${esc(u.a.courses.code)} · ${esc(u.a.student_groups.code)} · ${esc(u.a.teachers.last_name)}</b> : ${u.missing} créneau${u.missing>1?"x":""} manquant${u.missing>1?"s":""}. Raison la plus fréquente : ${esc(u.reason)}.</div>`).join("")}</div>`:""}
       ${P.length?`<div><div class="sub" style="margin-bottom:6px">Présence par professeur (avec les créneaux déjà enregistrés)</div><div class="chips">${tsum(P)}</div></div>`:""}
       ${P.length?`<div class="gplist">${P.map(x=>`<div class="gp"><span class="gp-t"><b>${DAYS[x.day_of_week]}</b><span class="mono">${x.start_time}–${x.end_time}</span></span><span class="gp-c"><span><b>${esc(x.a.courses.code)}</b> · ${esc(x.a.student_groups.code)}</span><span class="sub">${esc(x.a.teachers.last_name)} · salle ${esc(x.room_code)}</span></span></div>`).join("")}</div>
       ${cfg.replace&&!ctx.published&&drafts.length?`<div class="gpwarn">En enregistrant, les <b>${drafts.length} cours en brouillon</b> de la semaine sont remplacés par cette proposition.</div>`:""}
