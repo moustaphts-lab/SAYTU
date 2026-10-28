@@ -243,6 +243,12 @@ body.ttdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .phead{padding:18px 20px;margin-bottom:14px}.ph-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.phead h2{margin:2px 0 4px;font-size:22px}
 .ph-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.ph-x{margin-top:14px}.ph-prog{margin-top:14px}.ph-prog .hbar{height:12px;margin-bottom:6px}
 .stat.big b{color:var(--accent)}
+button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.stat:hover{border-color:var(--accent)}
+.adgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.adcard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg)}.adcard h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
+.adcard.vide{border-style:dashed;border-color:var(--warn)}.adcard .who{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:3px 0}
+.adsec{margin:0 0 18px}.adsec>h2{font-size:17px;margin:0 0 10px}
+.feed{display:grid;gap:2px}.feed div{display:flex;gap:12px;font-size:14px;padding:7px 0;border-bottom:1px solid var(--line)}.feed div:last-child{border:0}.feed time{flex:none;color:var(--muted);font-size:13px;min-width:92px}
 .slips{padding:0}.slip{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 200px;gap:8px 20px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line)}.slip:last-child{border-bottom:0}
 .sl-net{font:700 18px var(--f-display);margin-bottom:6px}.sl-amt .hbar{margin-bottom:5px}
 .sl-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
@@ -533,6 +539,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  get admindash(){return this.dashboard},
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   monplanning:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 17.5h3"/>',
   seances:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -550,6 +557,7 @@ const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" s
 function availableTabs(){
   const t=[];
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
+  else if(has("admin"))t.push({id:"admindash",label:"Tableau de bord",fn:viewAdminDash});
   if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable});
   if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
@@ -2068,8 +2076,8 @@ async function viewRef(v){
   let counts=null;
   if(isPl)try{counts=await Promise.all(SETUP_STEPS.map(([,t])=>q(sb.from(t).select("id")).then(r=>r.length)))}catch(e){counts=null}
   const nextIdx=counts?counts.findIndex(n=>!n):-1,doneN=counts?counts.filter(n=>n>0).length:0;
-  v.innerHTML=`<h1>Référentiel</h1>
-    <p class="lead">Les données de l'université. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>
+  v.innerHTML=`${isPl?`<h1>Référentiel</h1>
+    <p class="lead">Les données de l'université. Chaque changement est enregistré dans le journal. Les affectations et les créneaux se saisissent dans « Emplois du temps ».</p>`:`<h1>Comptes</h1><p class="lead">Les comptes de connexion, le poste de chacun et le lien avec les fiches enseignants.</p>`}
     ${counts?`<div class="panel setup"><div class="su-top"><div><b>Mise en place</b><div class="sub">${doneN===SETUP_STEPS.length?"Tout est renseigné.":"Suivez l'ordre : chaque étape dépend de la précédente."}</div></div><span class="su-n">${doneN}/${SETUP_STEPS.length}</span></div>
       <div class="hbar" style="width:100%;height:8px;margin:12px 0 ${doneN===SETUP_STEPS.length?0:12}px"><i style="width:${Math.round(doneN/SETUP_STEPS.length*100)}%"></i></div>
       ${doneN===SETUP_STEPS.length?"":`<div class="su-steps">${SETUP_STEPS.map(([l,,sc],i)=>`<button type="button" class="su ${counts[i]?"done":""} ${i===nextIdx?"next":""}" data-su="${sc}"><span class="su-i">${counts[i]?"✓":i+1}</span><span class="su-l">${l}</span><span class="su-c">${counts[i]||""}</span></button>`).join("")}</div>`}</div>`:""}
@@ -2187,6 +2195,70 @@ function showCredentials(title,email,pwd){
   document.getElementById("dlg").addEventListener("close",()=>rerender(),{once:true});
 }
 
+/* ---------- tableau de bord de l'administrateur ---------- */
+function goAccounts(o){Object.assign(S,{accTab:o.tab||"all",accState:o.state||"",accRole:o.role||"",accQ:"",accWithStaff:!!o.withStaff,accOpen:o.open||null,accBulk:!!o.bulk});
+  S.tab="referentiel";S.refSec="comptes";try{history.replaceState(null,"","#referentiel")}catch(e){}renderShell()}
+async function viewAdminDash(v){
+  let [profiles,roles,teachers,info,logs]=await Promise.all([
+    q(sb.from("profiles").select("id,full_name,email,active,must_change_password").order("full_name")),
+    q(sb.from("user_roles").select("id,user_id,role,department_id")),
+    q(sb.from("teachers").select("id,profile_id,first_name,last_name,active").order("last_name")),
+    q(sb.rpc("admin_users_info")).catch(()=>[]),
+    q(sb.from("audit_logs").select("*").order("occurred_at",{ascending:false}).limit(8))]);
+  info=Array.isArray(info)?info:[];
+  const inf=id=>info.find(x=>x.id===id)||{};
+  const rolesOf=id=>roles.filter(r=>r.user_id===id);
+  const tOf=id=>teachers.find(t=>t.profile_id===id);
+  const act=profiles.filter(u=>u.active!==false);
+  const setOf=u=>new Set(rolesOf(u.id).map(r=>r.role+"|"+(r.department_id||"")));
+  const fdt=d=>d?new Date(d).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}):"jamais";
+  const noRole=act.filter(u=>!rolesOf(u.id).length);
+  const profNoT=act.filter(u=>rolesOf(u.id).some(r=>r.role==="professeur")&&!tOf(u.id));
+  const tNoAcc=teachers.filter(t=>t.active!==false&&!t.profile_id);
+  const neverIn=act.filter(u=>info.length&&!inf(u.id).last_sign_in_at);
+  const pending=act.filter(u=>u.must_change_password);
+  const admins=act.filter(u=>rolesOf(u.id).some(r=>r.role==="admin"));
+  const profAcc=act.filter(u=>rolesOf(u.id).some(r=>r.role==="professeur"));
+  const profIn=profAcc.filter(u=>inf(u.id).last_sign_in_at);
+  const {say,nm}=auditText(profiles);
+  const chip=u=>`<button type="button" class="pill p-info" data-open="${u.id}" style="border:0;cursor:pointer">${esc(u.full_name)}</button>`;
+  const team=POSTES.filter(p=>p[0]!=="prof").map(([k,l])=>{const ppl=act.filter(u=>posteOf(setOf(u)).key===k);
+    return `<div class="adcard ${ppl.length?"":"vide"}"><h4>${l}</h4>${ppl.length?ppl.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}${posteOf(setOf(u)).teaches?' <span class="sub">· enseigne</span>':""}</button><span class="sub">${info.length?fdt(inf(u.id).last_sign_in_at):""}</span></div>`).join(""):`<span class="sub" style="color:var(--warn)">Personne à ce poste</span>`}</div>`}).join("");
+  const custom=act.filter(u=>posteOf(setOf(u)).key==="custom");
+  const pct=profAcc.length?Math.round(profIn.length*100/profAcc.length):0;
+  v.innerHTML=`<h1>Tableau de bord</h1><p class="lead">L'état des comptes en un coup d'œil. Touchez un chiffre ou un nom pour l'ouvrir dans Comptes.</p>
+    <div class="stats">
+      <button class="stat" data-go="on"><b>${act.length}</b><span>comptes actifs</span></button>
+      <button class="stat" data-go="off"><b>${profiles.length-act.length}</b><span>désactivés</span></button>
+      <button class="stat" data-go="tmp"><b style="color:${pending.length?"var(--warn)":"inherit"}">${pending.length}</b><span>mot de passe provisoire</span></button>
+      <button class="stat" data-go="never"><b style="color:${neverIn.length?"var(--warn)":"inherit"}">${info.length?neverIn.length:"—"}</b><span>jamais connectés</span></button></div>
+
+    <section class="adsec panel" style="padding:14px 16px"><h2>Points à régler</h2>
+    ${noRole.length||profNoT.length||tNoAcc.length||admins.length<2?`<ul class="chk">
+      ${admins.length<2?`<li class="warn"><i>!</i><span><b>${admins.length?"Un seul administrateur":"Aucun administrateur actif"}.</b> S'il perd son accès, plus personne ne pourra gérer les comptes. Donnez ce poste à une deuxième personne de confiance.</span></li>`:""}
+      ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans poste : la personne ne voit rien après connexion. Choisissez son poste : <span class="chips" style="display:inline-flex">${noRole.map(chip).join("")}</span></span></li>`:""}
+      ${profNoT.length?`<li class="bad"><i>✕</i><span>${profNoT.length} compte(s) professeur sans fiche enseignant liée : ils ne voient pas leurs cours. Liez-les : <span class="chips" style="display:inline-flex">${profNoT.map(chip).join("")}</span></span></li>`:""}
+      ${tNoAcc.length?`<li class="info"><i>i</i><span style="flex:1">${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger (${esc(tNoAcc.slice(0,6).map(t=>t.first_name+" "+t.last_name).join(", "))}${tNoAcc.length>6?"…":""}).</span><button class="btn sm primary" id="adBulk">Créer les comptes</button></li>`:""}</ul>`
+      :`<ul class="chk"><li class="ok"><i>✓</i><span>Rien à régler : chaque compte a un poste, chaque professeur a sa fiche, et il y a au moins deux administrateurs.</span></li></ul>`}</section>
+
+    <section class="adsec"><h2>Équipe administrative</h2><div class="adgrid">${team}
+      ${custom.length?`<div class="adcard"><h4>Postes personnalisés</h4>${custom.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}</button><span class="sub">${esc(posteLabel(rolesOf(u.id)))}</span></div>`).join("")}</div>`:""}</div></section>
+
+    <section class="adsec panel" style="padding:14px 16px"><h2>Professeurs</h2>
+      <div class="stats mini" style="margin-bottom:10px"><div class="stat"><b>${profAcc.length}</b><span>avec un compte</span></div><div class="stat"><b>${info.length?profIn.length:"—"}</b><span>déjà connectés</span></div>
+        <div class="stat"><b style="color:${info.length&&profAcc.length-profIn.length?"var(--warn)":"inherit"}">${info.length?profAcc.length-profIn.length:"—"}</b><span>jamais connectés</span></div><div class="stat"><b style="color:${tNoAcc.length?"var(--warn)":"inherit"}">${tNoAcc.length}</b><span>sans compte</span></div></div>
+      ${profAcc.length&&info.length?`<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div><p class="sub" style="margin:6px 0 0">${pct} % des professeurs se sont déjà connectés.</p>`:""}
+      ${info.length&&profAcc.length>profIn.length?`<div class="row" style="margin-top:10px"><button class="btn sm" id="adNever">Voir les professeurs jamais connectés</button></div>`:""}</section>
+
+    <section class="adsec panel" style="padding:14px 16px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Activité récente</h2><button class="btn sm" id="adLog">Voir tout le journal</button></div>
+      ${logs.length?`<div class="feed" style="margin-top:8px">${logs.map(r=>`<div><time>${fdt(r.occurred_at)}</time><span><b>${esc(nm(r.actor))}</b> ${esc(say(r))}</span></div>`).join("")}</div>`:`<p class="empty">Aucune opération enregistrée.</p>`}</section>`;
+  v.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>goAccounts({tab:"all",state:b.dataset.go}));
+  v.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>goAccounts({tab:"all",open:b.dataset.open}));
+  const bk=document.getElementById("adBulk");if(bk)bk.onclick=()=>goAccounts({tab:"prof",bulk:true});
+  const nv=document.getElementById("adNever");if(nv)nv.onclick=()=>goAccounts({tab:"prof",state:"never",withStaff:true});
+  adLog.onclick=()=>{S.tab="journal";try{history.replaceState(null,"","#journal")}catch(e){}renderShell()};
+}
+
 async function viewAccounts(el){
   let [profiles,roles,teachers,deps,info]=await Promise.all([
     q(sb.from("profiles").select("id,full_name,email,active,must_change_password").order("full_name")),
@@ -2208,31 +2280,25 @@ async function viewAccounts(el){
   const pending=profiles.filter(u=>u.active!==false&&u.must_change_password);
   const actives=profiles.filter(u=>u.active!==false).length;
   S.accQ=S.accQ||"";S.accRole=S.accRole||"";if(S.accRole&&!["custom","_none",...POSTES.map(p=>p[0])].includes(S.accRole))S.accRole="";S.accState=S.accState||"";
-  const ROLEF=[["","Tous les postes"],...POSTES.filter(p=>p[0]!=="prof").map(p=>[p[0],p[1]]),["custom","Poste personnalisé"],["_none","Sans poste"]];
+  const ROLEF=[["","Tous les postes"],...POSTES.filter(p=>p[0]!=="prof"||S.accTab==="all").map(p=>[p[0],p[1]]),["custom","Poste personnalisé"],["_none","Sans poste"]];
   const pkey=rs=>{const o=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||""))));return o.key?(o.key+(o.teaches&&o.key!=="prof"?" prof":"")):"_none"};
   /* deux groupes : personnel administratif (tout poste autre que Professeur, ou sans poste) et professeurs */
   const isProfOnly=u=>{const rs=rolesOf(u.id);return rs.length>0&&rs.every(r=>r.role==="professeur")};
   const teaches=u=>rolesOf(u.id).some(r=>r.role==="professeur");
   const staff=profiles.filter(u=>!isProfOnly(u)),profs=profiles.filter(isProfOnly);
   S.accTab=S.accTab||"staff";S.accWithStaff=!!S.accWithStaff;
-  const P=S.accTab==="prof";
-  const list=P?[...profs,...staff.filter(teaches)].sort((x,y)=>x.full_name.localeCompare(y.full_name,"fr")):staff;
+  const P=S.accTab==="prof",ALL=S.accTab==="all";
+  const list=ALL?profiles:P?[...profs,...staff.filter(teaches)].sort((x,y)=>x.full_name.localeCompare(y.full_name,"fr")):staff;
   const stateOf=(u,li)=>`${u.active===false?"off":"on"}${u.must_change_password?" tmp":""}${info.length&&!li?" never":""}`;
   const lienT=(u,t)=>t?esc(t.first_name+" "+t.last_name):teaches(u)?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>';
   const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
   const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>`;
   const posteCell=rs=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabel(rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes</h2><div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
-    <div class="stats mini"><div class="stat"><b>${actives}</b><span>comptes actifs</span></div><div class="stat"><b>${profiles.length-actives}</b><span>désactivés</span></div>
-      <div class="stat"><b style="color:${pending.length?"var(--warn)":"inherit"}">${pending.length}</b><span>mot de passe provisoire</span></div>
-      <div class="stat"><b style="color:${neverIn.length?"var(--warn)":"inherit"}">${neverIn.length}</b><span>jamais connectés</span></div></div>
-    ${noRole.length||profNoT.length||tNoAcc.length?`<div class="panel" style="padding:12px 14px;margin-bottom:14px"><b>Points à régler</b><ul class="chk" style="margin-top:8px">
-      ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans poste : la personne ne voit rien après connexion (${esc(noRole.map(u=>u.full_name).join(", "))}). Ils sont dans « Personnel administratif ».</span></li>`:""}
-      ${profNoT.length?`<li class="bad"><i>✕</i><span>${profNoT.length} compte(s) professeur sans fiche enseignant : ils ne peuvent pas se connecter normalement (${esc(profNoT.map(u=>u.full_name).join(", "))}). Ouvrez le compte pour le lier à sa fiche.</span></li>`:""}
-      ${tNoAcc.length?`<li class="info"><i>i</i><span>${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger. Utilisez « Créer les comptes… » dans l'onglet Professeurs.</span></li>`:""}</ul></div>`:""}
+  el.innerHTML=`<div class="row" style="justify-content:${has("planificateur")?"space-between":"flex-end"}">${has("planificateur")?'<h2 style="margin-top:0">Comptes</h2>':""}<div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
-      <button type="button" role="tab" data-acct="staff" aria-pressed="${!P}">Personnel administratif (${staff.length})</button>
-      <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button></div>
+      <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}">Personnel administratif (${staff.length})</button>
+      <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button>
+      <button type="button" role="tab" data-acct="all" aria-pressed="${ALL}">Tous (${profiles.length})</button></div>
     <div class="row" style="margin-bottom:10px;align-items:flex-end">
       <label style="flex:1;min-width:200px">Rechercher<input id="accQ" placeholder="Nom ou adresse…" value="${esc(S.accQ)}"></label>
       ${P?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);padding-bottom:10px"><input type="checkbox" id="accWS" ${S.accWithStaff?"checked":""}> Inclure le personnel qui enseigne</label>`
@@ -2253,6 +2319,9 @@ async function viewAccounts(el){
     el.querySelectorAll("#accTable tbody tr").forEach(tr=>{const ok=(!k||norm(tr.textContent).includes(k))&&(!r||tr.dataset.roles.split(" ").includes(r))&&(!st||tr.dataset.state.split(" ").includes(st))&&(!P||ws||tr.dataset.staff==="0");tr.hidden=!ok;if(ok)n++});
     accNone.hidden=n>0};
   accQ.oninput=filt;accState.onchange=filt;if(P)accWS.onchange=filt;else accRole.onchange=filt;filt();
+  /* arrivée depuis le tableau de bord : ouvrir une fiche ou la création en série */
+  setTimeout(()=>{if(S.accOpen){const b=el.querySelector(`[data-det="${S.accOpen}"]`);S.accOpen=null;if(b)b.click()}
+    if(S.accBulk){S.accBulk=false;const b=document.getElementById("bulkAcc");if(b&&!b.disabled)b.click()}},0);
 
   const saveRoles=async(userId,desired)=>{
     const mine=rolesOf(userId);
@@ -2586,17 +2655,8 @@ async function viewMyPayslips(v){
 }
 
 /* ---------- journal ---------- */
-async function viewAudit(v){
-  const today=iso(new Date());
-  S.auF=S.auF||iso(addDays(new Date(),-30));S.auT=S.auT||today;S.auWho=S.auWho||"";S.auCat=S.auCat||"";S.auLim=S.auLim||300;
-  const CAT={edt:["Emplois du temps",["timetable_slots","published_weeks","schedule_sessions","teacher_availability","availability_weeks","school_schedule"]],
-    emarg:["Émargements et validations",["attendance_records"]],paie:["Paie et tarifs",["pay_periods","payslips","payments","payroll_items","hourly_rates"]],
-    ref:["Référentiel et affectations",["departments","programs","student_groups","courses","course_programs","rooms","teachers","teacher_statuses","teaching_assignments","assignment_groups","academic_years","semesters"]],
-    comptes:["Comptes et rôles",["profiles","user_roles"]]};
-  let qy=sb.from("audit_logs").select("*").gte("occurred_at",S.auF+"T00:00:00").lte("occurred_at",S.auT+"T23:59:59").order("occurred_at",{ascending:false}).limit(S.auLim);
-  if(S.auCat)qy=qy.in("table_name",CAT[S.auCat][1]);
-  if(S.auWho)qy=qy.eq("actor",S.auWho);
-  const [rows,people]=await Promise.all([q(qy),q(sb.from("profiles").select("id,full_name").order("full_name"))]);
+/* phrases lisibles du journal (partagées par le journal et le tableau de bord de l'administrateur) */
+function auditText(people){
   const nm=id=>people.find(p=>p.id===id)?.full_name||"Système";
   /* l'administrateur seul ne voit pas les montants de paie */
   const mask=has("admin")&&!has("finance")&&!has("direction");
@@ -2622,6 +2682,21 @@ async function viewAudit(v){
       case "payroll_items":return `${verb[a]} une ligne de paie`;
       case "hourly_rates":return `${a==="INSERT"?"a fixé":verb[a]} un tarif horaire de ${money(d.rate_fcfa)} à partir du ${fdl(d.effective_from)}`;
       default:return `${verb[a]||a} ${thing[r.table_name]||r.table_name} ${label(d)}`.trim()}};
+  return {say,nm};
+}
+
+async function viewAudit(v){
+  const today=iso(new Date());
+  S.auF=S.auF||iso(addDays(new Date(),-30));S.auT=S.auT||today;S.auWho=S.auWho||"";S.auCat=S.auCat||"";S.auLim=S.auLim||300;
+  const CAT={edt:["Emplois du temps",["timetable_slots","published_weeks","schedule_sessions","teacher_availability","availability_weeks","school_schedule"]],
+    emarg:["Émargements et validations",["attendance_records"]],paie:["Paie et tarifs",["pay_periods","payslips","payments","payroll_items","hourly_rates"]],
+    ref:["Référentiel et affectations",["departments","programs","student_groups","courses","course_programs","rooms","teachers","teacher_statuses","teaching_assignments","assignment_groups","academic_years","semesters"]],
+    comptes:["Comptes et rôles",["profiles","user_roles"]]};
+  let qy=sb.from("audit_logs").select("*").gte("occurred_at",S.auF+"T00:00:00").lte("occurred_at",S.auT+"T23:59:59").order("occurred_at",{ascending:false}).limit(S.auLim);
+  if(S.auCat)qy=qy.in("table_name",CAT[S.auCat][1]);
+  if(S.auWho)qy=qy.eq("actor",S.auWho);
+  const [rows,people]=await Promise.all([q(qy),q(sb.from("profiles").select("id,full_name").order("full_name"))]);
+  const {say,nm}=auditText(people);
   const dt=x=>new Date(x).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"});
   v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque action sensible est enregistrée avec son auteur et l'heure. Le journal ne peut pas être modifié.</p>
     <div class="row" style="margin-bottom:12px;align-items:flex-end">
