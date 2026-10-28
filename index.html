@@ -1009,7 +1009,7 @@ async function viewPlanning(v){
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer la semaine</button>
       <button class="btn" id="copyPrev" ${assigns.length?"":"disabled"}>Copier la semaine précédente</button>
       <button class="btn" id="ttExport" ${slots.length?"":"disabled"}>${DLI}Imprimer / exporter</button>
-      ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button>`+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
+      ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button><button class="btn danger" id="unpubBtn">Retirer la publication</button>`+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
     </div>
     ${pub?`<div class="gpwarn" style="margin-bottom:10px;background:var(--ok-soft);border-color:var(--ok)">Semaine publiée : toute modification est visible tout de suite par les professeurs. Pour un empêchement, touchez le cours puis « Annuler » ou « Reporter » : le professeur voit le motif.</div>`:""}
     ${!assigns.length?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière d'un semestre en cours cette semaine. Vérifiez les dates des semestres et les affectations.</div>`:""}
@@ -1063,6 +1063,19 @@ async function viewPlanning(v){
     notifyDialog({title:"Prévenir les professeurs",intro:`L'emploi du temps de la semaine du ${weekRange(W)} est publié. Envoyez à chaque professeur la liste de ses cours.`,
       common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, la Direction des études.`,items})}
   const anb=document.getElementById("annBtn");if(anb)anb.onclick=announce;
+  /* retirer la publication (refusé par le serveur si une séance de la semaine est déjà émargée) */
+  const upb=document.getElementById("unpubBtn");
+  if(upb)upb.onclick=()=>{const att=sessW.filter(x=>x.attendance_records&&(Array.isArray(x.attendance_records)?x.attendance_records.length:x.attendance_records.id));
+    if(att.length){openDialog(`<h3>Retrait impossible</h3><p style="margin:0">${att.length} séance(s) de cette semaine ont déjà été émargées. Pour ne pas toucher aux heures déclarées, la publication ne peut plus être retirée. Annulez ou reportez plutôt les autres cours un par un.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Compris</button></div>`,async()=>{});return}
+    openDialog(`<h3>Retirer la publication de la semaine du ${weekRange(W)} ?</h3>
+      <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li>les ${live.length} cours repassent en <b>brouillon</b> (rien n'est supprimé) ;</li><li>les séances datées sont retirées : les professeurs ne voient plus cette semaine ;</li><li>les professeurs peuvent de nouveau modifier leurs disponibilités ;</li><li>les cours annulés redeviennent des brouillons ordinaires.</li></ul>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn danger" value="ok">Retirer la publication</button></div>`,
+    async()=>{try{await q(sb.rpc("unpublish_week",{p_week:wk}))}catch(e){if(/Could not find the function|PGRST202/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « retirer_publication.sql » doit être exécuté dans Supabase.");throw e}
+      toast("Publication retirée : la semaine est de nouveau en brouillon");rerender();
+      const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=1)});
+      const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`}));
+      setTimeout(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`,items}),400)})};
 
   /* ----- copier la semaine précédente ----- */
   copyPrev.onclick=async()=>{
