@@ -76,8 +76,9 @@ h2{font:600 17px var(--f-display);margin:28px 0 10px}
 .lead{color:var(--muted);margin:0 0 20px;max-width:68ch}
 .asg-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}.asg-load{padding:14px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto}
 .ld{padding:8px 0;border-bottom:1px solid var(--line,#e3e8e6)}.ld:last-child{border:0}.ld-t{display:flex;justify-content:space-between;gap:8px;font-size:14px}
-@media(max-width:1024px){.asg-layout{grid-template-columns:1fr}.asg-load{position:static;max-height:none}}
-#aTable select{min-width:170px}
+@media(max-width:1399px){.asg-layout{grid-template-columns:1fr}.asg-load{position:static;max-height:none}}
+#aTable select{min-width:150px;max-width:100%}#aTable td{vertical-align:top}#aTable .lnk{border:0;background:none;color:var(--accent);font:600 13px var(--f-body);padding:4px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.panel.tbl:has(#aTable){overflow-x:auto}
 .ttseg{display:inline-grid;max-width:100%;overflow-x:auto}
 .tt-ev.cancel{opacity:.6;background:repeating-linear-gradient(135deg,var(--surface) 0 6px,color-mix(in srgb,var(--bad) 8%,var(--surface)) 6px 12px)!important;border-left-color:var(--bad)!important}.tt-ev.cancel b,.tt-ev.cancel .tt-n{text-decoration:line-through}
 .ovwrap{overflow-x:auto;padding:0}
@@ -1343,7 +1344,7 @@ async function viewAssign(v){
           return `<tr data-i="${i}"><td><b>${esc(r.c.code)}</b><div class="sub">${esc(r.c.name)}</div>${r.dup?'<span class="pill p-bad">En double</span>':""}${!inProg(r.c)?'<span class="pill p-mute">Autre filière</span>':""}
             ${r.shared.length?`<div style="margin-top:4px"><span class="pill p-info">Commun avec ${esc(r.shared.map(gcode).join(", "))}</span></div>`:""}
             ${r.joinable.length?`<div style="margin-top:6px">${r.joinable.map(a=>`<button class="btn sm" type="button" data-join="${a.id}">Rejoindre le cours de ${esc(gids(a).map(gcode).join(" + "))} (${esc(tName(teachers.find(t=>t.id===a.teacher_id)||{first_name:"",last_name:"?"}))})</button>`).join(" ")}</div>`:""}
-            ${r.a?`<div style="margin-top:6px"><button class="btn sm" type="button" data-grp="${r.a.id}">Groupes réunis…</button></div>`:""}</td>
+            ${r.a?`<div><button class="lnk" type="button" data-grp="${r.a.id}">Groupes réunis…</button></div>`:""}</td>
           <td><select class="aT" data-i="${i}" aria-label="Professeur pour ${esc(r.c.code)}">${tOpts(r.teacher)}</select></td>
           <td><input class="aH" data-i="${i}" type="number" min="0.5" step="0.5" value="${r.hours}" style="width:84px" aria-label="Volume ${esc(r.c.code)}"></td>
           <td class="num">${r.a?`${hrs(d)}<div class="pbar"><i style="width:${Math.min(100,Math.round(d/(r.hours*60||1)*100))}%"></i></div>`:"—"}</td>
