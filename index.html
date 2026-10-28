@@ -513,11 +513,12 @@ async function boot(){
   renderShell();
 }
 
-const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",groupMax:8};
+const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",groupMax:8,teacherMax:6};
+const ROOM_TYPE={standard:"Standard",labo:"Laboratoire",amphi:"Amphithéâtre",informatique:"Salle informatique"};
 const hmin=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
 async function loadSchedule(){
   try{const r=await q(sb.from("school_schedule").select("*").eq("id",1).maybeSingle());
-    S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):"",groupMax:Number(r.group_max_hours)||8}:{...SCHED_DEFAULT}}
+    S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):"",groupMax:Number(r.group_max_hours)||8,teacherMax:Number(r.teacher_max_hours)||6}:{...SCHED_DEFAULT}}
   catch(e){S.sched={...SCHED_DEFAULT}}
   return S.sched;
 }
@@ -900,10 +901,10 @@ async function viewPlanning(v){
     q(sb.from("schedule_sessions").select("assignment_id,start_time,end_time").in("status",["annulee","reportee"])),
     q(sb.from("schedule_sessions").select("id,slot_id,status,note,session_date,start_time,attendance_records(id,status)").gte("session_date",wk).lte("session_date",wEnd)),
     q(sb.from("slot_conflicts").select("*").eq("week_start",wk)),
-    q(sb.from("student_groups").select("id,code,name,size,programs(code,department_id,departments(code,name))").order("code")),
+    q(sb.from("student_groups").select("id,code,name,size,home_room_id,programs(code,department_id,departments(code,name))").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name,active,phone").order("last_name")),
-    q(sb.from("rooms").select("id,code,name,capacity").order("code")),
-    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
+    q(sb.from("rooms").select("id,code,name,capacity,room_type").order("code")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name,room_type),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
     q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",wk)),
     q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",wk)),
@@ -1008,7 +1009,7 @@ async function viewPlanning(v){
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer la semaine</button>
       <button class="btn" id="copyPrev" ${assigns.length?"":"disabled"}>Copier la semaine précédente</button>
       <button class="btn" id="ttExport" ${slots.length?"":"disabled"}>${DLI}Imprimer / exporter</button>
-      ${pub?(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
+      ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button>`+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
     </div>
     ${pub?`<div class="gpwarn" style="margin-bottom:10px;background:var(--ok-soft);border-color:var(--ok)">Semaine publiée : toute modification est visible tout de suite par les professeurs. Pour un empêchement, touchez le cours puis « Annuler » ou « Reporter » : le professeur voit le motif.</div>`:""}
     ${!assigns.length?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière d'un semestre en cours cette semaine. Vérifiez les dates des semestres et les affectations.</div>`:""}
@@ -1052,7 +1053,16 @@ async function viewPlanning(v){
       <p style="margin:0">${live.length} cours, ${hrs(weekMin)}. Les séances sont créées, les professeurs voient leur emploi du temps et ne peuvent plus modifier leurs disponibilités de cette semaine.</p>
       <ul class="chk">${L.map(x=>`<li class="${x.k}"><i>${ICON[x.k]}</i><span>${esc(x.t)}</span></li>`).join("")}</ul>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok" ${conf.length?"disabled":""}>Publier</button></div>`,
-    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender()})};
+    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender();setTimeout(announce,400)})};
+  /* prévenir les professeurs de leur emploi du temps publié */
+  function announce(){
+    const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=[]).push(x)});
+    const items=Object.entries(byT).map(([tid,L])=>{const t=teachers.find(y=>y.id==tid);if(!t)return null;
+      const lines=L.sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time)).map(x=>`- ${DAYS[x.day_of_week]} ${dayDate(W,x.day_of_week)} · ${hm(x.start_time)}–${hm(x.end_time)} · ${x.teaching_assignments.courses.code} · ${x.teaching_assignments.student_groups.code} · salle ${x.rooms.code}`).join("\n");
+      return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre emploi du temps de la semaine du ${weekRange(W)} est publié :\n${lines}\nDétails et émargement dans l'application : ${appUrl()}\nCordialement, la Direction des études.`}}).filter(Boolean);
+    notifyDialog({title:"Prévenir les professeurs",intro:`L'emploi du temps de la semaine du ${weekRange(W)} est publié. Envoyez à chaque professeur la liste de ses cours.`,
+      common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, la Direction des études.`,items})}
+  const anb=document.getElementById("annBtn");if(anb)anb.onclick=announce;
 
   /* ----- copier la semaine précédente ----- */
   copyPrev.onclick=async()=>{
@@ -1083,7 +1093,7 @@ async function viewPlanning(v){
     {k:"assignment_id",l:"Affectation",t:"select",num:1,opt:assigns.map(a=>[a.id,aLabel(a)+(remaining[a.id]<=0?" (terminée)":"")]),req:1},
     {k:"day_of_week",l:"Jour",t:"select",num:1,opt:sc.days.map(d=>[d,DAYS[d]+" "+dayDate(W,d)]),req:1},
     {k:"start_time",l:"Début",t:"time",req:1},{k:"end_time",l:"Fin",t:"time",req:1},
-    {k:"room_id",l:"Salle",t:"select",num:1,opt:rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"]),req:1}];
+    {k:"room_id",l:"Salle",t:"select",num:1,opt:rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"+(r.room_type&&r.room_type!=="standard"?" · "+(ROOM_TYPE[r.room_type]||r.room_type):"")]),req:1}];
   const slotDialog=(row,report)=>{
     const f=slotFields();
     const vals=row?{...row,start_time:hm(row.start_time),end_time:hm(row.end_time)}:{day_of_week:sc.days[0],start_time:sc.start,end_time:""};
@@ -1095,7 +1105,8 @@ async function viewPlanning(v){
       if(!o.end_time||o.end_time<=o.start_time)throw new Error("L'heure de fin doit être après l'heure de début.");
       if(row)await q(sb.from("timetable_slots").update(o).eq("id",row.id));else await q(sb.from("timetable_slots").insert({...o,week_start:wk,published:false}));
       if(report){const s=sessOf[row.id];const why=document.getElementById("rpWhy").value.trim();
-        if(s)await q(sb.from("schedule_sessions").update({status:"planifiee",note:`Reporté (prévu ${DAYS[row.day_of_week].toLowerCase()} ${dayDate(W,row.day_of_week)} à ${hm(row.start_time)}) : ${why}`}).eq("id",s.id))}
+        if(s)await q(sb.from("schedule_sessions").update({status:"planifiee",note:`Reporté (prévu ${DAYS[row.day_of_week].toLowerCase()} ${dayDate(W,row.day_of_week)} à ${hm(row.start_time)}) : ${why}`}).eq("id",s.id));
+        tellTeacher(row,`votre cours ${row.teaching_assignments.courses.code} (${row.teaching_assignments.student_groups.code}) prévu le ${dayLong(row.day_of_week).toLowerCase()} à ${hm(row.start_time)} est reporté au ${dayLong(o.day_of_week).toLowerCase()} de ${o.start_time} à ${o.end_time}${rooms.find(r=>r.id===o.room_id)?", salle "+rooms.find(r=>r.id===o.room_id).code:""}. Motif : ${why}.`)}
       const a=assigns.find(x=>x.id===o.assignment_id),av=a?avOf(a.teacher_id):[];
       const off=a&&declared.has(a.teacher_id)&&!av.some(x=>x.day_of_week===o.day_of_week&&hm(x.start_time)<=o.start_time&&hm(x.end_time)>=o.end_time);
       const noAns=a&&!declared.has(a.teacher_id);
@@ -1110,7 +1121,10 @@ async function viewPlanning(v){
     openDialog(`<h3>Annuler ce cours ?</h3><p style="margin:0">${esc(sl.teaching_assignments.courses.code)} · ${esc(sl.teaching_assignments.student_groups.code)}, ${dayLong(sl.day_of_week)} ${hm(sl.start_time)}–${hm(sl.end_time)}. Le cours reste visible, barré, avec le motif. Ses heures ne sont pas comptées et l'horaire est libéré.</p>
       <label>Motif (visible par le professeur)<input id="cWhy" required placeholder="ex. jour férié, professeur malade"></label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn danger" value="ok">Annuler le cours</button></div>`,
-    async()=>{await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+document.getElementById("cWhy").value.trim()}).eq("id",s.id));toast("Cours annulé");rerender()})};
+    async()=>{const why=document.getElementById("cWhy").value.trim();await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+why}).eq("id",s.id));toast("Cours annulé");rerender();
+      tellTeacher(sl,`votre cours ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) du ${dayLong(sl.day_of_week).toLowerCase()} de ${hm(sl.start_time)} à ${hm(sl.end_time)} est annulé. Motif : ${why}.`)})};
+  const tellTeacher=(sl,txt)=>{const t=teachers.find(y=>y.id===sl.teaching_assignments.teacher_id);if(!t)return;
+    setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, la Direction des études.`}]}),400)};
   const restoreSlot=async sl=>{try{await q(sb.from("schedule_sessions").update({status:"planifiee",note:null}).eq("id",sessOf[sl.id].id));toast("Cours rétabli");rerender()}
     catch(e){toast(/overlap|exclu/i.test(e.message||"")?"Impossible de rétablir : l'horaire a été repris par un autre cours.":errMsg(e),true)}};
   v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{if(b.dataset.dragged)return;const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments,s=sessOf[sl.id];
@@ -1228,22 +1242,27 @@ function ttExportWeek(fmt,by,ents,slots,c){
 
 /* ---------- outils du directeur : copie, relance, risque de fin de semestre ---------- */
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copié")}catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast("Copié")}catch(_){toast("Copie impossible : sélectionnez le texte",true)}ta.remove()}}
-function relanceDialog(W,list){
-  const url=location.origin+location.pathname;
-  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${url}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, la Direction des études.`;
+/* envoi d'un message aux professeurs : WhatsApp / SMS (le téléphone s'ouvre avec le texte) ou copie */
+function notifyDialog(o){ /* o = {title, intro, common, items:[{t:{id,first_name,last_name,phone}, msg}]} */
   const tel=p=>String(p||"").replace(/[^\d+]/g,"").replace(/^00/,"+");
   const wa=p=>{let n=tel(p).replace(/^\+/,"");if(n.length===9)n="221"+n;return n};
-  const noPhone=list.filter(t=>!t.phone).length;
-  openDialog(`<h3>Relancer ${list.length} professeur${list.length>1?"s":""} sans réponse</h3>
-    <p class="sub" style="margin:0">Semaine du ${weekRange(W)}. Envoyez le message par WhatsApp ou SMS (le téléphone s'ouvre avec le texte prêt), ou copiez-le pour un groupe WhatsApp.</p>
-    <label>Message commun<textarea id="rlMsg" rows="4" style="font:inherit;padding:10px;border:1px solid var(--line);border-radius:12px">${esc(msg(null))}</textarea></label>
-    <div class="row"><button type="button" class="btn sm" id="rlCopy">Copier le message commun</button></div>
-    <div class="rl">${list.map(t=>`<div class="rlrow"><div><b>${esc(t.first_name+" "+t.last_name)}</b><div class="sub">${t.phone?esc(t.phone):"pas de numéro (Référentiel > Enseignants)"}</div></div>
-      <div class="rlact">${t.phone?`<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/${wa(t.phone)}?text=${encodeURIComponent(msg(t))}">WhatsApp</a><a class="btn sm" href="sms:${tel(t.phone)}?&body=${encodeURIComponent(msg(t))}">SMS</a>`:""}<button type="button" class="btn sm" data-cp="${t.id}">Copier</button></div></div>`).join("")}</div>
+  const noPhone=o.items.filter(x=>!x.t.phone).length;
+  openDialog(`<h3>${esc(o.title)}</h3>
+    <p class="sub" style="margin:0">${o.intro}</p>
+    ${o.common!=null?`<label>Message commun<textarea id="rlMsg" rows="4" style="font:inherit;padding:10px;border:1px solid var(--line);border-radius:12px">${esc(o.common)}</textarea></label>
+    <div class="row"><button type="button" class="btn sm" id="rlCopy">Copier le message commun</button></div>`:""}
+    <div class="rl">${o.items.map((x,i)=>`<div class="rlrow"><div><b>${esc(x.t.first_name+" "+x.t.last_name)}</b><div class="sub">${x.t.phone?esc(x.t.phone):"pas de numéro (Référentiel > Enseignants)"}</div></div>
+      <div class="rlact">${x.t.phone?`<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/${wa(x.t.phone)}?text=${encodeURIComponent(x.msg)}">WhatsApp</a><a class="btn sm" href="sms:${tel(x.t.phone)}?&body=${encodeURIComponent(x.msg)}">SMS</a>`:""}<button type="button" class="btn sm" data-cp="${i}">Copier</button></div></div>`).join("")||'<p class="sub">Aucun professeur concerné.</p>'}</div>
     ${noPhone?`<p class="sub" style="margin:0">${noPhone} professeur(s) sans numéro de téléphone : ajoutez-le dans Référentiel > Enseignants pour les boutons WhatsApp et SMS.</p>`:""}
     <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{});
-  rlCopy.onclick=()=>copyText(rlMsg.value);
-  document.querySelectorAll("[data-cp]").forEach(b=>b.onclick=()=>copyText(msg(list.find(t=>t.id==b.dataset.cp))));
+  const rc=document.getElementById("rlCopy");if(rc)rc.onclick=()=>copyText(rlMsg.value);
+  document.querySelectorAll("[data-cp]").forEach(b=>b.onclick=()=>copyText(o.items[Number(b.dataset.cp)].msg));
+}
+const appUrl=()=>location.origin+location.pathname;
+function relanceDialog(W,list){
+  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${appUrl()}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, la Direction des études.`;
+  notifyDialog({title:`Relancer ${list.length} professeur${list.length>1?"s":""} sans réponse`,intro:`Semaine du ${weekRange(W)}. Envoyez le message par WhatsApp ou SMS (le téléphone s'ouvre avec le texte prêt), ou copiez-le pour un groupe WhatsApp.`,
+    common:msg(null),items:list.map(t=>({t,msg:msg(t)}))});
 }
 /* projection : au rythme déjà suivi, la matière atteindra-t-elle son volume avant la fin du semestre ? */
 function semesterRisk(a,doneMin,today){
@@ -1556,7 +1575,7 @@ function generateTimetable(o,D){
   const off=new Set(o.off||[]);
   const blocked=(d,t)=>off.has(d+"|"+F(t));
   const rooms=[...D.rooms].sort((a,b)=>a.capacity-b.capacity);
-  const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size]));
+  const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size])),ghome=Object.fromEntries(D.groups.map(g=>[g.id,g.home_room_id]));
   const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
   /* heures restantes de chaque matière (déjà déduites de tous les créneaux programmés, y compris cette semaine) ; plafond par matière dans la semaine */
   const jobs=D.assigns.map(a=>{const rem=Math.max(0,D.remaining[a.id]||0);const cap=o.maxCourse?Math.max(0,Math.floor(o.maxCourse*60/len)-Math.round((existing[a.id]||0)/len)):1e9;
@@ -1587,8 +1606,12 @@ function generateTimetable(o,D){
           if(run>maxChain){fail("trop d'heures de suite pour la même matière");continue}}
         if(GS(a).some(g=>load("g",g,d)+len>o.maxGroup*60)){fail("limite d'heures par jour du groupe");continue}
         if(load("t",a.teacher_id,d)+len>o.maxTeacher*60){fail("limite d'heures par jour du professeur");continue}
-        const need=GS(a).reduce((s2,g)=>s2+(gsize[g]||0),0);const room=rooms.find(r=>r.capacity>=need&&free("r",r.id,d,t,e));
-        if(!room){fail(rooms.some(r=>r.capacity>=need)?"aucune salle libre":"aucune salle assez grande");continue}
+        const need=GS(a).reduce((s2,g)=>s2+(gsize[g]||0),0),rt=a.courses?.room_type||null;
+        /* sans exigence, on garde les salles spécialisées (labo, amphi…) en dernier recours */
+        const fit=rooms.filter(r=>r.capacity>=need&&(!rt||(r.room_type||"standard")===rt)).sort((x,y)=>(rt?0:((x.room_type||"standard")!=="standard")-((y.room_type||"standard")!=="standard"))||x.capacity-y.capacity);
+        const home=GS(a).map(g=>ghome[g]).find(h=>h&&fit.some(r=>r.id===h&&free("r",r.id,d,t,e)));
+        const room=home?fit.find(r=>r.id===home):fit.find(r=>free("r",r.id,d,t,e));
+        if(!room){fail(!fit.length?(rt?"aucune salle de type « "+(ROOM_TYPE[rt]||rt)+" » assez grande":"aucune salle assez grande"):"aucune salle libre");continue}
         const adj=(busy.t[a.teacher_id]?.[d]||[]).some(x=>x.e===t||x.s===e);
         const score=o.compact?((tday(a.teacher_id).has(d)?0:500)+(usedDays.has(d)?10:0)+(asl(a.id,d).some(x=>x.e===t||x.s===e)?60:0)+(adj&&!asl(a.id,d).some(x=>x.e===t||x.s===e)?-4:0)+Math.max(...GS(a).map(g=>load("g",g,d)))/6+times.indexOf(t)*0.5+d*0.01)
           :((usedDays.has(d)?1000:0)+Math.max(...GS(a).map(g=>load("g",g,d)))/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01);
@@ -1604,8 +1627,8 @@ function generateTimetable(o,D){
 }
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
-  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxTeacher","maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
-  cfg.maxGroup=(S.sched||SCHED_DEFAULT).groupMax||8;
+  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  cfg.maxGroup=(S.sched||SCHED_DEFAULT).groupMax||8;cfg.maxTeacher=(S.sched||SCHED_DEFAULT).teacherMax||6;
   cfg.off=[];
   /* jours et créneaux de la semaine type (Référentiel > Jours et horaires) */
   const T2=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
@@ -1628,7 +1651,6 @@ function genDialog(ctx){
         <tbody>${ST.map(t=>`<tr><th><button type="button" data-gt="${t}">${t}–${F2(T2(t)+cfg.len)}</button></th>${SD.map(d=>`<td><button type="button" class="gc" data-gc="${d}|${t}" aria-pressed="${!cfg.off.includes(d+"|"+t)}" aria-label="${DAYS[d]} ${t}"></button></td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <p class="sub" style="margin:6px 0 0" id="gOffTxt"></p></div>
       <div class="grid2">
-        <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label>
         <label>Jours de présence max par professeur<input id="gMaxD" type="number" min="0" max="6" step="1" value="${cfg.maxDays||0}"><small class="sub">0 = sans limite</small></label></div>
       ${!ctx.published&&drafts.length?`<div class="seg" role="radiogroup" aria-label="Brouillons existants" style="display:grid;grid-template-columns:1fr 1fr">
         <button type="button" data-rep="1" aria-pressed="${cfg.replace}">Refaire la semaine<br><small style="font-weight:500">remplace les ${drafts.length} cours en brouillon</small></button>
@@ -1640,7 +1662,7 @@ function genDialog(ctx){
     async()=>{
       const offL=[...document.querySelectorAll("#gGrid [data-gc]")].filter(b=>b.getAttribute("aria-pressed")!=="true").map(b=>b.dataset.gc);
       cfg={...cfg,days:SD.filter(d=>!ST.every(t=>offL.includes(d+"|"+t))),off:offL,
-        maxTeacher:Number(gMaxT.value)||6,maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
+        maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
       try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,maxCourse:cfg.maxCourse,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
@@ -1888,12 +1910,13 @@ const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:
 const SETUP_STEPS=[["Départements","departments","structure"],["Filières","programs","structure"],["Groupes","student_groups","structure"],["Année","academic_years","calendrier"],["Semestres","semesters","calendrier"],["Matières","courses","matieres"],["Salles","rooms","salles"],["Enseignants","teachers","enseignants"]];
 
 async function refLookups(){
-  const [deps,programs,years,statuses]=await Promise.all([
+  const [deps,programs,years,statuses,rooms]=await Promise.all([
     q(sb.from("departments").select("id,code,name").order("code")),
     q(sb.from("programs").select("id,code,name,level,department_id").order("code")),
     q(sb.from("academic_years").select("id,label,start_date,end_date").order("label")),
-    q(sb.from("teacher_statuses").select("id,label").order("id"))]);
-  return {deps,programs,years,statuses};
+    q(sb.from("teacher_statuses").select("id,label").order("id")),
+    q(sb.from("rooms").select("id,code,capacity,room_type").order("code"))]);
+  return {deps,programs,years,statuses,rooms};
 }
 
 function refDefs(L){
@@ -1910,25 +1933,28 @@ function refDefs(L){
       cols:[["Code",code],["Libellé",r=>esc(r.label)]],
       fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
     matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département et à une ou plusieurs filières. Plusieurs filières = matière commune (tronc commun) : elle sera proposée à chacune lors des affectations. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code),course_programs(program_id,programs(code))",order:"code",
-      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Filières",r=>{const L2=(r.course_programs||[]).map(x=>x.programs?.code).filter(Boolean).sort();return L2.length?esc(L2.join(", "))+(L2.length>1?' <span class="pill p-info">commune</span>':""):'<span class="pill p-warn">À préciser</span>'}],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
+      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Filières",r=>{const L2=(r.course_programs||[]).map(x=>x.programs?.code).filter(Boolean).sort();return L2.length?esc(L2.join(", "))+(L2.length>1?' <span class="pill p-info">commune</span>':""):'<span class="pill p-warn">À préciser</span>'}],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Salle requise",r=>r.room_type?esc(ROOM_TYPE[r.room_type]):""],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Intitulé",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},
         {k:"_progs",l:"Filières qui suivent cette matière",t:"multi",virtual:1,opt:L.programs.map(p=>[p.id,p.code]),get:r=>(r.course_programs||[]).map(x=>x.program_id),hint:"Touchez une ou plusieurs filières. Plusieurs filières = matière commune."},
-        {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}],
+        {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1},
+        {k:"room_type",l:"Salle requise (vide = n'importe quelle salle)",t:"select",opt:[["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]]}],
       normalize:o=>({...o,program_id:(o._progs||[])[0]??null}),
       after:async(o,saved,v,row)=>{const want=new Set(v._progs||[]),had=new Set((row?.course_programs||[]).map(x=>x.program_id));
         const add=[...want].filter(x=>!had.has(x)),del=[...had].filter(x=>!want.has(x));
         if(add.length)await q(sb.from("course_programs").insert(add.map(pid=>({course_id:saved.id,program_id:pid}))));
         if(del.length)await q(sb.from("course_programs").delete().eq("course_id",saved.id).in("program_id",del))}},
-    groupes:{title:"Groupes d'étudiants",one:"groupe",head:[1,0],hint:"Un groupe appartient à une filière. L'effectif sert à choisir une salle assez grande.",table:"student_groups",select:"*,programs(name,level)",order:"code",
-      cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`]],
-      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1}]},
+    groupes:{title:"Groupes d'étudiants",one:"groupe",head:[1,0],hint:"Un groupe appartient à une filière. L'effectif sert à choisir une salle assez grande. La salle habituelle est choisie en priorité par le générateur quand elle convient.",table:"student_groups",select:"*,programs(name,level),rooms(code)",order:"code",
+      cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`],["Salle habituelle",r=>esc(r.rooms?.code||"")]],
+      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1},
+        {k:"home_room_id",l:"Salle habituelle (facultatif)",t:"select",num:1,opt:L.rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"])}],
+      check:o=>{const r=L.rooms.find(x=>x.id===o.home_room_id);if(r&&r.capacity<o.size)throw new Error(`La salle ${r.code} (${r.capacity} places) est trop petite pour ${o.size} étudiants.`)}},
     filieres:{title:"Filières",one:"filière",head:[1,0],hint:"Une filière appartient à un département (ex. Informatique L1).",table:"programs",select:"*,departments(code)",order:"code",
       cols:[["Code",code],["Filière",r=>esc(r.name)],["Niveau",r=>esc(r.level)],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"level",l:"Niveau (L1, L2, M1…)",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1}]},
     salles:{title:"Salles",one:"salle",head:[1,0],hint:"La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",
-      cols:[["Code",code],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(r.room_type)]],
+      cols:[["Code",code],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
-        {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"]],req:1}]},
+        {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]],req:1}]},
     departements:{title:"Départements",one:"département",head:[1,0],hint:"Commencez par les départements : filières, matières et enseignants en dépendent.",table:"departments",order:"code",
       cols:[["Code",code],["Nom",r=>esc(r.name)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1}]},
@@ -2053,13 +2079,13 @@ async function viewSchedule(el){
     <div class="panel" style="padding:20px"><form id="schForm" style="display:grid;gap:16px">
       <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="shDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${sc.days.includes(d)}">${DAYS[d]}</button>`).join("")}</div></div>
       <div class="grid2"><label>Début de journée<input id="shStart" type="time" required value="${sc.start}"></label><label>Fin de journée<input id="shEnd" type="time" required value="${sc.end}"></label>
-        <label>Durée d'un créneau<select id="shLen">${[...new Set([60,90,120,150,180,240,sc.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===sc.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label><label>Heures de cours max par jour pour un groupe<input id="shGm" type="number" min="1" max="12" step="0.5" value="${sc.groupMax||8}"></label>
+        <label>Durée d'un créneau<select id="shLen">${[...new Set([60,90,120,150,180,240,sc.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===sc.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label><label>Heures de cours max par jour pour un groupe<input id="shGm" type="number" min="1" max="12" step="0.5" value="${sc.groupMax||8}"></label><label>Heures de cours max par jour pour un professeur<input id="shTm" type="number" min="1" max="12" step="0.5" value="${sc.teacherMax||6}"></label><span></span>
         <label>Pause : de<input id="shLf" type="time" value="${sc.lunchFrom}"></label><label>Pause : à<input id="shLt" type="time" value="${sc.lunchTo}"></label></div>
       <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
     <p class="sub">Une journée ou un créneau sans cours (jour férié, activité) se marque semaine par semaine, dans « Générer la semaine ».</p>`;
-  const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),groupMax:Number(shGm.value)||8,lunchFrom:shLf.value,lunchTo:shLt.value});
+  const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),groupMax:Number(shGm.value)||8,teacherMax:Number(shTm.value)||6,lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
   ["shStart","shEnd","shLen","shLf","shLt"].forEach(i=>document.getElementById(i).oninput=prev);prev();
@@ -2069,7 +2095,7 @@ async function viewSchedule(el){
       if(c.end<=c.start)throw new Error("La fin de journée doit être après le début.");
       if(!!c.lunchFrom!==!!c.lunchTo||(c.lunchFrom&&c.lunchTo<=c.lunchFrom))throw new Error("Pause : indiquez une heure de début et de fin (ou laissez les deux vides).");
       if(hmin(c.end)-hmin(c.start)<c.len)throw new Error("La journée est plus courte qu'un créneau.");
-      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,group_max_hours:c.groupMax,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
+      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,group_max_hours:c.groupMax,teacher_max_hours:c.teacherMax,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");
       await loadSchedule();toast("Jours et horaires enregistrés")}
     catch(e){shErr.textContent=errMsg(e)}};
