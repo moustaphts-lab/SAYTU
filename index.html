@@ -74,6 +74,10 @@ main{padding-block:26px 64px}
 h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:-.02em;line-height:1.15;margin:0 0 6px;text-wrap:balance}
 h2{font:600 17px var(--f-display);margin:28px 0 10px}
 .lead{color:var(--muted);margin:0 0 20px;max-width:68ch}
+.asg-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}.asg-load{padding:14px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto}
+.ld{padding:8px 0;border-bottom:1px solid var(--line,#e3e8e6)}.ld:last-child{border:0}.ld-t{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+@media(max-width:1024px){.asg-layout{grid-template-columns:1fr}.asg-load{position:static;max-height:none}}
+#aTable select{min-width:170px}
 .pbar{height:5px;border-radius:9px;background:var(--line,#e3e8e6);overflow:hidden;margin-top:5px;min-width:70px}.pbar i{display:block;height:100%;background:var(--accent)}
 .weeknav{display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line,#e3e8e6);border-radius:16px;padding:8px;margin:4px 0 18px}
 .weeknav .wbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line,#e3e8e6);background:var(--bg,#f3f5f4);color:inherit;display:grid;place-items:center;cursor:pointer;flex:none}
@@ -145,6 +149,12 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--muted) 10%,transparent) 7px 14px);display:grid;place-items:center;pointer-events:none}.tt-lunch span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
 .tt-av{position:absolute;left:0;right:0;background:var(--ok-soft);opacity:.7;border-left:3px solid var(--ok)}
 .tt-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:2}.tt-now::before{content:"";position:absolute;left:-5px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.tt-ghost{position:fixed;z-index:60;pointer-events:none;opacity:.9;box-shadow:0 12px 28px rgba(0,0,0,.22);transform:rotate(-1deg)}
+.tt-drop{position:absolute;left:2px;right:2px;z-index:3;border:2px dashed var(--accent);border-radius:8px;background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;display:grid;place-items:start center;padding-top:4px;font:600 12px/1 inherit;color:var(--accent)}
+.tt-drop.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);color:var(--bad)}
+.tt-ev.dragging{opacity:.35}
+.tt-ev.lift{box-shadow:0 0 0 3px var(--accent)}
+body.ttdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .tt-ev{position:absolute;z-index:1;overflow:hidden;text-align:left;display:flex;flex-direction:column;gap:1px;padding:6px 8px 6px 10px;border:0;border-left:4px solid var(--c);border-radius:8px;background:color-mix(in srgb,var(--c) 15%,var(--surface));color:var(--ink);font:inherit;font-size:12.5px;line-height:1.25;cursor:pointer}
 .tt-ev:hover{background:color-mix(in srgb,var(--c) 24%,var(--surface))}
 .tt-ev b{font:700 13.5px var(--f-display)}.tt-t{font-size:11.5px;color:var(--muted)}.tt-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tt-m{font-size:11.5px;color:var(--muted);margin-top:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -493,6 +503,7 @@ const TABICON={
   tarifs:'<path d="M3 12l9-9h7a2 2 0 012 2v7l-9 9z"/><circle cx="16" cy="8" r="1.3"/>',
   synthese:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   referentiel:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  affect:'<circle cx="9" cy="7" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0111 0"/><path d="M15 8h6M15 12h6M17 16h4"/>',
   journal:'<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11M9 8h6"/>'};
 const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABICON[id]||""}</svg>`;
 function availableTabs(){
@@ -503,6 +514,7 @@ function availableTabs(){
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
   if(isProf())t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
+  if(has("planificateur"))t.push({id:"affect",label:"Affectations",fn:viewAssign});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
   if(has("finance")||has("direction")){
     t.push({id:"paie",label:"Paie",fn:viewPayroll});
@@ -905,15 +917,13 @@ async function viewPlanning(v){
     ${timetableGrid({mine,conf:confIds,view:S.planView,avOf,outside,teacherId:S.planId,week:W})}
     ${conf.length?`<h2>Conflits</h2><div class="panel tbl"><table><thead><tr><th>Jour</th><th>Type</th><th>Créneaux</th></tr></thead><tbody>${conf.map(c=>{const a=slots.find(s=>s.id===c.slot_a),b=slots.find(s=>s.id===c.slot_b);return `<tr><td>${DAYS[c.day_of_week]}</td><td><span class="pill p-bad">${esc(c.conflict_type)}</span></td><td>${esc(a?.teaching_assignments.courses.code)} ${hm(a?.start_time)} / ${esc(b?.teaching_assignments.courses.code)} ${hm(b?.start_time)}</td></tr>`}).join("")}</tbody></table></div>`:""}
 
-    <div class="row" style="justify-content:space-between"><h2>Affectations · ${assignsAll.length}</h2><button class="btn sm" id="addAsg">Ajouter une affectation</button></div>
-    <p class="sub" style="margin:0 0 10px">Une affectation relie un professeur, une matière et un groupe, avec le volume d'heures prévu sur le semestre. « Programmé » additionne les créneaux de toutes les semaines (hors séances annulées ou reportées). Une matière terminée n'est plus proposée par le générateur.</p>
-    ${assignsAll.length>8?searchBox("asgSearch","Rechercher une matière, un groupe, un professeur…"):""}
-    <div class="panel tbl">${assignsAll.length?`<table id="asgTable"><thead><tr><th>Matière</th><th>Groupe</th><th>Professeur</th><th>Semestre</th><th>Programmé / prévu</th><th>Cette semaine</th><th>État</th><th></th></tr></thead><tbody>
-    ${assignsAll.map(a=>{const d=Math.max(0,done[a.id]||0),p=a.planned_hours*60,w=slots.filter(x=>x.assignment_id===a.id).reduce((s,x)=>s+mins(x),0);
+    <div class="row" style="justify-content:space-between;margin-top:18px"><h2>Avancement des matières · ${finished}/${assigns.length} terminée(s)</h2><button class="btn sm" id="goAsg">Gérer les affectations →</button></div>
+    ${assigns.length>8?searchBox("asgSearch","Rechercher une matière, un groupe, un professeur…"):""}
+    <div class="panel tbl">${assigns.length?`<table id="asgTable"><thead><tr><th>Matière</th><th>Groupe</th><th>Professeur</th><th>Programmé / prévu</th><th>Cette semaine</th><th>État</th></tr></thead><tbody>
+    ${assigns.map(a=>{const d=Math.max(0,done[a.id]||0),p=a.planned_hours*60,w=slots.filter(x=>x.assignment_id===a.id).reduce((s,x)=>s+mins(x),0);
       const st=d>=p?'<span class="pill p-ok">Terminée</span>':d>0?'<span class="pill p-info">En cours</span>':'<span class="pill p-mute">Pas commencée</span>';
-      return `<tr><td>${esc(a.courses.code)}<div class="sub">${esc(a.courses.name)}</div></td><td>${esc(a.student_groups.code)}</td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td><td>${esc(a.semesters.label)}</td>
-      <td class="num">${hrs(d)} / ${num(a.planned_hours)} h<div class="pbar"><i style="width:${Math.min(100,Math.round(d/p*100))}%"></i></div></td><td class="num">${w?hrs(w):"—"}</td><td>${st}</td>
-      <td style="white-space:nowrap"><button class="btn sm" data-ea="${a.id}">Modifier</button> <button class="btn sm danger" data-da="${a.id}">Supprimer</button></td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune affectation. Ajoutez la première pour pouvoir placer des créneaux.</p>`}</div>`;
+      return `<tr><td>${esc(a.courses.code)}<div class="sub">${esc(a.courses.name)}</div></td><td>${esc(a.student_groups.code)}</td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</td>
+      <td class="num">${hrs(d)} / ${num(a.planned_hours)} h<div class="pbar"><i style="width:${Math.min(100,Math.round(d/p*100))}%"></i></div></td><td class="num">${w?hrs(w):"—"}</td><td>${st}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucune affectation pour le semestre de cette semaine. Faites-les dans l'onglet Affectations.</p>`}</div>`;
 
   wireWeekNav(v,()=>S.ttWeek,w=>{S.ttWeek=w});
   pView.value=S.planView;
@@ -978,30 +988,122 @@ async function viewPlanning(v){
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button><button class="btn danger" value="del">Supprimer</button><button class="btn primary" value="edit">Modifier</button></div>`,
     async(act)=>{if(act==="edit"){slotDialog(sl);return "keep"}if(act==="del"){delSlot(sl);return "keep"}})});
 
-  /* affectations */
-  const asgFields=()=>[
-    {k:"semester_id",l:"Semestre",t:"select",num:1,opt:sems.map(s=>[s.id,s.academic_years.label+" · "+s.label]),req:1},
-    {k:"course_id",l:"Matière",t:"select",num:1,opt:courses.map(c=>[c.id,c.code+" · "+c.name]),req:1},
-    {k:"group_id",l:"Groupe",t:"select",num:1,opt:groups.map(g=>[g.id,g.code]),req:1},
-    {k:"teacher_id",l:"Professeur",t:"select",num:1,opt:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),req:1},
-    {k:"planned_hours",l:"Volume prévu (h)",t:"number",min:0.5,step:"0.5",req:1}];
-  const asgDialog=row=>{
-    const f=asgFields();
-    openDialog(`<h3>${row?"Modifier l'affectation":"Ajouter une affectation"}</h3>
-      <div class="grid2">${f.map(x=>fieldHtml(x,row?row[x.k]:undefined)).join("")}</div>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{const o=readFields(f);
-      if(row)await q(sb.from("teaching_assignments").update(o).eq("id",row.id));else await q(sb.from("teaching_assignments").insert(o));
-      toast("Affectation enregistrée");rerender()});
-  };
-  addAsg.onclick=()=>asgDialog(null);
-  v.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>asgDialog(assigns.find(a=>a.id==b.dataset.ea)));
-  v.querySelectorAll("[data-da]").forEach(b=>b.onclick=()=>{const a=assigns.find(x=>x.id==b.dataset.da);
-    openDialog(`<h3>Supprimer l'affectation ?</h3><p style="margin:0">${esc(aLabel(a))}. Ses créneaux (toutes semaines) seront supprimés aussi. Si des séances existent déjà pour cette affectation, la suppression sera refusée.</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
-    async()=>{const r=await q(sb.from("teaching_assignments").delete().eq("id",a.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Affectation supprimée");rerender()})});
+  enableTtDrag(v,{
+    check:(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),t=sl.teaching_assignments;const F2=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+      const o=slots.find(x=>x.id!==id&&x.day_of_week===d&&toMin(x.start_time)<b&&a<toMin(x.end_time)&&(x.teaching_assignments.teacher_id===t.teacher_id||x.teaching_assignments.group_id===t.group_id||x.room_id===sl.room_id));
+      return o?`Conflit avec ${o.teaching_assignments.courses.code}`:""},
+    onDrop:async(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),tid=sl.teaching_assignments.teacher_id;
+      try{await q(sb.from("timetable_slots").update({day_of_week:d,start_time:a,end_time:b}).eq("id",id));
+        const off=declared.has(tid)&&!avOf(tid).some(x=>x.day_of_week===d&&hm(x.start_time)<=a&&hm(x.end_time)>=b);
+        toast(`${sl.teaching_assignments.courses.code} déplacé : ${DAYS[d]} ${a}–${b}`+(off?" · Attention : hors disponibilités du professeur":"")+(sl.published?" · visible par le professeur":""),off)}
+      catch(e){toast(errMsg(e),true)}
+      rerender()}});
+  goAsg.onclick=()=>{S.tab="affect";try{history.replaceState(null,"","#affect")}catch(e){}renderShell()};
 }
 
+
+
+/* ---------- affectations : par groupe, avec la charge des professeurs ---------- */
+async function viewAssign(v){
+  const [sems,groups,courses,teachers,assigns,slotsAll,cancelled]=await Promise.all([
+    q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
+    q(sb.from("student_groups").select("id,code,name,size,program_id,programs(code,name,level,department_id,departments(code,name))").order("code")),
+    q(sb.from("courses").select("id,code,name,total_hours,department_id,program_id").order("code")),
+    q(sb.from("teachers").select("id,first_name,last_name,department_id,active,departments(code)").order("last_name")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours").order("id")),
+    q(sb.from("timetable_slots").select("assignment_id,start_time,end_time")),
+    q(sb.from("schedule_sessions").select("assignment_id,start_time,end_time").in("status",["annulee","reportee"]))]);
+  const today=iso(new Date());
+  if(!S.asgSem||!sems.some(x=>x.id==S.asgSem))S.asgSem=(sems.find(x=>x.start_date<=today&&x.end_date>=today)||sems[sems.length-1]||{}).id;
+  if(!S.asgGroup||!groups.some(g=>g.id==S.asgGroup))S.asgGroup=groups[0]?.id;
+  const sem=Number(S.asgSem),G=groups.find(g=>g.id==S.asgGroup);
+  if(!sems.length||!G){v.innerHTML=`<h1>Affectations</h1><div class="panel"><p class="empty">${!sems.length?"Créez d'abord un semestre (Référentiel > Années et semestres).":"Créez d'abord un groupe d'étudiants (Référentiel > Structure)."}</p></div>`;return}
+  const dep=G.programs?.department_id;
+  const mins=x=>toMin(x.end_time)-toMin(x.start_time);
+  const done={};slotsAll.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)+mins(x)});cancelled.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)-mins(x)});
+  const semA=assigns.filter(a=>a.semester_id===sem);
+  const mineA=semA.filter(a=>a.group_id===G.id);
+  /* lignes : matières de la filière du groupe + matières déjà affectées à ce groupe + matières ajoutées à la main */
+  S.asgExtra=S.asgExtra||{};const extra=S.asgExtra[G.id]||[];
+  const ids=[...new Set([...courses.filter(c=>c.program_id===G.program_id).map(c=>c.id),...mineA.map(a=>a.course_id),...extra])];
+  const rows=ids.map(cid=>{const c=courses.find(x=>x.id===cid);const ex=mineA.filter(a=>a.course_id===cid);
+    return{c,a:ex[0]||null,dup:ex.length>1,teacher:ex[0]?.teacher_id||null,hours:ex[0]?Number(ex[0].planned_hours):Number(c.total_hours)||0}});
+  const tName=t=>t.first_name+" "+t.last_name;
+  const act=teachers.filter(t=>t.active!==false);
+  const own=act.filter(t=>t.department_id===dep),oth=act.filter(t=>t.department_id!==dep);
+  const tOpts=sel=>`<option value="">— Non affectée —</option>${own.length?`<optgroup label="${esc(G.programs?.departments?.code||"Département")}">${own.map(t=>`<option value="${t.id}" ${t.id===sel?"selected":""}>${esc(tName(t))}</option>`).join("")}</optgroup>`:""}${oth.length?`<optgroup label="Autres départements">${oth.map(t=>`<option value="${t.id}" ${t.id===sel?"selected":""}>${esc(tName(t))}${t.departments?" ("+esc(t.departments.code)+")":""}</option>`).join("")}</optgroup>`:""}`;
+  const assignedCount=rows.filter(r=>r.a).length;
+  const others=courses.filter(c=>!ids.includes(c.id));
+  const byDep={};groups.forEach(g=>{const k=g.programs?.departments?.name||"Sans département";(byDep[k]??=[]).push(g)});
+  v.innerHTML=`<h1>Affectations</h1>
+    <p class="lead">Choisissez un groupe : ses matières s'affichent avec leur volume prévu. Indiquez le professeur de chaque matière puis enregistrez. La charge de chaque professeur se met à jour pendant la saisie.</p>
+    <div class="row" style="margin-bottom:12px;align-items:flex-end">
+      <label>Semestre<select id="aSem">${sems.map(x=>`<option value="${x.id}" ${x.id===sem?"selected":""}>${esc(x.academic_years.label)} · ${esc(x.label)}</option>`).join("")}</select></label>
+      <label>Groupe<select id="aGrp">${Object.entries(byDep).map(([k,gs])=>`<optgroup label="${esc(k)}">${gs.map(g=>`<option value="${g.id}" ${g.id===G.id?"selected":""}>${esc(g.code)} · ${esc(g.name)}</option>`).join("")}</optgroup>`).join("")}</select></label>
+      <button class="btn" id="aCopy">Reprendre un autre semestre</button>
+    </div>
+    <div class="asg-layout">
+      <div>
+        <div class="panel" style="padding:10px 14px;margin-bottom:10px"><b>${esc(G.name)}</b> <span class="sub">· ${esc(G.programs?.code||"")} · ${G.size} étudiants · ${assignedCount}/${rows.length} matière(s) affectée(s)</span></div>
+        ${!courses.some(c=>c.program_id===G.program_id)?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière n'est rattachée à la filière ${esc(G.programs?.code||"")}. Rattachez-les dans Référentiel > Matières (champ « Filière et niveau »), ou ajoutez-les ci-dessous.</div>`:""}
+        <div class="panel tbl"><table id="aTable"><thead><tr><th>Matière</th><th>Professeur</th><th>Volume (h)</th><th>Programmé</th><th></th></tr></thead><tbody>
+        ${rows.map((r,i)=>{const d=r.a?Math.max(0,done[r.a.id]||0):0;
+          return `<tr data-i="${i}"><td><b>${esc(r.c.code)}</b><div class="sub">${esc(r.c.name)}</div>${r.dup?'<span class="pill p-bad">En double</span>':""}${r.c.program_id!==G.program_id?'<span class="pill p-mute">Autre filière</span>':""}</td>
+          <td><select class="aT" data-i="${i}" aria-label="Professeur pour ${esc(r.c.code)}">${tOpts(r.teacher)}</select></td>
+          <td><input class="aH" data-i="${i}" type="number" min="0.5" step="0.5" value="${r.hours}" style="width:84px" aria-label="Volume ${esc(r.c.code)}"></td>
+          <td class="num">${r.a?`${hrs(d)}<div class="pbar"><i style="width:${Math.min(100,Math.round(d/(r.hours*60||1)*100))}%"></i></div>`:"—"}</td>
+          <td class="aS" data-i="${i}">${r.a?'<span class="pill p-ok">Affectée</span>':'<span class="pill p-mute">Non affectée</span>'}</td></tr>`}).join("")}
+        </tbody></table></div>
+        <div class="row" style="margin-top:10px;justify-content:space-between">
+          <label style="flex:1;min-width:220px">Ajouter une matière d'une autre filière<select id="aAdd"><option value="">Choisir…</option>${others.map(c=>`<option value="${c.id}">${esc(c.code)} · ${esc(c.name)}</option>`).join("")}</select></label>
+          <span class="sub" id="aDirty"></span>
+          <button class="btn primary" id="aSave">Enregistrer</button>
+        </div>
+      </div>
+      <aside class="panel asg-load"><h3 style="margin:0 0 4px">Charge des professeurs</h3><p class="sub" style="margin:0 0 10px">Semestre choisi, tous groupes confondus.</p><div id="aLoad"></div></aside>
+    </div>`;
+  const cur=()=>rows.map((r,i)=>({...r,teacherNew:Number(v.querySelector(`.aT[data-i="${i}"]`).value)||null,hoursNew:Number(v.querySelector(`.aH[data-i="${i}"]`).value)||0}));
+  const drawLoad=()=>{const c=cur(),m={};
+    semA.filter(a=>a.group_id!==G.id).forEach(a=>{(m[a.teacher_id]??={n:0,h:0});m[a.teacher_id].n++;m[a.teacher_id].h+=Number(a.planned_hours)});
+    c.forEach(r=>{if(r.teacherNew){(m[r.teacherNew]??={n:0,h:0});m[r.teacherNew].n++;m[r.teacherNew].h+=r.hoursNew}});
+    const list=act.filter(t=>m[t.id]||t.department_id===dep).sort((a,b)=>(m[b.id]?.h||0)-(m[a.id]?.h||0));
+    const max=Math.max(1,...list.map(t=>m[t.id]?.h||0));
+    document.getElementById("aLoad").innerHTML=list.length?list.map(t=>{const x=m[t.id]||{n:0,h:0};const here=c.filter(r=>r.teacherNew===t.id).length;
+      return `<div class="ld"><div class="ld-t"><span>${esc(tName(t))}${here?` <span class="pill p-info">${here} ici</span>`:""}</span><b>${Number(x.h.toFixed(1))} h</b></div><div class="pbar"><i style="width:${Math.round(x.h/max*100)}%"></i></div><div class="sub">${x.n} matière(s)</div></div>`}).join(""):'<p class="sub">Aucun professeur.</p>';
+    const ch=c.filter(r=>(r.a?(r.teacherNew!==r.a.teacher_id||r.hoursNew!==Number(r.a.planned_hours)):!!r.teacherNew)).length;
+    document.getElementById("aDirty").textContent=ch?`${ch} modification(s) non enregistrée(s)`:"";
+    c.forEach((r,i)=>{const td=v.querySelector(`.aS[data-i="${i}"]`);const changed=r.a?(r.teacherNew!==r.a.teacher_id||r.hoursNew!==Number(r.a.planned_hours)):!!r.teacherNew;
+      td.innerHTML=changed?(r.a&&!r.teacherNew?'<span class="pill p-bad">À retirer</span>':'<span class="pill p-warn">Modifiée</span>'):(r.a?'<span class="pill p-ok">Affectée</span>':'<span class="pill p-mute">Non affectée</span>')})};
+  drawLoad();
+  v.querySelectorAll(".aT,.aH").forEach(e=>e.oninput=drawLoad);
+  aSem.onchange=()=>{S.asgSem=Number(aSem.value);rerender()};
+  aGrp.onchange=()=>{S.asgGroup=Number(aGrp.value);rerender()};
+  aAdd.onchange=()=>{if(!aAdd.value)return;(S.asgExtra[G.id]??=[]).push(Number(aAdd.value));rerender()};
+  aSave.onclick=async()=>{
+    const c=cur(),errs=[];let ok=0;
+    for(const r of c){try{
+      if(!r.a&&r.teacherNew){if(r.hoursNew<=0)throw new Error("volume manquant");
+        await q(sb.from("teaching_assignments").insert({semester_id:sem,course_id:r.c.id,group_id:G.id,teacher_id:r.teacherNew,planned_hours:r.hoursNew}));ok++}
+      else if(r.a&&!r.teacherNew){if((done[r.a.id]||0)>0)throw new Error("a déjà des créneaux : changez plutôt le professeur");
+        const d=await q(sb.from("teaching_assignments").delete().eq("id",r.a.id).select());if(!d.length)throw new Error("suppression refusée");ok++}
+      else if(r.a){
+        if(r.teacherNew!==r.a.teacher_id){await q(sb.rpc("change_assignment_teacher",{p_assignment:r.a.id,p_teacher:r.teacherNew}));ok++}
+        if(r.hoursNew!==Number(r.a.planned_hours)){if(r.hoursNew<=0)throw new Error("volume manquant");await q(sb.from("teaching_assignments").update({planned_hours:r.hoursNew}).eq("id",r.a.id));ok++}}
+    }catch(e){errs.push(r.c.code+" : "+errMsg(e))}}
+    if(S.asgExtra[G.id])S.asgExtra[G.id]=[];
+    if(errs.length)openDialog(`<h3>${ok} enregistrement(s), ${errs.length} refus</h3><ul style="margin:0;padding-left:18px">${errs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><div class="row" style="justify-content:flex-end"><button class="btn primary" value="ok">Compris</button></div>`,async()=>{rerender()});
+    else{toast(ok?`${ok} changement(s) enregistré(s)`:"Rien à enregistrer");rerender()}};
+  aCopy.onclick=()=>{const src=sems.filter(x=>x.id!==sem);
+    if(!src.length){toast("Aucun autre semestre.",true);return}
+    openDialog(`<h3>Reprendre les affectations d'un autre semestre</h3>
+      <p class="sub" style="margin:0">Toutes les affectations du semestre choisi (tous groupes) sont recopiées dans « ${esc(sems.find(x=>x.id===sem).label)} », avec le même professeur et le même volume. Celles qui existent déjà ici sont ignorées. Vous pourrez ensuite ajuster.</p>
+      <label>Semestre source<select id="cpSrc">${src.map(x=>`<option value="${x.id}">${esc(x.academic_years.label)} · ${esc(x.label)} (${assigns.filter(a=>a.semester_id===x.id).length})</option>`).join("")}</select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Reprendre</button></div>`,
+    async()=>{const sid=Number(cpSrc.value);const have=new Set(semA.map(a=>a.course_id+"_"+a.group_id));
+      const todo=assigns.filter(a=>a.semester_id===sid&&!have.has(a.course_id+"_"+a.group_id)).map(a=>({semester_id:sem,course_id:a.course_id,group_id:a.group_id,teacher_id:a.teacher_id,planned_hours:a.planned_hours}));
+      if(todo.length)await q(sb.from("teaching_assignments").insert(todo));
+      toast(`${todo.length} affectation(s) reprise(s)`);rerender()})};
+}
 
 /* ---------- professeur : son emploi du temps hebdomadaire (créneaux publiés) ---------- */
 async function viewMyTimetable(v){
@@ -1031,6 +1133,49 @@ async function viewMyTimetable(v){
       <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{})});
 }
 
+
+/* ---------- glisser-déposer dans la grille (souris : glisser ; tactile : appui long puis glisser) ---------- */
+function enableTtDrag(root,opt){
+  const tt=root.querySelector(".tt");if(!tt)return;
+  const lo=Number(tt.dataset.lo),hi=Number(tt.dataset.hi),HH=Number(tt.dataset.hh);
+  const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+  let st=null;
+  const colAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest(".tt-col"):null};
+  const begin=(ev,x,y)=>{const r=ev.getBoundingClientRect();const g=ev.cloneNode(true);g.classList.add("tt-ghost");g.style.width=r.width+"px";g.style.height=r.height+"px";g.style.left=r.left+"px";g.style.top=r.top+"px";
+    document.body.appendChild(g);ev.classList.add("dragging");document.body.classList.add("ttdrag");st.g=g;st.dx=x-r.left;st.dy=y-r.top;st.w=r.width;st.on=true;move(x,y)};
+  const move=(x,y)=>{if(!st||!st.on)return;st.g.style.left=(x-st.dx)+"px";st.g.style.top=(y-st.dy)+"px";
+    const col=colAt(x,y);if(st.drop&&st.drop.parentNode!==col){st.drop.remove();st.drop=null}
+    if(!col){st.target=null;return}
+    const cr=col.getBoundingClientRect();let m=lo+Math.round(((y-st.dy)-cr.top)/HH*60/30)*30;m=Math.max(lo,Math.min(hi-st.len,m));
+    st.target={day:Number(col.dataset.day),start:m};
+    if(!st.drop){st.drop=document.createElement("div");st.drop.className="tt-drop";col.appendChild(st.drop)}
+    st.drop.style.top=((m-lo)/60*HH)+"px";st.drop.style.height=(st.len/60*HH)+"px";st.drop.textContent=F(m)+"–"+F(m+st.len);const gt=st.g.querySelector(".tt-t");if(gt)gt.textContent=DAYS[st.target.day].slice(0,3)+". "+F(m)+"–"+F(m+st.len);
+    const bad=opt.check?opt.check(st.id,st.target.day,m,m+st.len):false;st.drop.classList.toggle("bad",!!bad);st.drop.title=bad||""};
+  const end=async(cancel)=>{if(!st)return;const s0=st;st=null;clearTimeout(s0.timer);
+    s0.el.classList.remove("dragging","lift");document.body.classList.remove("ttdrag");if(s0.g)s0.g.remove();if(s0.drop)s0.drop.remove();
+    if(!s0.on||cancel||!s0.target)return;
+    s0.el.dataset.dragged="1";setTimeout(()=>{delete s0.el.dataset.dragged},350);
+    if(s0.target.day===s0.day&&s0.target.start===s0.start)return;
+    await opt.onDrop(s0.id,s0.target.day,F(s0.target.start),F(s0.target.start+s0.len))};
+  const init=(el,x,y)=>{const T=t=>{const [h,m]=t.split(":").map(Number);return h*60+m};
+    const [a,b]=el.querySelector(".tt-t").textContent.split("–");st={el,id:Number(el.dataset.sl),x0:x,y0:y,start:T(a),len:T(b)-T(a),day:Number(el.closest(".tt-col").dataset.day),on:false}};
+  /* souris */
+  tt.addEventListener("mousedown",e=>{const el=e.target.closest(".tt-ev");if(!el||e.button!==0)return;e.preventDefault();init(el,e.clientX,e.clientY)});
+  window.__ttH={move:e=>{if(!st)return;if(!st.on&&Math.hypot(e.clientX-st.x0,e.clientY-st.y0)>6)begin(st.el,e.clientX,e.clientY);else move(e.clientX,e.clientY)},
+    up:()=>{if(st)end(false)},key:e=>{if(e.key==="Escape"&&st)end(true)}};
+  if(!window.__ttW){window.__ttW=1;window.addEventListener("mousemove",e=>window.__ttH.move(e));window.addEventListener("mouseup",e=>window.__ttH.up(e));window.addEventListener("keydown",e=>window.__ttH.key(e))}
+  /* tactile : appui long 400 ms, sinon la page défile normalement */
+  tt.addEventListener("touchstart",e=>{const el=e.target.closest(".tt-ev");if(!el||e.touches.length!==1)return;const t=e.touches[0];init(el,t.clientX,t.clientY);
+    st.timer=setTimeout(()=>{if(!st)return;el.classList.add("lift");if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){};begin(el,st.x0,st.y0)},400)},{passive:true});
+  tt.addEventListener("touchmove",e=>{if(!st)return;const t=e.touches[0];
+    if(!st.on){if(Math.hypot(t.clientX-st.x0,t.clientY-st.y0)>8){clearTimeout(st.timer);st=null}return}
+    e.preventDefault();move(t.clientX,t.clientY)},{passive:false});
+  tt.addEventListener("touchend",e=>{if(!st)return;if(st.on){e.preventDefault();end(false)}else{clearTimeout(st.timer);st=null}});
+  tt.addEventListener("touchcancel",()=>{if(st)end(true)});
+  /* un glisser ne doit pas ouvrir la fiche du créneau */
+  tt.addEventListener("click",e=>{const el=e.target.closest(".tt-ev");if(el&&el.dataset.dragged){e.stopImmediatePropagation();e.preventDefault()}},true);
+}
+
 /* ---------- grille hebdomadaire : jours en colonnes, heures en lignes ---------- */
 const TT_COLORS=["#0b6e5b","#2563a8","#b06a00","#7a4fa3","#b23a5a","#3f7f2a","#0e7490","#9a5b2e"];
 function timetableGrid(o){
@@ -1053,7 +1198,7 @@ function timetableGrid(o){
   const second=x=>{const t=x.teaching_assignments;return o.view==="teacher"?t.student_groups.code:o.view==="room"?t.student_groups.code:t.teachers.last_name};
   const third=x=>{const t=x.teaching_assignments;return o.view==="room"?t.teachers.last_name:x.rooms.code};
   const col=d=>{const list=lane(o.mine.filter(x=>x.day_of_week===d));
-    return `<div class="tt-col ${d===todayDow?"today":""}" style="height:${H}px">
+    return `<div class="tt-col ${d===todayDow?"today":""}" data-day="${d}" style="height:${H}px">
       ${sc.lunchFrom&&sc.lunchTo&&T(sc.lunchTo)>lo&&T(sc.lunchFrom)<hi?`<div class="tt-lunch" style="top:${y(Math.max(lo,T(sc.lunchFrom)))}px;height:${(Math.min(hi,T(sc.lunchTo))-Math.max(lo,T(sc.lunchFrom)))/60*HH}px" title="Pause"><span>Pause</span></div>`:""}
       ${av.filter(a=>a.day_of_week===d).map(a=>`<div class="tt-av" style="top:${y(T(a.start_time))}px;height:${(T(a.end_time)-T(a.start_time))/60*HH}px" title="Disponible ${hm(a.start_time)}–${hm(a.end_time)}"></div>`).join("")}
       ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" style="top:${y(nowMin)}px"></div>`:""}
@@ -1061,11 +1206,11 @@ function timetableGrid(o){
         return `<button type="button" class="tt-ev ${o.conf.has(x.id)?"conf":""} ${x.published?"":"draft"} ${dur<=60?"short":""}" data-sl="${x.id}" style="--c:${c};top:${y(T(x.start_time))+1}px;height:${dur/60*HH-2}px;left:calc(${x._l*w}% + 2px);width:calc(${w}% - 4px)">
           <span class="tt-t">${hm(x.start_time)}–${hm(x.end_time)}</span><b>${esc(x.teaching_assignments.courses.code)}</b><span class="tt-n">${esc(x.teaching_assignments.courses.name)}</span>
           <span class="tt-m">${esc(second(x))} · ${esc(third(x))}</span>${o.outside(x)?'<i class="tt-w" title="Hors disponibilités du professeur">!</i>':""}</button>`}).join("")}</div>`};
-  return `<div class="tt-wrap"><div class="tt" style="--n:${days.length}">
+  return `<div class="tt-wrap"><div class="tt" data-lo="${lo}" data-hi="${hi}" data-hh="${HH}" style="--n:${days.length}">
     <div class="tt-corner"></div>${days.map(d=>`<div class="tt-head ${d===todayDow?"today":""}">${DAYS[d]}${o.week?` <small>${dayDate(o.week,d)}</small>`:""}</div>`).join("")}
     <div class="tt-gut" style="height:${H}px">${hours.map(m=>`<span style="top:${y(m)}px">${String(m/60).padStart(2,"0")}:00</span>`).join("")}</div>
     ${days.map(col).join("")}</div></div>
-  <div class="tt-leg">${o.readonly?"":'<span><i style="background:var(--accent)"></i>Publié</span><span><i class="dr"></i>Brouillon</span><span><i style="background:var(--bad)"></i>Conflit</span>'}${o.view==="teacher"&&av.length?'<span><i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Disponibilités</span>':""}<span class="sub">${o.readonly?"Touchez un créneau pour voir le détail.":"Touchez un créneau pour le modifier."}</span></div>`;
+  <div class="tt-leg">${o.readonly?"":'<span><i style="background:var(--accent)"></i>Publié</span><span><i class="dr"></i>Brouillon</span><span><i style="background:var(--bad)"></i>Conflit</span>'}${o.view==="teacher"&&av.length?'<span><i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Disponibilités</span>':""}<span class="sub">${o.readonly?"Touchez un créneau pour voir le détail.":"Touchez un créneau pour le modifier, ou faites-le glisser pour le déplacer (sur tablette : appui long puis glisser)."}</span></div>`;
 }
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
@@ -1378,7 +1523,7 @@ const SETUP_STEPS=[["Départements","departments","structure"],["Filières","pro
 async function refLookups(){
   const [deps,programs,years,statuses]=await Promise.all([
     q(sb.from("departments").select("id,code,name").order("code")),
-    q(sb.from("programs").select("id,code,name,level").order("code")),
+    q(sb.from("programs").select("id,code,name,level,department_id").order("code")),
     q(sb.from("academic_years").select("id,label,start_date,end_date").order("label")),
     q(sb.from("teacher_statuses").select("id,label").order("id"))]);
   return {deps,programs,years,statuses};
@@ -1397,10 +1542,12 @@ function refDefs(L){
     statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",head:[1,0],
       cols:[["Code",code],["Libellé",r=>esc(r.label)]],
       fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
-    matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code)",order:"code",
-      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
+    matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département et à une filière (niveau). La filière permet de proposer les bonnes matières lors de l'affectation d'un groupe. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code),programs(code,level)",order:"code",
+      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Filière",r=>r.programs?esc(r.programs.code):'<span class="pill p-warn">À préciser</span>'],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Intitulé",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},
-        {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}]},
+        {k:"program_id",l:"Filière et niveau",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.code+" · "+p.name])},
+        {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}],
+      check:o=>{const p=L.programs.find(x=>x.id===o.program_id);if(p&&p.department_id!==o.department_id)throw new Error("Cette filière appartient à un autre département.")}},
     groupes:{title:"Groupes d'étudiants",one:"groupe",head:[1,0],hint:"Un groupe appartient à une filière. L'effectif sert à choisir une salle assez grande.",table:"student_groups",select:"*,programs(name,level)",order:"code",
       cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1}]},
