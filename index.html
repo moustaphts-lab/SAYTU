@@ -77,7 +77,7 @@ h2{font:600 17px var(--f-display);margin:28px 0 10px}
 .asg-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}.asg-load{padding:14px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto}
 .ld{padding:8px 0;border-bottom:1px solid var(--line,#e3e8e6)}.ld:last-child{border:0}.ld-t{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 @media(max-width:1399px){.asg-layout{grid-template-columns:1fr}.asg-load{position:static;max-height:none}}
-#aTable select{min-width:150px;max-width:100%}#aTable td{vertical-align:top}#aTable .lnk{border:0;background:none;color:var(--accent);font:600 13px var(--f-body);padding:4px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#aTable select{min-width:150px;max-width:100%}#aTable td{vertical-align:top}.lnk{border:0;background:none;color:var(--accent);font:600 13px var(--f-body);padding:4px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .panel.tbl:has(#aTable){overflow-x:auto}
 .ttseg{display:inline-grid;max-width:100%;overflow-x:auto}
 .tt-ev.cancel{opacity:.6;background:repeating-linear-gradient(135deg,var(--surface) 0 6px,color-mix(in srgb,var(--bad) 8%,var(--surface)) 6px 12px)!important;border-left-color:var(--bad)!important}.tt-ev.cancel b,.tt-ev.cancel .tt-n{text-decoration:line-through}
@@ -499,6 +499,7 @@ async function boot(){
   S.user=session.user;
   try{
     S.roles=await q(sb.rpc("my_roles"));
+    try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
     await loadSchedule();
@@ -2146,32 +2147,64 @@ function showCredentials(title,email,pwd){
 }
 
 async function viewAccounts(el){
-  const [profiles,roles,teachers,deps]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active").order("full_name")),
+  let [profiles,roles,teachers,deps,info]=await Promise.all([
+    q(sb.from("profiles").select("id,full_name,email,active,must_change_password").order("full_name")),
     q(sb.from("user_roles").select("id,user_id,role,department_id")),
-    q(sb.from("teachers").select("id,profile_id,first_name,last_name,email")),
-    q(sb.from("departments").select("id,code,name").order("code"))]);
+    q(sb.from("teachers").select("id,profile_id,first_name,last_name,email,phone,active").order("last_name")),
+    q(sb.from("departments").select("id,code,name").order("code")),
+    q(sb.rpc("admin_users_info")).catch(()=>[])]);
+  info=Array.isArray(info)?info:[];
   const dcode=id=>deps.find(d=>d.id===id)?.code;
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes · ${profiles.length}</h2><button class="btn sm primary" id="addAcc">Créer un compte</button></div>
-    <p class="sub" style="margin:0 0 10px">Un compte est lié automatiquement à l'enseignant qui a la même adresse e-mail. Le rôle « Professeur » donne accès à l'émargement.</p>
-    <div class="panel tbl"><table><thead><tr><th>Nom</th><th>Rôles</th><th>Enseignant</th><th>État</th><th></th></tr></thead><tbody>
-    ${profiles.map(u=>{const rs=roles.filter(r=>r.user_id===u.id);const t=teachers.find(t=>t.profile_id===u.id);
-      return `<tr><td>${esc(u.full_name)}<div class="sub mono">${esc(u.email)}</div></td>
-      <td><div class="chips">${rs.length?rs.map(r=>`<span class="pill p-info">${ROLE_LABEL[r.role]}${r.role==="responsable"?" · "+(r.department_id?esc(dcode(r.department_id)):"tous"):""}</span>`).join(""):'<span class="sub">Aucun rôle</span>'}</div></td>
-      <td>${t?esc(t.first_name+" "+t.last_name):'<span class="sub">—</span>'}</td>
-      <td>${u.active===false?'<span class="pill p-bad">Désactivé</span>':'<span class="pill p-ok">Actif</span>'}</td>
-      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-ro="${u.id}">Rôles</button><button class="btn sm" data-pw="${u.id}">Mot de passe</button>
-        ${u.id!==S.user.id?`<button class="btn sm ${u.active===false?"":"danger"}" data-ac="${u.id}">${u.active===false?"Réactiver":"Désactiver"}</button>`:""}</div></td></tr>`}).join("")}
-    </tbody></table></div>`;
+  const inf=id=>info.find(x=>x.id===id)||{};
+  const rolesOf=id=>roles.filter(r=>r.user_id===id);
+  const tOf=id=>teachers.find(t=>t.profile_id===id);
+  const fdt=d=>d?new Date(d).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}):"jamais";
+  /* points à régler */
+  const noRole=profiles.filter(u=>u.active!==false&&!rolesOf(u.id).length);
+  const profNoT=profiles.filter(u=>rolesOf(u.id).some(r=>r.role==="professeur")&&!tOf(u.id));
+  const tNoAcc=teachers.filter(t=>t.active!==false&&!t.profile_id);
+  const neverIn=profiles.filter(u=>u.active!==false&&info.length&&!inf(u.id).last_sign_in_at);
+  const pending=profiles.filter(u=>u.active!==false&&u.must_change_password);
+  const actives=profiles.filter(u=>u.active!==false).length;
+  S.accQ=S.accQ||"";S.accRole=S.accRole||"";S.accState=S.accState||"";
+  const ROLEF=[["","Tous les rôles"],...Object.entries(ROLE_LABEL),["_none","Sans rôle"]];
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes</h2><div class="row" style="gap:8px"><button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button><button class="btn sm primary" id="addAcc">Créer un compte</button></div></div>
+    <div class="stats mini"><div class="stat"><b>${actives}</b><span>comptes actifs</span></div><div class="stat"><b>${profiles.length-actives}</b><span>désactivés</span></div>
+      <div class="stat"><b style="color:${pending.length?"var(--warn)":"inherit"}">${pending.length}</b><span>mot de passe provisoire</span></div>
+      <div class="stat"><b style="color:${neverIn.length?"var(--warn)":"inherit"}">${neverIn.length}</b><span>jamais connectés</span></div></div>
+    ${noRole.length||profNoT.length||tNoAcc.length?`<div class="panel" style="padding:12px 14px;margin-bottom:14px"><b>Points à régler</b><ul class="chk" style="margin-top:8px">
+      ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans rôle : la personne ne voit rien après connexion (${esc(noRole.map(u=>u.full_name).join(", "))}).</span></li>`:""}
+      ${profNoT.length?`<li class="bad"><i>✕</i><span>${profNoT.length} compte(s) professeur sans fiche enseignant : ils ne peuvent pas se connecter normalement (${esc(profNoT.map(u=>u.full_name).join(", "))}). Ouvrez le compte pour le lier à sa fiche.</span></li>`:""}
+      ${tNoAcc.length?`<li class="info"><i>i</i><span>${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger. Utilisez « Créer les comptes… ».</span></li>`:""}</ul></div>`:""}
+    <div class="row" style="margin-bottom:10px;align-items:flex-end">
+      <label style="flex:1;min-width:200px">Rechercher<input id="accQ" placeholder="Nom ou adresse…" value="${esc(S.accQ)}"></label>
+      <label>Rôle<select id="accRole">${ROLEF.map(([k,l])=>`<option value="${k}" ${k===S.accRole?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
+      <label>État<select id="accState">${[["","Tous"],["on","Actifs"],["off","Désactivés"],["tmp","Mot de passe provisoire"],["never","Jamais connectés"]].map(([k,l])=>`<option value="${k}" ${k===S.accState?"selected":""}>${l}</option>`).join("")}</select></label></div>
+    <div class="panel tbl"><table id="accTable"><thead><tr><th>Nom</th><th>Rôles</th><th>Enseignant</th><th>Dernière connexion</th><th>État</th><th></th></tr></thead><tbody>
+    ${profiles.map(u=>{const rs=rolesOf(u.id);const t=tOf(u.id);const li=inf(u.id).last_sign_in_at;
+      return `<tr data-u="${u.id}" data-roles="${rs.map(r=>r.role).join(" ")||"_none"}" data-state="${u.active===false?"off":"on"}${u.must_change_password?" tmp":""}${info.length&&!li?" never":""}">
+      <td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>
+      <td><div class="chips">${rs.length?rs.map(r=>`<span class="pill p-info">${ROLE_LABEL[r.role]}${r.role==="responsable"?" · "+(r.department_id?esc(dcode(r.department_id)):"tous"):""}</span>`).join(""):'<span class="pill p-warn">Aucun rôle</span>'}</div></td>
+      <td>${t?esc(t.first_name+" "+t.last_name):rs.some(r=>r.role==="professeur")?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>'}</td>
+      <td class="mono">${info.length?(li?fdt(li):'<span class="sub">jamais</span>'):"—"}</td>
+      <td>${u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>'}</td>
+      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-det="${u.id}">Ouvrir</button></div></td></tr>`}).join("")}
+    </tbody></table><p class="empty" id="accNone" hidden>Aucun compte ne correspond.</p></div>`;
+
+  const filt=()=>{const k=norm(accQ.value.trim()),r=accRole.value,st=accState.value;S.accQ=accQ.value;S.accRole=r;S.accState=st;let n=0;
+    el.querySelectorAll("#accTable tbody tr").forEach(tr=>{const ok=(!k||norm(tr.textContent).includes(k))&&(!r||tr.dataset.roles.split(" ").includes(r))&&(!st||tr.dataset.state.split(" ").includes(st));tr.hidden=!ok;if(ok)n++});
+    accNone.hidden=n>0};
+  accQ.oninput=filt;accRole.onchange=filt;accState.onchange=filt;filt();
 
   const saveRoles=async(userId,desired)=>{
-    const mine=roles.filter(r=>r.user_id===userId);
+    const mine=rolesOf(userId);
     const key=r=>r.role+"|"+(r.department_id||"");
     const have=new Set(mine.map(key));
     if(userId===S.user.id&&mine.some(r=>r.role==="admin")&&!desired.has("admin|"))throw new Error("Vous ne pouvez pas retirer votre propre rôle d'administrateur.");
     for(const r of mine)if(!desired.has(key(r)))await q(sb.from("user_roles").delete().eq("id",r.id));
     for(const k of desired)if(!have.has(k)){const [role,dep]=k.split("|");await q(sb.from("user_roles").insert({user_id:userId,role,department_id:dep?Number(dep):null}))}
   };
+  const credMsg=(name,email,pwd)=>`Bonjour ${name}, voici vos accès à l'application des enseignements : ${appUrl()}\nAdresse : ${email}\nMot de passe provisoire : ${pwd}\nVous choisirez votre propre mot de passe à la première connexion.`;
 
   addAcc.onclick=()=>{
     const free=teachers.filter(t=>!t.profile_id);
@@ -2179,12 +2212,13 @@ async function viewAccounts(el){
       ${free.length?`<label>Enseignant sans compte (facultatif)<select id="aT"><option value="">—</option>${free.map(t=>`<option value="${t.id}">${esc(t.first_name+" "+t.last_name+" · "+t.email)}</option>`).join("")}</select></label>`:""}
       <div class="grid2"><label>Nom complet<input id="aN" required></label><label>Adresse e-mail<input id="aE" type="email" required></label></div>
       ${roleBoxes(deps,new Set())}
-      <p class="sub" style="margin:0">Un mot de passe provisoire sera généré et affiché une seule fois.</p>
+      <p class="sub" style="margin:0">Un mot de passe provisoire sera généré et affiché une seule fois. La personne devra choisir le sien à la première connexion.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer le compte</button></div>`,
     async()=>{
       const desired=readRoleBoxes();
       const r=await callUsers({action:"create",email:aE.value,full_name:aN.value});
       try{await saveRoles(r.user_id,desired)}catch(e){toast("Compte créé, mais les rôles n'ont pas pu être enregistrés : "+errMsg(e),true)}
+      try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
       showCredentials("Compte créé",r.email,r.temp_password);
       return "keep";
     });
@@ -2192,24 +2226,85 @@ async function viewAccounts(el){
     if(sel)sel.onchange=()=>{const t=free.find(x=>x.id==sel.value);if(!t)return;aN.value=t.first_name+" "+t.last_name;aE.value=t.email;
       const c=document.querySelector('#dlgForm input[data-role="professeur"]');if(c)c.checked=true};
   };
-  el.querySelectorAll("[data-ro]").forEach(b=>b.onclick=()=>{
-    const u=profiles.find(p=>p.id===b.dataset.ro);const cur=new Set(roles.filter(r=>r.user_id===u.id).map(r=>r.role+"|"+(r.department_id||"")));
-    openDialog(`<h3>Rôles de ${esc(u.full_name)}</h3>${roleBoxes(deps,cur)}
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await saveRoles(u.id,readRoleBoxes());toast("Rôles enregistrés");rerender()});
-  });
-  el.querySelectorAll("[data-pw]").forEach(b=>b.onclick=()=>{
-    const u=profiles.find(p=>p.id===b.dataset.pw);
-    openDialog(`<h3>Réinitialiser le mot de passe</h3><p style="margin:0">Un nouveau mot de passe provisoire sera créé pour <b>${esc(u.full_name)}</b>. L'ancien ne fonctionnera plus.</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Réinitialiser</button></div>`,
-    async()=>{const r=await callUsers({action:"reset_password",user_id:u.id});showCredentials("Nouveau mot de passe",u.email,r.temp_password);return "keep"});
-  });
-  el.querySelectorAll("[data-ac]").forEach(b=>b.onclick=()=>{
-    const u=profiles.find(p=>p.id===b.dataset.ac);const to=u.active===false;
-    openDialog(`<h3>${to?"Réactiver":"Désactiver"} le compte ?</h3><p style="margin:0">${to?"La personne pourra de nouveau se connecter.":"La personne ne pourra plus se connecter. Ses données et son historique sont conservés."}</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn ${to?"primary":"danger"}" value="ok">${to?"Réactiver":"Désactiver"}</button></div>`,
-    async()=>{await callUsers({action:"set_active",user_id:u.id,active:to});toast(to?"Compte réactivé":"Compte désactivé");rerender()});
-  });
+
+  /* création en série pour les enseignants sans compte */
+  bulkAcc.onclick=()=>openDialog(`<h3>Créer ${tNoAcc.length} compte(s) professeur</h3>
+      <p style="margin:0">Un compte avec le rôle Professeur sera créé pour chaque enseignant sans compte, avec son adresse e-mail de la fiche et un mot de passe provisoire. Vous pourrez ensuite imprimer la liste des identifiants ou les envoyer par WhatsApp ou SMS.</p>
+      <div class="rl">${tNoAcc.map(t=>`<div class="rlrow"><b>${esc(t.first_name+" "+t.last_name)}</b><span class="sub mono">${esc(t.email||"pas d'adresse")}</span></div>`).join("")}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer les comptes</button></div>`,
+    async()=>{const done=[],errs=[];
+      for(const t of tNoAcc){try{if(!t.email)throw new Error("pas d'adresse e-mail");
+        const r=await callUsers({action:"create",email:t.email,full_name:t.first_name+" "+t.last_name});
+        await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
+        try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
+        try{await q(sb.rpc("admin_link_teacher",{p_user:r.user_id,p_teacher:t.id}))}catch(e){}
+        done.push({t,email:r.email,pwd:r.temp_password})}catch(e){errs.push(t.first_name+" "+t.last_name+" : "+errMsg(e))}}
+      credsResult(done,errs);return "keep"});
+  function credsResult(done,errs){
+    const f=document.getElementById("dlgForm");
+    f.innerHTML=`<h3>${done.length} compte(s) créé(s)</h3>
+      <p class="sub" style="margin:0">Notez ou transmettez ces identifiants maintenant : les mots de passe provisoires ne seront plus affichés.</p>
+      <div class="panel tbl"><table><thead><tr><th>Enseignant</th><th>Adresse</th><th>Mot de passe provisoire</th></tr></thead><tbody>${done.map(d=>`<tr><td>${esc(d.t.first_name+" "+d.t.last_name)}</td><td class="mono">${esc(d.email)}</td><td class="mono" style="user-select:all">${esc(d.pwd)}</td></tr>`).join("")}</tbody></table></div>
+      ${errs.length?`<div class="gpwarn">${errs.length} échec(s) : ${esc(errs.join(" ; "))}</div>`:""}
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn" id="crPdf">${DLI}Imprimer (PDF)</button><button type="button" class="btn" id="crSend">Envoyer par WhatsApp / SMS</button><button class="btn primary" value="cancel" formnovalidate>Terminé</button></div>`;
+    crPdf.onclick=()=>exportPdf("identifiants-"+iso(new Date()),"Identifiants de connexion","À remettre à chaque enseignant · "+appUrl(),[{title:"",head:["Enseignant","Adresse","Mot de passe provisoire"],rows:done.map(d=>[d.t.first_name+" "+d.t.last_name,d.email,d.pwd])}]);
+    crSend.onclick=()=>notifyDialog({title:"Envoyer les identifiants",intro:"Chaque professeur reçoit son adresse et son mot de passe provisoire. Il choisira le sien à la première connexion.",items:done.map(d=>({t:d.t,msg:credMsg(d.t.first_name+" "+d.t.last_name,d.email,d.pwd)}))});
+    dlg.addEventListener("close",()=>rerender(),{once:true});
+  }
+
+  /* fiche d'un compte */
+  el.querySelectorAll("[data-det]").forEach(b=>b.onclick=()=>{
+    const u=profiles.find(p=>p.id===b.dataset.det),rs=rolesOf(u.id),t=tOf(u.id),i=inf(u.id);
+    const linkable=teachers.filter(x=>!x.profile_id||x.profile_id===u.id);
+    openDialog(`<h3>${esc(u.full_name)}</h3>
+      <dl class="kv"><dt>Adresse</dt><dd class="mono">${esc(u.email)}</dd><dt>Créé le</dt><dd>${i.created_at?fdt(i.created_at):"—"}</dd><dt>Dernière connexion</dt><dd>${info.length?fdt(i.last_sign_in_at):"—"}</dd>
+        <dt>État</dt><dd>${u.active===false?"Désactivé":u.must_change_password?"Actif · mot de passe provisoire à changer":"Actif"}</dd>
+        <dt>Rôles</dt><dd>${rs.length?rs.map(r=>esc(ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):""))).join(", "):"aucun"}</dd></dl>
+      <label>Fiche enseignant liée<select id="lnkT"><option value="">— aucune —</option>${linkable.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?"selected":""}>${esc(x.first_name+" "+x.last_name+(x.email?" · "+x.email:""))}</option>`).join("")}</select></label>
+      <p class="sub" style="margin:0">Nécessaire pour un professeur : c'est ce qui relie le compte à ses cours, ses disponibilités et ses émargements.</p>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn" value="roles" formnovalidate>Rôles</button><button class="btn" value="pwd" formnovalidate>Réinitialiser le mot de passe</button>
+        ${u.id!==S.user.id?`<button class="btn ${u.active===false?"":"danger"}" value="act" formnovalidate>${u.active===false?"Réactiver":"Désactiver"}</button>`:""}
+        <button class="btn primary" value="link">Enregistrer la fiche liée</button></div>`,
+    async(act)=>{
+      if(act==="link"){const v=lnkT.value?Number(lnkT.value):null;if((t?.id||null)===v){toast("Rien à changer");return}
+        await q(sb.rpc("admin_link_teacher",{p_user:u.id,p_teacher:v}));toast(v?"Fiche enseignant liée":"Fiche enseignant déliée");rerender();return}
+      if(act==="roles"){const cur=new Set(rs.map(r=>r.role+"|"+(r.department_id||"")));
+        openDialog(`<h3>Rôles de ${esc(u.full_name)}</h3>${roleBoxes(deps,cur)}
+          <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+        async()=>{await saveRoles(u.id,readRoleBoxes());toast("Rôles enregistrés");rerender()});return "keep"}
+      if(act==="pwd"){openDialog(`<h3>Réinitialiser le mot de passe</h3><p style="margin:0">Un nouveau mot de passe provisoire sera créé pour <b>${esc(u.full_name)}</b>. L'ancien ne fonctionnera plus, et la personne devra choisir le sien à la prochaine connexion.</p>
+          <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Réinitialiser</button></div>`,
+        async()=>{const r=await callUsers({action:"reset_password",user_id:u.id});try{await q(sb.rpc("admin_set_must_change",{p_user:u.id,p_value:true}))}catch(e){}
+          showCredentials("Nouveau mot de passe",u.email,r.temp_password);
+          const tt=t||{id:0,first_name:u.full_name,last_name:"",phone:null};
+          const sb2=document.createElement("button");sb2.type="button";sb2.className="btn";sb2.textContent="Envoyer par WhatsApp / SMS";
+          sb2.onclick=()=>notifyDialog({title:"Envoyer le nouveau mot de passe",intro:"Il devra être changé à la prochaine connexion.",items:[{t:{...tt,first_name:u.full_name,last_name:""},msg:credMsg(u.full_name,u.email,r.temp_password)}]});
+          const row=document.querySelector("#dlgForm .row:last-child");if(row)row.prepend(sb2);
+          return "keep"});return "keep"}
+      if(act==="act"){const to=u.active===false;
+        openDialog(`<h3>${to?"Réactiver":"Désactiver"} le compte ?</h3><p style="margin:0">${to?"La personne pourra de nouveau se connecter.":"La personne ne pourra plus se connecter. Ses données et son historique sont conservés."}</p>
+          <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn ${to?"primary":"danger"}" value="ok">${to?"Réactiver":"Désactiver"}</button></div>`,
+        async()=>{await callUsers({action:"set_active",user_id:u.id,active:to});toast(to?"Compte réactivé":"Compte désactivé");rerender()});return "keep"}
+    })});
+}
+
+/* mot de passe provisoire : la personne choisit le sien avant d'accéder à l'application */
+function renderForcePw(){
+  $app.classList.remove("hasnav");
+  $app.innerHTML=`<div class="wrap loginpage"><div class="login"><div class="brand"><i>U</i><div>UCAB Touba<small>Enseignements</small></div></div>
+    <h1>Choisissez votre mot de passe</h1>
+    <p class="lead">Vous utilisez un mot de passe provisoire. Choisissez-en un personnel pour continuer.</p>
+    <form class="panel" id="fpForm"><label>Nouveau mot de passe (8 caractères minimum)<input id="fp1" type="password" minlength="8" required autocomplete="new-password"></label>
+      <label>Confirmer<input id="fp2" type="password" minlength="8" required autocomplete="new-password"></label>
+      <div class="err" id="fpErr"></div><button class="btn primary" type="submit">Enregistrer et continuer</button>
+      <button class="btn" type="button" id="fpOut">Se déconnecter</button></form></div></div>`;
+  const $=id=>$app.querySelector("#"+id),fpForm=$("fpForm"),fp1=$("fp1"),fp2=$("fp2"),fpErr=$("fpErr"),fpOut=$("fpOut");
+  fpForm.onsubmit=async ev=>{ev.preventDefault();fpErr.textContent="";
+    try{if(fp1.value!==fp2.value)throw new Error("Les deux mots de passe ne sont pas identiques.");
+      const {error}=await sb.auth.updateUser({password:fp1.value});if(error)throw error;
+      await q(sb.rpc("clear_my_must_change"));toast("Mot de passe enregistré");boot()}catch(e){fpErr.textContent=errMsg(e)}};
+  fpOut.onclick=async()=>{await sb.auth.signOut();location.reload()};
 }
 
 function passwordDialog(){
@@ -2218,7 +2313,7 @@ function passwordDialog(){
     <label>Confirmer<input id="pw2" type="password" minlength="8" required autocomplete="new-password"></label>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Changer</button></div>`,
   async()=>{if(pw1.value!==pw2.value)throw new Error("Les deux mots de passe ne sont pas identiques.");
-    const {error}=await sb.auth.updateUser({password:pw1.value});if(error)throw error;toast("Mot de passe modifié")});
+    const {error}=await sb.auth.updateUser({password:pw1.value});if(error)throw error;try{await q(sb.rpc("clear_my_must_change"))}catch(e){}toast("Mot de passe modifié")});
 }
 
 /* ---------- paie ---------- */
@@ -2432,23 +2527,57 @@ async function viewMyPayslips(v){
 
 /* ---------- journal ---------- */
 async function viewAudit(v){
-  const rows=await q(sb.from("audit_logs").select("*").order("occurred_at",{ascending:false}).limit(200));
-  const ids=[...new Set(rows.map(r=>r.actor).filter(Boolean))];
-  const people=ids.length?await q(sb.from("profiles").select("id,full_name").in("id",ids)):[];
+  const today=iso(new Date());
+  S.auF=S.auF||iso(addDays(new Date(),-30));S.auT=S.auT||today;S.auWho=S.auWho||"";S.auCat=S.auCat||"";S.auLim=S.auLim||300;
+  const CAT={edt:["Emplois du temps",["timetable_slots","published_weeks","schedule_sessions","teacher_availability","availability_weeks","school_schedule"]],
+    emarg:["Émargements et validations",["attendance_records"]],paie:["Paie et tarifs",["pay_periods","payslips","payments","payroll_items","hourly_rates"]],
+    ref:["Référentiel et affectations",["departments","programs","student_groups","courses","course_programs","rooms","teachers","teacher_statuses","teaching_assignments","assignment_groups","academic_years","semesters"]],
+    comptes:["Comptes et rôles",["profiles","user_roles"]]};
+  let qy=sb.from("audit_logs").select("*").gte("occurred_at",S.auF+"T00:00:00").lte("occurred_at",S.auT+"T23:59:59").order("occurred_at",{ascending:false}).limit(S.auLim);
+  if(S.auCat)qy=qy.in("table_name",CAT[S.auCat][1]);
+  if(S.auWho)qy=qy.eq("actor",S.auWho);
+  const [rows,people]=await Promise.all([q(qy),q(sb.from("profiles").select("id,full_name").order("full_name"))]);
   const nm=id=>people.find(p=>p.id===id)?.full_name||"Système";
-  const OP={INSERT:"Création",UPDATE:"Modification",DELETE:"Suppression"};
-  const TB={attendance_records:"Émargement",schedule_sessions:"Séance",timetable_slots:"Créneau",teaching_assignments:"Affectation",user_roles:"Rôle",teachers:"Enseignant",profiles:"Profil",hourly_rates:"Tarif",pay_periods:"Période de paie",payslips:"Bulletin",payments:"Paiement",teacher_statuses:"Statut"};
-  const detail=r=>{if(r.table_name==="attendance_records"&&r.new_data){const o=r.old_data?.status,n=r.new_data.status;return o&&o!==n?`${ATT[o]?.[0]||o} → ${ATT[n]?.[0]||n}`:(ATT[n]?.[0]||"")}
-    if(r.table_name==="schedule_sessions"&&r.new_data)return `${r.new_data.session_date} ${hm(r.new_data.start_time)} · ${r.new_data.status}`;
-    if(r.table_name==="pay_periods"&&r.new_data)return `${r.new_data.name} · ${PER[r.new_data.status]?.[0]||r.new_data.status}`;
-    if(r.table_name==="payslips"&&r.new_data)return `${r.new_data.number} · ${fcfa(r.new_data.net_fcfa)}`;
-    if(r.table_name==="payments"&&r.new_data)return `${fcfa(r.new_data.amount_fcfa)} · ${r.new_data.method}`;
-    if(r.table_name==="hourly_rates"&&r.new_data)return `${fcfa(r.new_data.rate_fcfa)} dès le ${fdl(r.new_data.effective_from)}`;
-    return ""};
-  v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque création, modification ou suppression sensible est enregistrée avec son auteur et l'heure.</p>
-    <div class="panel tbl">${rows.length?`<table><thead><tr><th>Date</th><th>Auteur</th><th>Opération</th><th>Élément</th><th>Détail</th></tr></thead><tbody>
-    ${rows.map(r=>`<tr><td class="mono">${new Date(r.occurred_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</td><td>${esc(nm(r.actor))}</td><td>${OP[r.action]||r.action}</td><td>${TB[r.table_name]||r.table_name} <span class="sub mono">#${esc(r.record_id)}</span></td><td>${esc(detail(r))}</td></tr>`).join("")}
-    </tbody></table>`:`<p class="empty">Aucune opération enregistrée pour l'instant. Les émargements et validations apparaîtront ici.</p>`}</div>`;
+  /* l'administrateur seul ne voit pas les montants de paie */
+  const mask=has("admin")&&!has("finance")&&!has("direction");
+  const money=n=>mask?"(montant masqué)":fcfa(n);
+  const N=r=>r.new_data||{},O=r=>r.old_data||{},D=r=>({...O(r),...N(r)});
+  const wkl=d=>d?"du "+weekRange(new Date(d+"T12:00:00")):"";
+  const verb={INSERT:"a créé",UPDATE:"a modifié",DELETE:"a supprimé"};
+  const thing={departments:"le département",programs:"la filière",student_groups:"le groupe",courses:"la matière",rooms:"la salle",teachers:"l'enseignant",teacher_statuses:"le statut",academic_years:"l'année",semesters:"le semestre",teaching_assignments:"une affectation",assignment_groups:"un regroupement (tronc commun)",course_programs:"les filières d'une matière",teacher_availability:"une plage de disponibilité",profiles:"le compte"};
+  const label=x=>x.code||x.label||x.name||x.full_name||((x.first_name||"")+" "+(x.last_name||"")).trim()||"";
+  const say=r=>{const d=D(r),n=N(r),o=O(r),a=r.action;
+    switch(r.table_name){
+      case "published_weeks":return a==="DELETE"?`a retiré la publication de la semaine ${wkl(o.week_start)}`:`a publié la semaine ${wkl(d.week_start)}`;
+      case "timetable_slots":return `${a==="INSERT"?"a placé":a==="DELETE"?"a retiré":"a déplacé ou modifié"} un cours ${d.week_start?"(semaine "+wkl(d.week_start)+", "+(DAYS[d.day_of_week]||"").toLowerCase()+" "+hm(d.start_time)+")":""}`;
+      case "schedule_sessions":return a==="UPDATE"&&o.status!==n.status?(n.status==="annulee"?`a annulé la séance du ${fdl(d.session_date)} à ${hm(d.start_time)}`:`a remis en place la séance du ${fdl(d.session_date)}`)+(n.note?` · ${n.note}`:""):`${verb[a]} la séance du ${fdl(d.session_date)} à ${hm(d.start_time)}`;
+      case "attendance_records":if(a==="INSERT")return n.entered_for_teacher?"a émargé une séance pour un professeur (délégation)":"a émargé une séance";
+        if(a==="UPDATE"&&o.status!==n.status)return {valide:"a validé un émargement",rejete:"a rejeté un émargement",correction_demandee:"a demandé une correction d'émargement",soumis:"a corrigé un émargement"}[n.status]||"a modifié un émargement";return `${verb[a]} un émargement`;
+      case "availability_weeks":return a==="DELETE"?`a effacé une réponse de disponibilités (semaine ${wkl(o.week_start)})`:(d.by_planner?`a saisi les disponibilités d'un professeur (semaine ${wkl(d.week_start)})`:`a déclaré ses disponibilités (semaine ${wkl(d.week_start)})`);
+      case "school_schedule":return "a modifié les jours et horaires de cours";
+      case "user_roles":return `${a==="DELETE"?"a retiré":"a attribué"} le rôle « ${ROLE_LABEL[d.role]||d.role} » ${a==="DELETE"?"à":"à"} ${nm(d.user_id)}`;
+      case "pay_periods":if(a==="UPDATE"&&o.status!==n.status)return ({en_verification:"a calculé la paie",approuvee:"a approuvé la paie",payee:"a soldé la paie"}[n.status]||"a modifié la paie")+` « ${d.name} »`;return `${verb[a]} la période de paie « ${d.name} »`;
+      case "payslips":return `${verb[a]} le bulletin ${d.number||""}${mask?"":" · "+fcfa(d.net_fcfa)}`;
+      case "payments":return `${a==="INSERT"?"a enregistré":verb[a]} un paiement de ${money(d.amount_fcfa)}`;
+      case "payroll_items":return `${verb[a]} une ligne de paie`;
+      case "hourly_rates":return `${a==="INSERT"?"a fixé":verb[a]} un tarif horaire de ${money(d.rate_fcfa)} à partir du ${fdl(d.effective_from)}`;
+      default:return `${verb[a]||a} ${thing[r.table_name]||r.table_name} ${label(d)}`.trim()}};
+  const dt=x=>new Date(x).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"});
+  v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque action sensible est enregistrée avec son auteur et l'heure. Le journal ne peut pas être modifié.</p>
+    <div class="row" style="margin-bottom:12px;align-items:flex-end">
+      <label>Du<input id="auF" type="date" value="${S.auF}"></label><label>Au<input id="auT" type="date" value="${S.auT}"></label>
+      <label>Personne<select id="auWho"><option value="">Tout le monde</option>${people.map(p=>`<option value="${p.id}" ${p.id===S.auWho?"selected":""}>${esc(p.full_name)}</option>`).join("")}</select></label>
+      <label>Domaine<select id="auCat"><option value="">Tous</option>${Object.entries(CAT).map(([k,[l]])=>`<option value="${k}" ${k===S.auCat?"selected":""}>${l}</option>`).join("")}</select></label>
+      <button class="btn" id="auGo">Afficher</button>${xbar("auX")}</div>
+    ${searchBox("auQ","Rechercher dans les résultats…")}
+    <div class="panel tbl">${rows.length?`<table id="auTable"><thead><tr><th>Date</th><th>Qui</th><th>Action</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td class="mono" style="white-space:nowrap">${dt(r.occurred_at)}</td><td>${esc(nm(r.actor))}</td><td>${esc(say(r))}</td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucune opération sur cette période avec ces filtres.</p>`}</div>
+    ${rows.length>=S.auLim?`<div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="auMore">Afficher plus</button></div>`:""}`;
+  auGo.onclick=()=>{if(auT.value<auF.value){toast("La date de fin doit être après la date de début.",true);return}S.auF=auF.value;S.auT=auT.value;S.auWho=auWho.value;S.auCat=auCat.value;S.auLim=300;rerender()};
+  const mo=document.getElementById("auMore");if(mo)mo.onclick=()=>{S.auLim+=300;rerender()};
+  const aq=document.getElementById("auQ");if(aq)aq.oninput=()=>{const k=norm(aq.value.trim());document.querySelectorAll("#auTable tbody tr").forEach(tr=>tr.hidden=!!k&&!norm(tr.textContent).includes(k))};
+  wireExport("auX",()=>({file:"journal-"+S.auF+"-"+S.auT,title:"Journal des opérations",subtitle:`Du ${fdl(S.auF)} au ${fdl(S.auT)}`,landscape:true,
+    sheets:[{name:"Journal",title:"Journal des opérations",subtitle:`Du ${fdl(S.auF)} au ${fdl(S.auT)}`,head:["Date","Qui","Action"],rows:rows.map(r=>[dt(r.occurred_at),nm(r.actor),say(r)])}]}));
 }
 
 sb.auth.onAuthStateChange((ev)=>{if(ev==="SIGNED_OUT")renderLogin()});
