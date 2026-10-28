@@ -183,6 +183,9 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .hlist{display:grid}.hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.hrow:last-child{border-bottom:0}
 @media (max-width:600px){.hrow{flex-direction:column;align-items:stretch}.hrow .row{justify-content:flex-start}.hrow>div:last-child{align-self:flex-start}}
 .sact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.prow{padding:12px 0;border-bottom:1px solid var(--line)}.prow:last-of-type{border-bottom:0}
+.pbar{display:flex;height:9px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0 6px}.pbar i{display:block;height:100%;background:var(--accent)}.pbar i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.pleg{display:inline-flex;align-items:center;gap:6px;margin-left:8px}.pleg i{display:inline-block;width:12px;height:8px;border-radius:3px;background:var(--accent)}.pleg i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent);margin-left:6px}
 .annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
 .ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
 .tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
@@ -602,7 +605,7 @@ function availableTabs(){
   if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable});
   if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
-  if(isProf())t.push({id:"bulletins",label:"Mes bulletins",fn:viewMyPayslips});
+  if(isProf())t.push({id:"bulletins",label:"Heures et paiements",fn:viewMyPayslips});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
   if(has("planificateur"))t.push({id:"affect",label:"Affectations",fn:viewAssign});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
@@ -1694,6 +1697,7 @@ async function viewMyTimetable(v){
     q(sb.from("teaching_assignments").select("id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),courses(code,name),student_groups!teaching_assignments_group_id_fkey(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("teacher_id",tid).eq("week_start",wk)),
     q(sb.from("schedule_sessions").select("slot_id,status,note").eq("teacher_id",tid).gte("session_date",wk).lte("session_date",iso(addDays(W,6))))]);
+  const allSess=await q(sb.from("schedule_sessions").select("id,assignment_id,session_date,start_time,end_time,status,attendance_records(status,retained_minutes)").eq("teacher_id",tid));
   const mins=x=>{const t=s=>{const [h,m]=s.slice(0,5).split(":").map(Number);return h*60+m};return t(x.end_time)-t(x.start_time)};
   slots.forEach(x=>decorateTA(x.teaching_assignments));assigns.forEach(decorateTA);
   const sOf={};sess.forEach(x=>{if(x.slot_id)sOf[x.slot_id]=x});
@@ -1704,12 +1708,17 @@ async function viewMyTimetable(v){
   v.innerHTML=`<h1>Mon emploi du temps</h1>
     <p class="lead">Vos cours de la semaine, tels qu'ils ont été publiés par le directeur des études ou sa secrétaire. Les heures payées restent celles que vous émargez et que le responsable valide.</p>
     ${weekNavHtml(W)}
+    <div class="row" id="myTools" style="margin:0 0 12px"><button class="btn" id="myPdf" ${slots.length?"":"disabled"}>${DLI}Télécharger la semaine (PDF)</button><button class="btn" id="myIcs">Ajouter à mon calendrier</button></div>
     ${slots.length?`<div class="stats"><div class="stat big"><b>${hrs(total)}</b><span>cette semaine</span></div><div class="stat"><b>${slots.length}</b><span>Créneaux</span></div><div class="stat"><b>${days}</b><span>Jours de cours</span></div></div>
       ${cancelled.size?`<div class="gpwarn" style="margin-bottom:10px">${cancelled.size} cours annulé(s) cette semaine : touchez-les pour voir le motif.</div>`:""}
       ${timetableGrid({mine:slots,conf:new Set(),cancelled,view:"teacher",avOf:()=>avails,outside:()=>false,teacherId:tid,week:W,readonly:1})}
-      <h2>Mes cours</h2><div class="panel rlist">${assigns.map(a=>`<div class="ritem"><div class="rmain"><b>${esc(a.courses.code)} · ${esc(a.courses.name)}</b><span class="sub">${esc(a.student_groups.code)} · ${esc(a.semesters.label)}</span></div>
-        <div class="rmeta"><span class="rm"><small>Cette semaine</small>${hrs(byA[a.id]||0)}</span><span class="rm"><small>Volume prévu</small>${Number(a.planned_hours)} h</span></div><div></div></div>`).join("")}</div>`
-    :`<div class="panel"><p class="empty">Aucun cours publié pour vous cette semaine.<br>L'emploi du temps apparaît ici dès que le directeur des études l'a publié.</p></div>`}`;
+`
+    :`<div class="panel"><p class="empty">Aucun cours publié pour vous cette semaine.<br>L'emploi du temps apparaît ici dès que le directeur des études l'a publié.</p></div>`}
+    <h2>Avancement de mes matières</h2>${progressHtml(assigns,allSess,byA)}`;
+  /* emporter son emploi du temps : PDF de la semaine, ou fichier calendrier pour le téléphone */
+  const tb=document.getElementById("myTools");
+  if(tb){myPdf.onclick=()=>ttExportWeek("pdf","teacher",[[tid,S.teacher.first_name+" "+S.teacher.last_name]],slots,{W,pub:true,isCancel:x=>cancelled.has(x.id),KEY:{teacher:x=>x.teaching_assignments.teacher_id},MATCH:(by,x,id)=>x.teaching_assignments.teacher_id==id});
+    myIcs.onclick=()=>icsDialog(tid)}
   wireWeekNav(v,()=>S.ttWeek,w=>{S.ttWeek=w});
   v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments;
     openDialog(`<h3>${esc(t.courses.code)} · ${esc(t.courses.name)}</h3>
@@ -1717,6 +1726,49 @@ async function viewMyTimetable(v){
       <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{})});
 }
 
+
+/* avancement des matières d'un professeur : heures faites (séances passées non annulées), programmées à venir, reste à programmer */
+function progressHtml(assigns,allSess,byWeek){
+  const today=iso(new Date()),now=new Date();
+  const cur=assigns.filter(a=>a.semesters&&a.semesters.end_date>=iso(addDays(now,-30))).sort((x,y)=>x.semesters.start_date.localeCompare(y.semesters.start_date)||x.courses.code.localeCompare(y.courses.code));
+  if(!cur.length)return `<div class="panel"><p class="empty">Aucune matière en cours.</p></div>`;
+  return `<div class="panel" style="padding:6px 16px">${cur.map(a=>{const ss=allSess.filter(x=>x.assignment_id===a.id&&x.status!=="annulee");
+    const m=x=>toMin(hm(x.end_time))-toMin(hm(x.start_time));
+    const done=ss.filter(x=>sEnd(x)<=now).reduce((t,x)=>t+m(x),0),plan=ss.filter(x=>sEnd(x)>now).reduce((t,x)=>t+m(x),0);
+    const val=ss.reduce((t,x)=>t+(x.attendance_records?.status==="valide"?x.attendance_records.retained_minutes||0:0),0);
+    const P=Number(a.planned_hours)*60,rest=Math.max(0,P-done-plan),pc=v=>Math.min(100,P?v*100/P:0);
+    const r=semesterRisk(a,done,today),fin=done>=P;
+    const late=!fin&&r&&r.risk;
+    return `<div class="prow"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px"><div><b>${esc(a.courses.code)} · ${esc(a.courses.name)}</b><div class="sub">${esc(a.student_groups?.code||"")} · ${esc(a.semesters.label)}${byWeek&&byWeek[a.id]?" · "+hrs(byWeek[a.id])+" cette semaine":""}</div></div>
+      <div style="text-align:right"><b>${hrs(done)}</b> <span class="sub">/ ${hrs(P)}</span>${fin?' <span class="pill p-ok">Terminée</span>':late?' <span class="pill p-warn">En retard</span>':""}</div></div>
+      <div class="pbar" title="Faites ${hrs(done)} · programmées ${hrs(plan)} · reste ${hrs(rest)}"><i style="width:${pc(done)}%"></i><i class="pl" style="width:${pc(plan)}%"></i></div>
+      <div class="sub">Faites ${hrs(done)} · programmées à venir ${hrs(plan)} · reste à programmer ${hrs(rest)} · validées pour la paie ${hrs(val)}${late&&r.missing!=null?` · au rythme actuel, il manquerait environ ${hrs(Math.round(r.missing/30)*30)} en fin de semestre`:late&&a.semesters?` · fin du semestre le ${fdl(a.semesters.end_date)}`:""}</div></div>`}).join("")}
+    <p class="sub" style="margin:8px 0">Le rythme tient compte des jours sans cours du calendrier. <span class="pleg"><i></i>faites <i class="pl"></i>programmées</span></p></div>`;
+}
+/* fichier calendrier (.ics) : les cours publiés à venir, avec un rappel avant chaque cours */
+function icsDialog(tid){
+  openDialog(`<h3>Ajouter à mon calendrier</h3>
+    <p style="margin:0">Un fichier calendrier avec vos cours publiés à venir. Ouvrez-le sur votre téléphone : il propose de les ajouter à votre agenda.</p>
+    <div class="grid2"><label>Période<select id="icW"><option value="2">2 semaines</option><option value="4" selected>4 semaines</option><option value="8">8 semaines</option></select></label>
+      <label>Rappel<select id="icA"><option value="0">Aucun</option><option value="15">15 minutes avant</option><option value="30" selected>30 minutes avant</option><option value="60">1 heure avant</option></select></label></div>
+    <p class="sub" style="margin:0">Un cours modifié ou annulé ensuite n'est pas mis à jour dans votre agenda : refaites le fichier après un changement.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Télécharger le fichier</button></div>`,
+  async()=>{const now=new Date(),to=iso(addDays(now,7*Number(icW.value))),al=Number(icA.value);
+    const ss=(await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name),assignment_groups(group_id,student_groups(code))),student_groups(code),rooms(code)").eq("teacher_id",tid).gte("session_date",iso(now)).lte("session_date",to).order("session_date"))).filter(x=>x.status!=="annulee"&&sEnd(x)>now);
+    if(!ss.length)throw new Error("Aucun cours publié à venir sur cette période.");
+    const dt=(d,t)=>d.replace(/-/g,"")+"T"+String(t).slice(0,5).replace(":","")+"00";
+    const e=x=>String(x||"").replace(/\\/g,"\\\\").replace(/[,;]/g,m=>"\\"+m).replace(/\n/g,"\\n");
+    const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+    const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//"+e(APPN())+"//Emploi du temps//FR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:"+e("Cours · "+APPN()),
+      "BEGIN:VTIMEZONE","TZID:Africa/Dakar","BEGIN:STANDARD","DTSTART:19700101T000000","TZOFFSETFROM:+0000","TZOFFSETTO:+0000","TZNAME:GMT","END:STANDARD","END:VTIMEZONE"];
+    ss.forEach(x=>{const c=x.teaching_assignments?.courses;L.push("BEGIN:VEVENT","UID:seance-"+x.id+"@"+slug(APPN()),"DTSTAMP:"+stamp,"DTSTART;TZID=Africa/Dakar:"+dt(x.session_date,x.start_time),"DTEND;TZID=Africa/Dakar:"+dt(x.session_date,x.end_time),
+      "SUMMARY:"+e((c?.code||"Cours")+" · "+grpLabel(x.teaching_assignments,x.student_groups?.code)),"LOCATION:"+e("Salle "+(x.rooms?.code||"")),"DESCRIPTION:"+e((c?.name||"")+(x.note?"\n"+x.note:"")));
+      if(al)L.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+e((c?.code||"Cours")+" dans "+(al>=60?"1 heure":al+" minutes")),"TRIGGER:-PT"+al+"M","END:VALARM");
+      L.push("END:VEVENT")});
+    L.push("END:VCALENDAR");
+    const blob=new Blob([L.join("\r\n")],{type:"text/calendar;charset=utf-8"}),a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);a.download="mes-cours-"+iso(now)+".ics";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+    toast(ss.length+" cours dans le fichier calendrier")})}
 
 /* ---------- glisser-déposer dans la grille (souris : glisser ; tactile : appui long puis glisser) ---------- */
 function enableTtDrag(root,opt){
@@ -3009,22 +3061,49 @@ async function viewRates(v){
 
 /* ---------- mes bulletins ---------- */
 async function viewMyPayslips(v){
-  const [slips,pays,unpaid]=await Promise.all([
+  const now=new Date();if(!S.payM)S.payM=new Date(now.getFullYear(),now.getMonth(),1);
+  const M=S.payM,mFrom=iso(M),mTo=iso(new Date(M.getFullYear(),M.getMonth()+1,0));
+  const [slips,pays,unpaid,att]=await Promise.all([
     q(sb.from("payslips").select("*").eq("teacher_id",S.teacher.id).order("generated_at",{ascending:false})),
     q(sb.from("payments").select("*")),
-    q(sb.from("attendance_records").select("retained_minutes").eq("teacher_id",S.teacher.id).eq("status","valide").is("pay_period_id",null))]);
+    q(sb.from("attendance_records").select("retained_minutes").eq("teacher_id",S.teacher.id).eq("status","valide").is("pay_period_id",null)),
+    q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,attendance_records(status,declared_minutes,retained_minutes,pay_period_id)").eq("teacher_id",S.teacher.id).gte("session_date",mFrom).lte("session_date",mTo))]);
   const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
   const waiting=unpaid.reduce((s,a)=>s+a.retained_minutes,0);
-  v.innerHTML=`<h1>Mes bulletins</h1>
-    <p class="lead">Vos bulletins de rémunération approuvés. Ils ne sont visibles que par vous et par le service financier.</p>
-    <div class="stats"><div class="stat"><b>${slips.length}</b><span>Bulletins</span></div>
-      <div class="stat"><b>${fcfa(slips.reduce((s,x)=>s+x.net_fcfa,0))}</b><span>Total net</span></div>
-      <div class="stat"><b>${hrs(waiting)}</b><span>Heures validées pas encore payées</span></div></div>
+  /* le mois choisi : heures par état ; paiements reçus ; et le total de tous les bulletins */
+  const A=att.filter(x=>x.status!=="annulee"),mm=x=>toMin(hm(x.end_time))-toMin(hm(x.start_time));
+  const sum=(f,g)=>A.filter(f).reduce((t,x)=>t+g(x),0),ar=x=>x.attendance_records;
+  const mVal=sum(x=>ar(x)?.status==="valide",x=>ar(x).retained_minutes||0),mWait=sum(x=>ar(x)?.status==="soumis",x=>ar(x).declared_minutes||0),
+    mFix=sum(x=>ar(x)?.status==="correction_demandee",x=>ar(x).declared_minutes||0),mTodo=sum(x=>!ar(x)&&sEnd(x)<=now,mm),mRej=A.filter(x=>ar(x)?.status==="rejete").length;
+  const mine=new Set(slips.map(x=>x.id)),myPays=pays.filter(x=>mine.has(x.payslip_id));
+  const mPaid=myPays.filter(x=>x.paid_on>=mFrom&&x.paid_on<=mTo).reduce((t,x)=>t+x.amount_fcfa,0);
+  const totNet=slips.reduce((t,x)=>t+x.net_fcfa,0),totPaid=myPays.reduce((t,x)=>t+x.amount_fcfa,0);
+  const ml=M.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  v.innerHTML=`<h1>Mes heures et paiements</h1>
+    <p class="lead">Vos heures du mois, ce qui a été payé et vos bulletins. Les montants viennent uniquement des bulletins approuvés par le service financier.</p>
+    <div class="weeknav"><button class="wbtn" id="mPrev" aria-label="Mois précédent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="wmid"><small>Mois de</small><b>${ml.charAt(0).toUpperCase()+ml.slice(1)}</b></div>
+      <button class="wbtn" id="mNext" aria-label="Mois suivant"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="wnow" id="mNow">Ce mois</button></div>
+    <div class="stats"><div class="stat big"><b>${hrs(mVal)}</b><span>Heures validées ce mois</span></div>
+      <div class="stat"><b>${hrs(mWait)}</b><span>En attente de contrôle</span></div>
+      <div class="stat"><b style="color:${mFix||mTodo?"var(--warn)":"inherit"}">${hrs(mFix+mTodo)}</b><span>À émarger ou à corriger</span></div>
+      <div class="stat"><b>${fcfa(mPaid)}</b><span>Reçu ce mois</span></div></div>
+    ${mRej?`<p class="sub" style="margin:-8px 0 14px">${mRej} émargement(s) rejeté(s) ce mois : voir « Mes séances ».</p>`:""}
+    <h2>Depuis le début</h2>
+    <div class="stats"><div class="stat"><b>${fcfa(totNet)}</b><span>Total net des bulletins (${slips.length})</span></div>
+      <div class="stat"><b>${fcfa(totPaid)}</b><span>Déjà payé</span></div>
+      <div class="stat"><b style="color:${totNet-totPaid>0?"var(--warn)":"inherit"}">${fcfa(Math.max(0,totNet-totPaid))}</b><span>Reste à payer</span></div>
+      <div class="stat"><b>${hrs(waiting)}</b><span>Heures validées pas encore dans un bulletin</span></div></div>
+    <h2>Mes bulletins</h2>
     <div class="panel tbl">${slips.length?`<table><thead><tr><th>Bulletin</th><th>Période</th><th>Heures</th><th>Net à payer</th><th>Réglé</th><th>État</th><th></th></tr></thead><tbody>
     ${slips.map(s=>`<tr><td class="mono">${esc(s.number)}</td><td>${esc(s.snapshot.periode.nom)}<div class="sub mono">${fdl(s.snapshot.periode.debut)} au ${fdl(s.snapshot.periode.fin)}</div></td>
       <td class="num">${hrs(s.total_minutes)}</td><td class="num"><b>${fcfa(s.net_fcfa)}</b></td><td class="num">${fcfa(paid(s.id))}</td><td>${ppill(SLIP,s.status)}</td>
       <td><button class="btn sm primary" data-pdf="${s.id}">Télécharger le PDF</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucun bulletin pour l'instant. Il apparaîtra ici dès que le service financier aura approuvé une période.</p>`}</div>`;
   v.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  mPrev.onclick=()=>{S.payM=new Date(M.getFullYear(),M.getMonth()-1,1);rerender()};
+  mNext.onclick=()=>{S.payM=new Date(M.getFullYear(),M.getMonth()+1,1);rerender()};
+  mNow.onclick=()=>{S.payM=null;rerender()};
 }
 
 /* ---------- journal ---------- */
