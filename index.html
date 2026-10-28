@@ -186,6 +186,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .prow{padding:12px 0;border-bottom:1px solid var(--line)}.prow:last-of-type{border-bottom:0}
 .pbar{display:flex;height:9px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0 6px}.pbar i{display:block;height:100%;background:var(--accent)}.pbar i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent)}
 .pleg{display:inline-flex;align-items:center;gap:6px;margin-left:8px}.pleg i{display:inline-block;width:12px;height:8px;border-radius:3px;background:var(--accent)}.pleg i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent);margin-left:6px}
+.rvh{font-size:15px;margin:14px 0 2px;padding-top:8px;border-top:1px solid var(--line)}
 .annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
 .ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
 .tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
@@ -903,49 +904,137 @@ async function absenceCard(el){
 }
 
 /* ---------- responsable ---------- */
+/* ---------- contrôle des émargements (responsable, aide du responsable financier) ---------- */
+const RV_SEL="id,status,planned_minutes,declared_start,declared_end,declared_minutes,retained_minutes,teacher_comment,review_reason,submitted_at,submitted_by,entered_for_teacher,teacher_id,teachers(first_name,last_name,phone),schedule_sessions!inner(id,session_date,start_time,end_time,teaching_assignments(courses(code,name,department_id,departments(code))),student_groups(code),rooms(code))";
 async function viewReview(v){
-  let qy=sb.from("attendance_records").select("id,status,planned_minutes,declared_start,declared_end,declared_minutes,retained_minutes,teacher_comment,review_reason,submitted_at,submitted_by,entered_for_teacher,teacher_id,teachers(first_name,last_name),schedule_sessions(session_date,start_time,end_time,teaching_assignments(courses(code,name,departments(code))),student_groups(code),rooms(code))").order("submitted_at",{ascending:false}).limit(300);
-  if(S.filter!=="tous")qy=qy.eq("status",S.filter);
-  const rows=await q(qy);
-  const counts=await q(sb.from("attendance_records").select("status"));
-  const c=k=>counts.filter(x=>x.status===k).length;
-  const F=[["soumis","En attente",c("soumis")],["correction_demandee","Correction demandée",c("correction_demandee")],["valide","Validés",c("valide")],["rejete","Rejetés",c("rejete")],["tous","Tous",counts.length]];
-  const reviewTable=list=>list.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>Écart</th><th>État</th><th></th></tr></thead><tbody>
-    ${list.map(a=>{const s=a.schedule_sessions;const d=a.declared_minutes-a.planned_minutes;const self=S.teacher&&a.teacher_id===S.teacher.id;
-      return `<tr><td>${fdate(s.session_date)}<div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}</div></td>
-      <td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}${a.entered_for_teacher?`<div class="sub">Saisi par délégation</div>`:""}</td>
-      <td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td>
-      <td class="mono">${hm(a.declared_start)}–${hm(a.declared_end)}${a.teacher_comment?`<div class="sub" style="font-family:var(--f-body)">« ${esc(a.teacher_comment)} »</div>`:""}</td>
-      <td class="mono ${d?"gap":""}">${d?(d>0?"+":"−")+Math.abs(d)+" min":"—"}</td>
-      <td>${pill(a.status)}${a.retained_minutes!=null?`<div class="sub">retenu ${hrs(a.retained_minutes)}</div>`:""}${a.review_reason?`<div class="sub">${esc(a.review_reason)}</div>`:""}</td>
-      <td>${a.status==="soumis"?(self?`<span class="sub">Vos heures</span>`:a.submitted_by===S.user.id?`<span class="sub">Saisi par vous : à valider par un collègue</span>`:`<button class="btn primary sm" data-rv="${a.id}">Contrôler</button>`):""}</td></tr>`}).join("")}
-    </tbody></table>`:`<p class="empty">${rows.length?"Aucun résultat pour cette recherche.":"Aucun émargement dans cette catégorie."}</p>`;
+  const today=iso(new Date()),now=new Date();
+  S.rvTab=S.rvTab||"ctrl";S.filter=S.filter&&S.filter!=="soumis"?S.filter:"valide";
+  S.rvFrom=S.rvFrom||iso(addDays(now,-60));S.rvTo=S.rvTo||today;S.rvDep=S.rvDep||"";S.rvT=S.rvT||"";
+  const [pend,hist,todo]=await Promise.all([
+    q(sb.from("attendance_records").select(RV_SEL).in("status",["soumis","correction_demandee"]).order("submitted_at")),
+    q(sb.from("attendance_records").select(RV_SEL).in("status",["valide","rejete"]).gte("schedule_sessions.session_date",S.rvFrom).lte("schedule_sessions.session_date",S.rvTo).order("submitted_at",{ascending:false}).limit(600)),
+    q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teachers(first_name,last_name,phone),teaching_assignments(courses(code,name,department_id,departments(code))),student_groups(code),attendance_records(id)").neq("status","annulee").gte("session_date",S.rvFrom).lte("session_date",today).order("session_date").order("start_time"))]);
+  const all=[...pend,...hist];
+  /* filtres : département de la matière, professeur */
+  const depOf=x=>x.teaching_assignments?.courses?.departments?.code||"";
+  const deps=[...new Set([...all.map(a=>depOf(a.schedule_sessions)),...todo.map(depOf)].filter(Boolean))].sort();
+  const tMap=new Map();[...all.map(a=>[a.teacher_id,a.teachers]),...todo.map(x=>[x.teacher_id,x.teachers])].forEach(([id,t])=>{if(t)tMap.set(id,t)});
+  const tList=[...tMap.entries()].sort((x,y)=>(x[1].last_name+x[1].first_name).localeCompare(y[1].last_name+y[1].first_name));
+  const okA=a=>(!S.rvDep||depOf(a.schedule_sessions)===S.rvDep)&&(!S.rvT||a.teacher_id==S.rvT);
+  const okS=x=>(!S.rvDep||depOf(x)===S.rvDep)&&(!S.rvT||x.teacher_id==S.rvT);
+  /* signalements automatiques */
+  const T=t=>toMin(hm(t));
+  const flags=a=>{const s=a.schedule_sessions,F=[];
+    const cl=closureAt(s.session_date,T(a.declared_start),T(a.declared_end));if(cl)F.push("jour sans cours : "+cl.label);
+    if(all.some(b=>b.id!==a.id&&b.teacher_id===a.teacher_id&&b.schedule_sessions.session_date===s.session_date&&b.status!=="rejete"&&T(b.declared_start)<T(a.declared_end)&&T(a.declared_start)<T(b.declared_end)))F.push("chevauche un autre cours émargé le même jour");
+    const late=(new Date(a.submitted_at)-sEnd(s))/864e5;if(late>7)F.push(`émargé ${Math.floor(late)} jours après la séance`);
+    const d=a.declared_minutes-a.planned_minutes;if(d>=15)F.push(`${d} min de plus que prévu`);
+    return F};
+  const self=a=>S.teacher&&a.teacher_id===S.teacher.id,byMe=a=>a.submitted_by===S.user.id;
+  const sub=pend.filter(a=>a.status==="soumis"&&okA(a)),corr=pend.filter(a=>a.status==="correction_demandee"&&okA(a));
+  const blocked=sub.filter(a=>self(a)||byMe(a)),free=sub.filter(a=>!self(a)&&!byMe(a));
+  const conf=free.filter(a=>a.declared_minutes===a.planned_minutes&&hm(a.declared_start)===hm(a.schedule_sessions.start_time)&&!a.teacher_comment&&!a.entered_for_teacher&&!flags(a).length);
+  const exam=free.filter(a=>!conf.includes(a));
+  const why=a=>{const W=flags(a).map(x=>["warn",x]);const d=a.declared_minutes-a.planned_minutes;
+    if(d&&d<15)W.push(["info",(d>0?"+":"−")+Math.abs(d)+" min"]);else if(d<0)W.push(["info","−"+Math.abs(d)+" min"]);
+    if(!d&&hm(a.declared_start)!==hm(a.schedule_sessions.start_time))W.push(["info","horaire décalé"]);
+    if(a.teacher_comment)W.push(["info","commentaire"]);if(a.entered_for_teacher)W.push(["info","saisi par délégation"]);return W};
+  const nonEm=todo.filter(x=>!x.attendance_records&&sEnd(x)<=now&&!(S.teacher&&x.teacher_id===S.teacher.id)&&okS(x));
+  const byT=list=>{const m=new Map();list.forEach(x=>{const k=x.teacher_id;if(!m.has(k))m.set(k,[]);m.get(k).push(x)});return [...m.entries()].sort((x,y)=>y[1].length-x[1].length)};
+  const tname=id=>{const t=tMap.get(Number(id))||tMap.get(id);return t?t.first_name+" "+t.last_name:"?"};
+  const row=(a,btn)=>{const s=a.schedule_sessions;return `<div class="hrow"><div><b>${esc(a.teachers.first_name+" "+a.teachers.last_name)} · ${fdate(s.session_date)} ${hm(s.start_time)}–${hm(s.end_time)}</b>
+    <div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code||"")} · déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>
+    ${btn==="exam"?`<div class="chips" style="margin-top:4px">${why(a).map(([k,t])=>`<span class="pill ${k==="warn"?"p-warn":"p-info"}">${esc(t)}</span>`).join("")}</div>`:""}</div>
+    ${btn==="exam"?`<button class="btn sm primary" data-rv="${a.id}">Contrôler</button>`:btn==="blocked"?`<span class="sub">${self(a)?"Vos heures":"Saisi par vous"} : à valider par un collègue</span>`:btn==="corr"?`<span class="sub">${a.review_reason?"Demandé : "+esc(a.review_reason):"En attente du professeur"}</span>`:""}</div>`};
+  const grouped=(list,kind)=>S.rvGroup?byT(list).map(([tid,L])=>`<h3 class="rvh">${esc(tname(tid))} <span class="sub">· ${L.length}</span></h3><div class="hlist">${L.map(a=>row(a,kind)).join("")}</div>`).join(""):`<div class="hlist">${list.map(a=>row(a,kind)).join("")}</div>`;
+  const TABS=[["ctrl","À contrôler",sub.length],["non","Non émargées",nonEm.length],["paie","Prêt pour la paie",""],["hist","Historique",""]];
+  const filt=`<div class="row" style="margin-bottom:12px;align-items:flex-end">
+      ${S.rvTab!=="paie"?`${S.rvTab!=="ctrl"?`<label>Du<input id="rvF" type="date" value="${S.rvFrom}"></label><label>Au<input id="rvTo" type="date" value="${S.rvTo}"></label>`:""}
+      ${deps.length>1?`<label>Département<select id="rvD"><option value="">Tous</option>${deps.map(d=>`<option ${d===S.rvDep?"selected":""}>${esc(d)}</option>`).join("")}</select></label>`:""}
+      <label>Professeur<select id="rvT"><option value="">Tous</option>${tList.map(([id,t])=>`<option value="${id}" ${id==S.rvT?"selected":""}>${esc(t.last_name+" "+t.first_name)}</option>`).join("")}</select></label>
+      ${S.rvTab!=="hist"?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);padding-bottom:10px"><input type="checkbox" id="rvG" ${S.rvGroup?"checked":""}> Regrouper par professeur</label>`:""}`:""}</div>`;
+  let body="";
+  if(S.rvTab==="ctrl")body=`
+    <section class="panel hcard" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">Conformes · ${conf.length}</h2><div class="sub">Durée et horaire identiques au prévu, sans commentaire, émargés par le professeur, sans signalement.</div></div>
+      ${conf.length?`<button class="btn primary" id="rvAll">${conf.length>1?`Valider les ${conf.length} émargements conformes`:"Valider l'émargement conforme"}</button>`:""}</div>
+      ${conf.length?`<details style="margin-top:8px"><summary class="lnk" style="cursor:pointer">Voir la liste</summary>${grouped(conf,"conf")}</details>`:`<p class="sub" style="margin:8px 0 0">Aucun émargement conforme en attente.</p>`}</section>
+    <section class="panel hcard" style="margin-bottom:14px"><h2 style="margin:0 0 4px">À examiner · ${exam.length}</h2><div class="sub">Écart de durée, horaire décalé, commentaire, saisie par délégation ou signalement : à contrôler un par un.</div>
+      ${exam.length?grouped(exam,"exam"):`<p class="sub" style="margin:8px 0 0">✓ Rien à examiner.</p>`}</section>
+    ${blocked.length?`<section class="panel hcard" style="margin-bottom:14px"><h2 style="margin:0 0 4px">À faire valider par un collègue · ${blocked.length}</h2><div class="sub">Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies.</div>${grouped(blocked,"blocked")}</section>`:""}
+    ${corr.length?`<section class="panel hcard"><h2 style="margin:0 0 4px">Corrections demandées · ${corr.length}</h2><div class="sub">En attente de la réponse du professeur.</div>${grouped(corr,"corr")}</section>`:""}`;
+  if(S.rvTab==="non"){const G=byT(nonEm);
+    const msgOf=(t,L)=>`Bonjour ${t.first_name} ${t.last_name}, il vous reste ${L.length} séance(s) à émarger : ${L.slice(0,8).map(x=>fdl(x.session_date)+" "+hm(x.start_time)+" "+(x.teaching_assignments?.courses?.code||"")).join(", ")}${L.length>8?"…":""}. Merci de les émarger dans l'application (${appUrl()}) : « J'ai fait ce cours ». Cordialement.`;
+    body=`<section class="panel hcard"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">Séances passées non émargées · ${nonEm.length}</h2><div class="sub">Du ${fdl(S.rvFrom)} à aujourd'hui, ${G.length} professeur(s).</div></div>
+      ${G.length?`<div class="row" style="gap:8px"><button class="btn" id="rvDeleg">Émarger pour un professeur</button><button class="btn primary" id="rvRelAll">${G.length>1?`Relancer les ${G.length} professeurs`:"Relancer le professeur"}</button></div>`:""}</div>
+      ${G.length?`<div class="hlist" style="margin-top:6px">${G.map(([tid,L])=>`<div class="hrow"><div><b>${esc(tname(tid))}</b> <span class="pill p-warn">${L.length}</span><div class="sub">${L.slice(0,6).map(x=>fdate(x.session_date)+" "+hm(x.start_time)+" "+esc(x.teaching_assignments?.courses?.code||"")).join(" · ")}${L.length>6?" …":""}</div></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-dg="${tid}">Émarger pour lui</button><button class="btn sm primary" data-rl="${tid}">Relancer</button></div></div>`).join("")}</div>`:`<p class="sub" style="margin:8px 0 0">✓ Toutes les séances passées de la période sont émargées.</p>`}</section>`;
+    S._rvMsg={G,msgOf}}
+  if(S.rvTab==="hist"){const H=hist.filter(a=>okA(a)&&(S.filter==="tous"||a.status===S.filter));
+    body=`<div class="chips" style="margin-bottom:12px">${[["valide","Validés"],["rejete","Rejetés"],["tous","Tous"]].map(([k,l])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l}</button>`).join("")}</div>
+      ${H.length?searchBox("rSearch","Rechercher un professeur, un cours ou un groupe…"):""}<div class="panel tbl" id="rList"></div>`;
+    S._rvHist=H}
   v.innerHTML=`<h1>Contrôle des émargements</h1>
-    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Les écarts entre durée prévue et durée déclarée sont signalés en orange. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
-    <div class="row" style="margin:0 0 6px;align-items:center"><button class="btn primary" id="delegBtn">Émarger pour un professeur</button><span style="margin-left:auto">${xbar("rX")}</span></div>
-    <p class="sub" style="margin:0 0 12px">Saisie pour les professeurs qui n'émargent pas eux-mêmes (à partir de leur fiche de cours). L'export reprend la liste affichée.</p>
-    <div class="chips" style="margin-bottom:12px">${F.map(([k,l,n])=>`<button data-f="${k}" aria-pressed="${S.filter===k}">${l} · ${n}</button>`).join("")}</div>
-    ${rows.length?searchBox("rSearch","Rechercher un professeur, un cours ou un groupe…"):""}
-    <div class="panel tbl" id="rList"></div>`;
-  v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
-  let shown=rows;
-  const drawRows=()=>{document.getElementById("rList").innerHTML=reviewTable(shown);v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(rows.find(a=>a.id==b.dataset.rv)))};
-  drawRows();
-  const rs=document.getElementById("rSearch");
-  if(rs)rs.oninput=()=>{const k=norm(rs.value.trim());shown=!k?rows:rows.filter(a=>{const s=a.schedule_sessions,c=s.teaching_assignments?.courses;return norm([a.teachers.first_name,a.teachers.last_name,a.teachers.last_name,a.teachers.first_name,c?.code,c?.name,s.student_groups?.code,s.rooms?.code].join(" ")).includes(k)});drawRows()};
-  v.querySelector("#delegBtn").onclick=delegDialog;
-  const SL={soumis:"En attente",valide:"Validé",rejete:"Rejeté",correction_demandee:"Correction demandée"};
-  wireExport("rX",()=>({file:"emargements_"+(S.filter==="tous"?"tous":S.filter)+"_"+iso(new Date()),title:"Contrôle des émargements",subtitle:"Filtre : "+(F.find(f=>f[0]===S.filter)?.[1]||""),landscape:true,sheets:[
-    {name:"Émargements",title:"Émargements",keepEmpty:1,head:["Date","Enseignant","Cours","Groupe","Prévu","Déclaré","Écart (min)","État","Heures retenues","Saisi par délégation","Commentaire","Motif"],
-     rows:shown.map(a=>{const s=a.schedule_sessions;const c=s.teaching_assignments?.courses;return [fdl(s.session_date),a.teachers.last_name+" "+a.teachers.first_name,(c?c.code+" "+c.name:""),s.student_groups?.code||"",
-       hm(s.start_time)+"-"+hm(s.end_time),hm(a.declared_start)+"-"+hm(a.declared_end),a.declared_minutes-a.planned_minutes,SL[a.status]||a.status,a.retained_minutes!=null?dh(a.retained_minutes):"",a.entered_for_teacher?"Oui":"",a.teacher_comment||"",a.review_reason||""]})}]}));
+    <p class="lead">Vérifiez les déclarations des professeurs de vos départements. Seules les heures validées comptent pour la paie. Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies vous-même.</p>
+    <div class="seg ttseg" role="tablist" aria-label="Contrôle" style="margin-bottom:14px">${TABS.map(([k,l,n])=>`<button role="tab" data-rt="${k}" aria-pressed="${S.rvTab===k}">${l}${n!==""?" · "+n:""}</button>`).join("")}</div>
+    ${filt}<div id="rvBody">${S.rvTab==="paie"?'<p class="empty">Chargement…</p>':body}</div>`;
+  v.querySelectorAll("[data-rt]").forEach(b=>b.onclick=()=>{S.rvTab=b.dataset.rt;rerender()});
+  const on=(id,f)=>{const e=document.getElementById(id);if(e)e.onchange=f};
+  on("rvF",()=>{S.rvFrom=rvF.value||S.rvFrom;rerender()});on("rvTo",()=>{S.rvTo=rvTo.value||S.rvTo;rerender()});
+  on("rvD",()=>{S.rvDep=rvD.value;rerender()});on("rvT",()=>{S.rvT=rvT.value;rerender()});on("rvG",()=>{S.rvGroup=rvG.checked;rerender()});
+  const find=id=>all.find(a=>a.id==id);
+  v.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>reviewDialog(find(b.dataset.rv),flags(find(b.dataset.rv))));
+  const ra=document.getElementById("rvAll");
+  if(ra)ra.onclick=()=>openDialog(`<h3>Valider ${conf.length>1?conf.length+" émargements conformes":"l'émargement conforme"} ?</h3>
+      <p style="margin:0">Chacun est validé pour la durée prévue (${hrs(conf.reduce((t,a)=>t+a.planned_minutes,0))} au total). Les émargements à examiner ne sont pas touchés.</p>
+      <div class="rl">${conf.slice(0,40).map(a=>`<div class="rlrow"><b>${esc(a.teachers.last_name)} · ${fdate(a.schedule_sessions.session_date)} ${hm(a.schedule_sessions.start_time)}</b><span class="sub">${esc(a.schedule_sessions.teaching_assignments?.courses?.code||"")} · ${hrs(a.planned_minutes)}</span></div>`).join("")}${conf.length>40?`<p class="sub">… et ${conf.length-40} autre(s).</p>`:""}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Valider</button></div>`,
+    async()=>{let ok=0;const errs=[];for(const a of conf){try{await q(sb.rpc("review_attendance",{p_id:a.id,p_decision:"valide",p_retained_minutes:a.planned_minutes,p_reason:null}));ok++}catch(e){errs.push(errMsg(e))}}
+      toast(`${ok} émargement(s) validé(s)`+(errs.length?` · ${errs.length} refusé(s) : ${errs[0]}`:""),errs.length>0);rerender()});
+  if(S.rvTab==="non"){const {G,msgOf}=S._rvMsg;const tOf=tid=>({id:Number(tid),...(tMap.get(Number(tid))||{})});
+    const L=tid=>G.find(([k])=>k==tid)[1];
+    v.querySelectorAll("[data-rl]").forEach(b=>b.onclick=()=>{const t=tOf(b.dataset.rl);notifyDialog({title:"Relancer "+t.first_name+" "+t.last_name,intro:"Rappel des séances à émarger.",items:[{t,msg:msgOf(t,L(b.dataset.rl))}]})});
+    v.querySelectorAll("[data-dg]").forEach(b=>b.onclick=()=>delegDialog(Number(b.dataset.dg)));
+    const r2=document.getElementById("rvRelAll");if(r2)r2.onclick=()=>notifyDialog({title:"Relancer les professeurs",intro:"Chaque professeur reçoit la liste de ses séances à émarger.",items:G.map(([tid,L])=>{const t=tOf(tid);return{t,msg:msgOf(t,L)}})});
+    const d2=document.getElementById("rvDeleg");if(d2)d2.onclick=()=>delegDialog()}
+  if(S.rvTab==="hist"){const H=S._rvHist;let shown=H;
+    const SL={soumis:"En attente",valide:"Validé",rejete:"Rejeté",correction_demandee:"Correction demandée"};
+    const draw=()=>{rList.innerHTML=shown.length?`<table><thead><tr><th>Séance</th><th>Professeur</th><th>Prévu</th><th>Déclaré</th><th>État</th></tr></thead><tbody>${shown.map(a=>{const s=a.schedule_sessions;return `<tr><td>${fdate(s.session_date)}<div class="sub">${sessionLabel(s)} · ${esc(s.student_groups?.code||"")}</div></td><td>${esc(a.teachers.first_name+" "+a.teachers.last_name)}${a.entered_for_teacher?'<div class="sub">Saisi par délégation</div>':""}</td><td class="mono">${hm(s.start_time)}–${hm(s.end_time)}</td><td class="mono">${hm(a.declared_start)}–${hm(a.declared_end)}</td><td>${pill(a.status)}${a.retained_minutes!=null?`<div class="sub">retenu ${hrs(a.retained_minutes)}</div>`:""}${a.review_reason?`<div class="sub">${esc(a.review_reason)}</div>`:""}</td></tr>`}).join("")}</tbody></table>`:`<p class="empty">Aucun émargement avec ces filtres.</p>`};
+    draw();v.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.filter=b.dataset.f;rerender()});
+    const rs=document.getElementById("rSearch");if(rs)rs.oninput=()=>{const k=norm(rs.value.trim());shown=!k?H:H.filter(a=>norm([a.teachers.first_name,a.teachers.last_name,a.schedule_sessions.teaching_assignments?.courses?.code,a.schedule_sessions.teaching_assignments?.courses?.name,a.schedule_sessions.student_groups?.code].join(" ")).includes(k));draw()};
+    const xb=document.createElement("div");xb.className="row";xb.style.margin="10px 0 0";xb.innerHTML=xbar("rX");rList.after(xb);
+    wireExport("rX",()=>({file:"emargements_"+S.rvFrom+"_"+S.rvTo,title:"Émargements contrôlés",subtitle:`Du ${fdl(S.rvFrom)} au ${fdl(S.rvTo)}`,landscape:true,sheets:[{name:"Émargements",title:"Émargements",keepEmpty:1,head:["Date","Enseignant","Cours","Groupe","Prévu","Déclaré","Écart (min)","État","Heures retenues","Délégation","Commentaire","Motif"],
+      rows:shown.map(a=>{const s=a.schedule_sessions,c=s.teaching_assignments?.courses;return [fdl(s.session_date),a.teachers.last_name+" "+a.teachers.first_name,c?c.code+" "+c.name:"",s.student_groups?.code||"",hm(s.start_time)+"-"+hm(s.end_time),hm(a.declared_start)+"-"+hm(a.declared_end),a.declared_minutes-a.planned_minutes,SL[a.status]||a.status,a.retained_minutes!=null?dh(a.retained_minutes):"",a.entered_for_teacher?"Oui":"",a.teacher_comment||"",a.review_reason||""]})}]}))}
+  if(S.rvTab==="paie")payReadyPane(document.getElementById("rvBody"),okS);
+}
+/* un mois est prêt pour la paie quand il ne reste ni émargement en attente, ni correction, ni séance passée non émargée */
+async function payReadyPane(el,okS){
+  const now=new Date();if(!S.rvM)S.rvM=new Date(now.getFullYear(),now.getMonth(),1);
+  const M=S.rvM,f=iso(M),t=iso(new Date(M.getFullYear(),M.getMonth()+1,0)),ended=new Date(t+"T23:59:59")<now;
+  const ss=(await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teaching_assignments(courses(code,department_id,departments(code))),attendance_records(status,retained_minutes,declared_minutes)").gte("session_date",f).lte("session_date",t))).filter(okS);
+  const live=ss.filter(x=>x.status!=="annulee"),past=live.filter(x=>sEnd(x)<=now),fut=live.filter(x=>sEnd(x)>now);
+  const ar=x=>x.attendance_records,c=st=>past.filter(x=>ar(x)?.status===st);
+  const val=c("valide"),sub=c("soumis"),cor=c("correction_demandee"),rej=c("rejete"),non=past.filter(x=>!ar(x));
+  const ready=ended&&!sub.length&&!cor.length&&!non.length;
+  const ml=M.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const li=(k,n,txt,tab)=>`<li class="${n?k:"ok"}"><i>${n?(k==="bad"?"✕":"!"):"✓"}</i><span style="flex:1">${txt}</span>${n&&tab?`<button class="btn sm" data-go="${tab}">Voir</button>`:""}</li>`;
+  el.innerHTML=`<div class="weeknav"><button class="wbtn" id="pmP" aria-label="Mois précédent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="wmid"><small>Mois de</small><b>${ml.charAt(0).toUpperCase()+ml.slice(1)}</b></div>
+      <button class="wbtn" id="pmN" aria-label="Mois suivant"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button><button class="wnow" id="pmT">Ce mois</button></div>
+    <div class="panel hcard" style="border-color:${ready?"var(--ok)":"var(--line)"}">
+      <h2 style="margin:0 0 4px;color:${ready?"var(--ok)":"inherit"}">${ready?"✓ Mois prêt pour la paie":ended?"Pas encore prêt pour la paie":"Mois en cours"}</h2>
+      <p class="sub" style="margin:0 0 10px">${ready?"Tous les émargements du mois sont contrôlés. Le responsable financier peut calculer la paie.":ended?"Il reste des points à régler avant le calcul de la paie.":`Le mois n'est pas terminé : ${fut.length} séance(s) restent à venir.`}</p>
+      <div class="stats mini"><div class="stat"><b>${past.length}</b><span>séances passées</span></div><div class="stat"><b style="color:var(--ok)">${val.length}</b><span>validées · ${hrs(val.reduce((s,x)=>s+(ar(x).retained_minutes||0),0))}</span></div><div class="stat"><b>${ss.length-live.length}</b><span>annulées</span></div></div>
+      <ul class="chk">${li("warn",sub.length,`${sub.length} émargement(s) en attente de contrôle`,"ctrl")}${li("warn",cor.length,`${cor.length} correction(s) demandée(s), sans réponse du professeur`,"ctrl")}${li("bad",non.length,`${non.length} séance(s) passée(s) non émargée(s)`,"non")}
+        ${rej.length?`<li class="info"><i>i</i><span>${rej.length} émargement(s) rejeté(s) : non payés.</span></li>`:""}</ul></div>`;
+  pmP.onclick=()=>{S.rvM=new Date(M.getFullYear(),M.getMonth()-1,1);rerender()};pmN.onclick=()=>{S.rvM=new Date(M.getFullYear(),M.getMonth()+1,1);rerender()};pmT.onclick=()=>{S.rvM=null;rerender()};
+  el.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{S.rvTab=b.dataset.go;if(b.dataset.go==="non"){S.rvFrom=f;S.rvTo=iso(new Date())}rerender()});
 }
 
-async function delegDialog(){
+async function delegDialog(onlyT){
   const from=new Date();from.setDate(from.getDate()-45);
   let list=await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,teacher_id,teachers(first_name,last_name),teaching_assignments(courses(code,name)),student_groups(code),attendance_records(id)").neq("status","annulee").gte("session_date",iso(from)).lte("session_date",iso(new Date())).order("session_date",{ascending:false}).limit(500));
   const now=new Date();
-  list=list.filter(s=>!s.attendance_records&&new Date(s.session_date+"T"+s.start_time)<=now&&!(S.teacher&&s.teacher_id===S.teacher.id));
+  list=list.filter(s=>!s.attendance_records&&new Date(s.session_date+"T"+s.start_time)<=now&&!(S.teacher&&s.teacher_id===S.teacher.id)&&(!onlyT||s.teacher_id===onlyT));
   if(!list.length){toast("Aucune séance en attente d'émargement sur les 45 derniers jours.");return}
   const byId=Object.fromEntries(list.map(s=>[s.id,s]));
   openDialog(`<h3>Émarger pour un professeur</h3>
@@ -965,9 +1054,10 @@ async function delegDialog(){
   dS.onchange=fill;fill();
 }
 
-function reviewDialog(a){
+function reviewDialog(a,fl){
   const s=a.schedule_sessions;const def=Math.min(a.declared_minutes,a.planned_minutes);
   openDialog(`<h3>Contrôler l'émargement</h3>
+    ${fl&&fl.length?`<ul class="chk">${fl.map(x=>`<li class="warn"><i>!</i><span>${esc(x)}</span></li>`).join("")}</ul>`:""}
     <dl class="kv"><dt>Professeur</dt><dd>${esc(a.teachers.first_name+" "+a.teachers.last_name)}</dd>
       <dt>Cours</dt><dd>${sessionLabel(s)}</dd><dt>Date</dt><dd>${fdate(s.session_date)}</dd>
       <dt>Prévu</dt><dd class="mono">${hm(s.start_time)}–${hm(s.end_time)} (${hrs(a.planned_minutes)})</dd>
@@ -2169,7 +2259,7 @@ async function viewDashboard(v){
     ${sansSorted.length?`<h2 id="sansList">Séances sans émargement</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Enseignant</th><th>Cours</th><th>Groupe</th></tr></thead><tbody>
       ${sansSorted.slice(0,15).map(s=>`<tr><td>${fdate(s.session_date)} ${hm(s.start_time)}</td><td>${esc(s.teachers?s.teachers.last_name+" "+s.teachers.first_name:"—")}</td><td>${sessionLabel(s)}</td><td>${esc(s.student_groups?.code)}</td></tr>`).join("")}</tbody></table></div>
       ${sansSorted.length>15?`<p class="sub">Les 15 plus anciennes sur ${sansSorted.length}. La liste complète est dans l'export.</p>`:""}`:""}`;
-  const go=(id,tab)=>{const b=document.getElementById(id);if(b)b.onclick=()=>{S.tab=tab;S.filter="soumis";try{history.replaceState(null,"","#"+tab)}catch(e){}renderShell()}};
+  const go=(id,tab)=>{const b=document.getElementById(id);if(b)b.onclick=()=>{S.tab=tab;S.filter="soumis";S.rvTab="ctrl";try{history.replaceState(null,"","#"+tab)}catch(e){}renderShell()}};
   go("goCtl","controle");go("goPay","paie");
   const gs=document.getElementById("goSans");if(gs)gs.onclick=()=>document.getElementById("sansList").scrollIntoView({behavior:"smooth",block:"start"});
   wireExport("dX",()=>({file:"tableau-de-bord_"+S.dFrom+"_"+S.dTo,title:"Tableau de bord",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),sheets:[
