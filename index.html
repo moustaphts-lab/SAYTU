@@ -89,6 +89,13 @@ table.ov thead th{font-size:13px;color:var(--muted);background:var(--bg)}table.o
 ul.chk{list-style:none;margin:0;padding:0;display:grid;gap:6px}ul.chk li{display:flex;gap:10px;align-items:flex-start;font-size:14px;padding:8px 10px;border-radius:10px;background:var(--bg)}
 ul.chk i{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:12px;color:#fff}
 ul.chk .ok i{background:var(--ok)}ul.chk .warn i{background:var(--warn)}ul.chk .bad i{background:var(--bad)}ul.chk .info i{background:var(--muted)}ul.chk .bad{color:var(--bad);font-weight:600}
+.dhgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}.dh{display:grid;gap:4px}
+.dh button{border:1px solid var(--line,#e3e8e6);background:var(--surface);color:var(--muted);border-radius:10px;padding:7px 4px;font:600 13px var(--f-body);cursor:pointer}
+.dh .dh-d{font-size:13px}.dh .dh-h{font-size:12px;font-weight:500}
+.dh button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.dh .dh-h[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.dh button[aria-pressed="false"]{text-decoration:line-through;background:repeating-linear-gradient(135deg,var(--surface) 0 5px,var(--bg) 5px 10px)}
+@media(max-width:560px){.dhgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .pbar{height:5px;border-radius:9px;background:var(--line,#e3e8e6);overflow:hidden;margin-top:5px;min-width:70px}.pbar i{display:block;height:100%;background:var(--accent)}
 .weeknav{display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line,#e3e8e6);border-radius:16px;padding:8px;margin:4px 0 18px}
 .weeknav .wbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line,#e3e8e6);background:var(--bg,#f3f5f4);color:inherit;display:grid;place-items:center;cursor:pointer;flex:none}
@@ -1342,6 +1349,9 @@ function generateTimetable(o,D){
     existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
   const len=o.len,maxChain=Math.max(1,Math.floor(360/o.len)),start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
   const times=[];for(let t=start;t+len<=end;t+=len){if(lf!=null&&lt!=null&&ov({s:t,e:t+len},{s:lf,e:lt}))continue;times.push(t)}
+  /* demi-journées sans cours : un créneau qui finit avant la pause (ou avant 13 h sans pause) est « matin », sinon « après-midi » */
+  const noon=lf!=null?lf:13*60,off=new Set(o.off||[]);
+  const blocked=(d,t)=>off.has(d+(t+len<=noon?"am":"pm"));
   const rooms=[...D.rooms].sort((a,b)=>a.capacity-b.capacity);
   const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size]));
   const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
@@ -1355,7 +1365,7 @@ function generateTimetable(o,D){
   const placed=[],unplaced=[];
   for(const j of jobs){const a=j.a;let done=0;const why={};const usedDays=new Set(D.slots.filter(x=>x.assignment_id===a.id).map(x=>x.day_of_week));
     for(let k=0;k<j.n;k++){let best=null;
-      for(const d of o.days)for(const t of times){const e=t+len;
+      for(const d of o.days)for(const t of times){const e=t+len;if(blocked(d,t))continue;
         const fail=r=>{why[r]=(why[r]||0)+1};
         const tav=av(a.teacher_id);
         if(o.useAvail&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail(D.declared.has(a.teacher_id)?"hors disponibilités du professeur":"pas de réponse du professeur pour cette semaine");continue}
@@ -1383,6 +1393,7 @@ function generateTimetable(o,D){
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
   try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","maxDays","maxCourse","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  cfg.off=[];
   const drafts=ctx.slots.filter(x=>!x.published);
   if(cfg.replace==null)cfg.replace=!ctx.published&&drafts.length>0;
   /* base de travail : en mode « refaire », les brouillons de la semaine sont ignorés et leurs heures redeviennent à placer */
@@ -1393,7 +1404,10 @@ function genDialog(ctx){
     openDialog(`<h3>Générer l'emploi du temps</h3>
       <p class="sub" style="margin:0">Le générateur place, dans cette semaine, les heures qui restent à faire pour chaque matière, avec les professeurs disponibles. Un professeur sans réponse n'est pas placé (vous pouvez saisir ses disponibilités depuis l'emploi du temps). Il respecte les conflits et les salles. Jours, heures et pause sont repris de « Jours et horaires » du Référentiel (modifiables ici pour cette génération seulement). Vous voyez le résultat avant de l'enregistrer.</p>
       <div class="panel" style="padding:10px 14px"><b>Semaine du ${weekRange(ctx.week)}</b><div class="sub">${ctx.assigns.length} matière(s) du semestre en cours · ${ctx.declared.size} professeur(s) ont donné leurs disponibilités</div></div>
-      <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="gDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${cfg.days.includes(d)}">${DAYS[d].slice(0,3)}.</button>`).join("")}</div></div>
+      <div><div class="sub" style="margin-bottom:6px">Jours et demi-journées de cours cette semaine <span class="sub">(touchez un jour, un matin ou un après-midi pour le marquer sans cours)</span></div>
+        <div class="dhgrid" id="gDays">${[1,2,3,4,5,6].map(d=>{const on=cfg.days.includes(d),am=on&&!cfg.off.includes(d+"am"),pm=on&&!cfg.off.includes(d+"pm");
+          return `<div class="dh"><button type="button" class="dh-d" data-dd="${d}" aria-pressed="${am||pm}">${DAYS[d].slice(0,3)}. ${dayDate(ctx.week,d)}</button><button type="button" class="dh-h" data-dh="${d}am" aria-pressed="${am}">Matin</button><button type="button" class="dh-h" data-dh="${d}pm" aria-pressed="${pm}">Après-midi</button></div>`}).join("")}</div>
+        <p class="sub" style="margin:6px 0 0" id="gOffTxt"></p></div>
       <div class="grid2"><label>Début de journée<input id="gStart" type="time" value="${cfg.start}" required></label><label>Fin de journée<input id="gEnd" type="time" value="${cfg.end}" required></label>
         <label>Durée d'un créneau<select id="gLen">${[...new Set([60,90,120,150,180,240,cfg.len])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m==cfg.len?"selected":""}>${m%60?Math.floor(m/60)+" h "+(m%60):m/60+" h"}</option>`).join("")}</select></label>
         <label>Max d'heures par jour (groupe)<input id="gMaxG" type="number" min="1" max="12" step="0.5" value="${cfg.maxGroup}"></label>
@@ -1409,7 +1423,9 @@ function genDialog(ctx){
       <label style="flex-direction:row;align-items:center;gap:10px;font-size:14px;color:var(--ink)"><input type="checkbox" id="gAv" ${cfg.useAvail?"checked":""}>Respecter les disponibilités de la semaine (décocher : tout le monde est considéré disponible)</label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="go">Voir la proposition</button></div>`,
     async()=>{
-      cfg={days:[...document.querySelectorAll("#gDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:gStart.value,end:gEnd.value,len:Number(gLen.value),lunchFrom:gLf.value,lunchTo:gLt.value,
+      const halves=[...document.querySelectorAll("#gDays [data-dh]")];
+      const offL=halves.filter(b=>b.getAttribute("aria-pressed")!=="true").map(b=>b.dataset.dh);
+      cfg={days:[1,2,3,4,5,6].filter(d=>!(offL.includes(d+"am")&&offL.includes(d+"pm"))),off:offL,start:gStart.value,end:gEnd.value,len:Number(gLen.value),lunchFrom:gLf.value,lunchTo:gLt.value,
         maxGroup:Number(gMaxG.value)||6,maxTeacher:Number(gMaxT.value)||6,maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),maxCourse:Math.max(1,Number(gMaxC.value)||4),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
       if(!cfg.days.length)throw new Error("Choisissez au moins un jour.");
       if(cfg.end<=cfg.start)throw new Error("La fin de journée doit être après le début.");
@@ -1419,7 +1435,13 @@ function genDialog(ctx){
       const B=base();
       const res=generateTimetable(cfg,{assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
       preview(res);return "keep"});
-    document.querySelectorAll("#gDays button").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true"));
+    const offTxt=()=>{const L=[];[1,2,3,4,5,6].forEach(d=>{const a=document.querySelector(`[data-dh="${d}am"]`).getAttribute("aria-pressed")==="true",p=document.querySelector(`[data-dh="${d}pm"]`).getAttribute("aria-pressed")==="true";
+        document.querySelector(`[data-dd="${d}"]`).setAttribute("aria-pressed",String(a||p));
+        if(!a&&!p)L.push(DAYS[d]+" "+dayDate(ctx.week,d));else if(!a)L.push(DAYS[d]+" matin");else if(!p)L.push(DAYS[d]+" après-midi")});
+      gOffTxt.textContent=L.length?"Sans cours : "+L.join(", "):"Tous les jours, matin et après-midi."};
+    document.querySelectorAll("#gDays [data-dh]").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");offTxt()});
+    document.querySelectorAll("#gDays [data-dd]").forEach(b=>b.onclick=()=>{const d=b.dataset.dd,hs=document.querySelectorAll(`[data-dh="${d}am"],[data-dh="${d}pm"]`);const anyOn=[...hs].some(x=>x.getAttribute("aria-pressed")==="true");hs.forEach(x=>x.setAttribute("aria-pressed",String(!anyOn)));offTxt()});
+    offTxt();
     document.querySelectorAll("[data-rep]").forEach(b=>b.onclick=()=>{cfg.replace=b.dataset.rep==="1";document.querySelectorAll("[data-rep]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)))});
   };
   const tsum=P=>{const m={};
