@@ -2208,35 +2208,51 @@ async function viewAccounts(el){
   const pending=profiles.filter(u=>u.active!==false&&u.must_change_password);
   const actives=profiles.filter(u=>u.active!==false).length;
   S.accQ=S.accQ||"";S.accRole=S.accRole||"";if(S.accRole&&!["custom","_none",...POSTES.map(p=>p[0])].includes(S.accRole))S.accRole="";S.accState=S.accState||"";
-  const ROLEF=[["","Tous les postes"],...POSTES.map(p=>[p[0],p[1]]),["custom","Poste personnalisé"],["_none","Sans poste"]];
+  const ROLEF=[["","Tous les postes"],...POSTES.filter(p=>p[0]!=="prof").map(p=>[p[0],p[1]]),["custom","Poste personnalisé"],["_none","Sans poste"]];
   const pkey=rs=>{const o=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||""))));return o.key?(o.key+(o.teaches&&o.key!=="prof"?" prof":"")):"_none"};
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes</h2><div class="row" style="gap:8px"><button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button><button class="btn sm primary" id="addAcc">Créer un compte</button></div></div>
+  /* deux groupes : personnel administratif (tout poste autre que Professeur, ou sans poste) et professeurs */
+  const isProfOnly=u=>{const rs=rolesOf(u.id);return rs.length>0&&rs.every(r=>r.role==="professeur")};
+  const teaches=u=>rolesOf(u.id).some(r=>r.role==="professeur");
+  const staff=profiles.filter(u=>!isProfOnly(u)),profs=profiles.filter(isProfOnly);
+  S.accTab=S.accTab||"staff";S.accWithStaff=!!S.accWithStaff;
+  const P=S.accTab==="prof";
+  const list=P?[...profs,...staff.filter(teaches)].sort((x,y)=>x.full_name.localeCompare(y.full_name,"fr")):staff;
+  const stateOf=(u,li)=>`${u.active===false?"off":"on"}${u.must_change_password?" tmp":""}${info.length&&!li?" never":""}`;
+  const lienT=(u,t)=>t?esc(t.first_name+" "+t.last_name):teaches(u)?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>';
+  const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
+  const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>`;
+  const posteCell=rs=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabel(rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Comptes</h2><div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="stats mini"><div class="stat"><b>${actives}</b><span>comptes actifs</span></div><div class="stat"><b>${profiles.length-actives}</b><span>désactivés</span></div>
       <div class="stat"><b style="color:${pending.length?"var(--warn)":"inherit"}">${pending.length}</b><span>mot de passe provisoire</span></div>
       <div class="stat"><b style="color:${neverIn.length?"var(--warn)":"inherit"}">${neverIn.length}</b><span>jamais connectés</span></div></div>
     ${noRole.length||profNoT.length||tNoAcc.length?`<div class="panel" style="padding:12px 14px;margin-bottom:14px"><b>Points à régler</b><ul class="chk" style="margin-top:8px">
-      ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans poste : la personne ne voit rien après connexion (${esc(noRole.map(u=>u.full_name).join(", "))}).</span></li>`:""}
+      ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans poste : la personne ne voit rien après connexion (${esc(noRole.map(u=>u.full_name).join(", "))}). Ils sont dans « Personnel administratif ».</span></li>`:""}
       ${profNoT.length?`<li class="bad"><i>✕</i><span>${profNoT.length} compte(s) professeur sans fiche enseignant : ils ne peuvent pas se connecter normalement (${esc(profNoT.map(u=>u.full_name).join(", "))}). Ouvrez le compte pour le lier à sa fiche.</span></li>`:""}
-      ${tNoAcc.length?`<li class="info"><i>i</i><span>${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger. Utilisez « Créer les comptes… ».</span></li>`:""}</ul></div>`:""}
+      ${tNoAcc.length?`<li class="info"><i>i</i><span>${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger. Utilisez « Créer les comptes… » dans l'onglet Professeurs.</span></li>`:""}</ul></div>`:""}
+    <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
+      <button type="button" role="tab" data-acct="staff" aria-pressed="${!P}">Personnel administratif (${staff.length})</button>
+      <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button></div>
     <div class="row" style="margin-bottom:10px;align-items:flex-end">
       <label style="flex:1;min-width:200px">Rechercher<input id="accQ" placeholder="Nom ou adresse…" value="${esc(S.accQ)}"></label>
-      <label>Poste<select id="accRole">${ROLEF.map(([k,l])=>`<option value="${k}" ${k===S.accRole?"selected":""}>${esc(l)}</option>`).join("")}</select></label>
+      ${P?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);padding-bottom:10px"><input type="checkbox" id="accWS" ${S.accWithStaff?"checked":""}> Inclure le personnel qui enseigne</label>`
+        :`<label>Poste<select id="accRole">${ROLEF.map(([k,l])=>`<option value="${k}" ${k===S.accRole?"selected":""}>${esc(l)}</option>`).join("")}</select></label>`}
       <label>État<select id="accState">${[["","Tous"],["on","Actifs"],["off","Désactivés"],["tmp","Mot de passe provisoire"],["never","Jamais connectés"]].map(([k,l])=>`<option value="${k}" ${k===S.accState?"selected":""}>${l}</option>`).join("")}</select></label></div>
-    <div class="panel tbl"><table id="accTable"><thead><tr><th>Nom</th><th>Poste</th><th>Enseignant</th><th>Dernière connexion</th><th>État</th><th></th></tr></thead><tbody>
-    ${profiles.map(u=>{const rs=rolesOf(u.id);const t=tOf(u.id);const li=inf(u.id).last_sign_in_at;
-      return `<tr data-u="${u.id}" data-roles="${pkey(rs)}" data-state="${u.active===false?"off":"on"}${u.must_change_password?" tmp":""}${info.length&&!li?" never":""}">
-      <td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>
-      <td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabel(rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>
-      <td>${t?esc(t.first_name+" "+t.last_name):rs.some(r=>r.role==="professeur")?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>'}</td>
+    <div class="panel tbl"><table id="accTable"><thead><tr><th>Nom</th>${P?"<th>Fiche enseignant</th>":"<th>Poste</th><th>Enseigne</th>"}<th>Dernière connexion</th><th>État</th><th></th></tr></thead><tbody>
+    ${list.map(u=>{const rs=rolesOf(u.id);const t=tOf(u.id);const li=inf(u.id).last_sign_in_at;const st=!isProfOnly(u);
+      return `<tr data-u="${u.id}" data-roles="${pkey(rs)}" data-staff="${st?1:0}" data-state="${stateOf(u,li)}">
+      ${nomCell(u)}
+      ${P?`<td>${lienT(u,t)}${st?`<div class="sub">${esc(posteLabel(rs))}</div>`:""}</td>`:`${posteCell(rs)}<td>${teaches(u)?lienT(u,t):'<span class="sub">non</span>'}</td>`}
       <td class="mono">${info.length?(li?fdt(li):'<span class="sub">jamais</span>'):"—"}</td>
-      <td>${u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>'}</td>
+      <td>${etat(u)}</td>
       <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-det="${u.id}">Ouvrir</button></div></td></tr>`}).join("")}
     </tbody></table><p class="empty" id="accNone" hidden>Aucun compte ne correspond.</p></div>`;
 
-  const filt=()=>{const k=norm(accQ.value.trim()),r=accRole.value,st=accState.value;S.accQ=accQ.value;S.accRole=r;S.accState=st;let n=0;
-    el.querySelectorAll("#accTable tbody tr").forEach(tr=>{const ok=(!k||norm(tr.textContent).includes(k))&&(!r||tr.dataset.roles.split(" ").includes(r))&&(!st||tr.dataset.state.split(" ").includes(st));tr.hidden=!ok;if(ok)n++});
+  el.querySelectorAll("[data-acct]").forEach(b=>b.onclick=()=>{S.accTab=b.dataset.acct;rerender()});
+  const filt=()=>{const k=norm(accQ.value.trim()),r=P?"":accRole.value,st=accState.value,ws=P&&accWS.checked;S.accQ=accQ.value;if(!P)S.accRole=r;else S.accWithStaff=ws;S.accState=st;let n=0;
+    el.querySelectorAll("#accTable tbody tr").forEach(tr=>{const ok=(!k||norm(tr.textContent).includes(k))&&(!r||tr.dataset.roles.split(" ").includes(r))&&(!st||tr.dataset.state.split(" ").includes(st))&&(!P||ws||tr.dataset.staff==="0");tr.hidden=!ok;if(ok)n++});
     accNone.hidden=n>0};
-  accQ.oninput=filt;accRole.onchange=filt;accState.onchange=filt;filt();
+  accQ.oninput=filt;accState.onchange=filt;if(P)accWS.onchange=filt;else accRole.onchange=filt;filt();
 
   const saveRoles=async(userId,desired)=>{
     const mine=rolesOf(userId);
@@ -2250,7 +2266,7 @@ async function viewAccounts(el){
 
   addAcc.onclick=()=>{
     const free=teachers.filter(t=>!t.profile_id);
-    openDialog(`<h3>Créer un compte</h3>
+    openDialog(`<h3>${P?"Créer un compte professeur":"Créer un compte"}</h3>
       ${free.length?`<label>Enseignant sans compte (facultatif)<select id="aT"><option value="">—</option>${free.map(t=>`<option value="${t.id}">${esc(t.first_name+" "+t.last_name+" · "+t.email)}</option>`).join("")}</select></label>`:""}
       <div class="grid2"><label>Nom complet<input id="aN" required></label><label>Adresse e-mail<input id="aE" type="email" required></label></div>
       ${roleBoxes(deps,new Set())}
@@ -2264,14 +2280,14 @@ async function viewAccounts(el){
       showCredentials("Compte créé",r.email,r.temp_password);
       return "keep";
     });
-    wireRoleBoxes();
+    wireRoleBoxes();if(P)document.getElementById("dlgForm")._setPoste("prof");
     const sel=document.getElementById("aT");
     if(sel)sel.onchange=()=>{const t=free.find(x=>x.id==sel.value);if(!t)return;aN.value=t.first_name+" "+t.last_name;aE.value=t.email;
       const f=document.getElementById("dlgForm");if(!rPoste.value)f._setPoste("prof");else if(rPoste.value!=="prof"){rTeach.checked=true;rTeach.onchange()}};
   };
 
   /* création en série pour les enseignants sans compte */
-  bulkAcc.onclick=()=>openDialog(`<h3>Créer ${tNoAcc.length} compte(s) professeur</h3>
+  if(P)bulkAcc.onclick=()=>openDialog(`<h3>Créer ${tNoAcc.length} compte(s) professeur</h3>
       <p style="margin:0">Un compte avec le rôle Professeur sera créé pour chaque enseignant sans compte, avec son adresse e-mail de la fiche et un mot de passe provisoire. Vous pourrez ensuite imprimer la liste des identifiants ou les envoyer par WhatsApp ou SMS.</p>
       <div class="rl">${tNoAcc.map(t=>`<div class="rlrow"><b>${esc(t.first_name+" "+t.last_name)}</b><span class="sub mono">${esc(t.email||"pas d'adresse")}</span></div>`).join("")}</div>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer les comptes</button></div>`,
