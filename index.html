@@ -889,7 +889,7 @@ async function viewPlanning(v){
   if(!S.ttTab)S.ttTab="grille";
   const W=S.ttWeek,wk=iso(W),wEnd=iso(addDays(W,6)),prevWk=iso(addDays(W,-7));
   const sc=S.sched||SCHED_DEFAULT;
-  const SLOTSEL="id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups(code))";
+  const SLOTSEL="id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code))";
   const [slots,allSlots,cancelled,sessW,conf,groups,teachers,rooms,assignsAll,sems,avails,answers,pub]=await Promise.all([
     q(sb.from("timetable_slots").select(SLOTSEL).eq("week_start",wk).order("start_time")),
     q(sb.from("timetable_slots").select("assignment_id,start_time,end_time,week_start")),
@@ -899,7 +899,7 @@ async function viewPlanning(v){
     q(sb.from("student_groups").select("id,code,name,size,programs(code,department_id,departments(code,name))").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name,active").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
-    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
     q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",wk)),
     q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",wk)),
@@ -1339,8 +1339,8 @@ async function viewMyTimetable(v){
   if(!S.ttWeek)S.ttWeek=planDefaultWeek();
   const W=S.ttWeek,wk=iso(W);
   const [slots,assigns,avails,sess]=await Promise.all([
-    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code,name),teaching_assignments!inner(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups(code))").eq("published",true).eq("week_start",wk).eq("teaching_assignments.teacher_id",tid).order("start_time")),
-    q(sb.from("teaching_assignments").select("id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),courses(code,name),student_groups(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
+    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code,name),teaching_assignments!inner(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code))").eq("published",true).eq("week_start",wk).eq("teaching_assignments.teacher_id",tid).order("start_time")),
+    q(sb.from("teaching_assignments").select("id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),courses(code,name),student_groups!teaching_assignments_group_id_fkey(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("teacher_id",tid).eq("week_start",wk)),
     q(sb.from("schedule_sessions").select("slot_id,status,note").eq("teacher_id",tid).gte("session_date",wk).lte("session_date",iso(addDays(W,6))))]);
   const mins=x=>{const t=s=>{const [h,m]=s.slice(0,5).split(":").map(Number);return h*60+m};return t(x.end_time)-t(x.start_time)};
