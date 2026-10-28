@@ -428,7 +428,7 @@ const DEMO = [
   ["financier@univdemo.test","Responsable financier"],
   ["admin@univdemo.test","Administrateur (comptes)"]];
 const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const ROLE_LABEL = {admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Consultation"};
+const ROLE_LABEL = {admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Direction générale (consultation et contrôle)"};
 const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
@@ -1984,7 +1984,7 @@ async function viewSchedule(el){
 }
 
 /* ---------- comptes et rôles ---------- */
-const SIMPLE_ROLES=["admin","planificateur","professeur","finance"];
+const SIMPLE_ROLES=["admin","planificateur","professeur","finance","direction"];
 async function callUsers(body){
   const {data,error}=await sb.functions.invoke("manage-users",{body});
   if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.error)m=j.error}catch(e){}throw new Error(m)}
