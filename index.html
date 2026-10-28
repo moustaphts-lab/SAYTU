@@ -631,9 +631,12 @@ function openDialog(html,onSubmit){
   };
   if(!dlg.open)dlg.showModal();
   f.focus({preventScroll:true});f.scrollTop=0;dlg.scrollTop=0;
-  if(!dlg._out){dlg._out=1;let down=null;
-    dlg.addEventListener("pointerdown",e=>{down=e.target});
-    dlg.addEventListener("click",e=>{if(e.target===dlg&&down===dlg)dlg.close();down=null});}
+  if(!dlg._out){dlg._out=1;let down=false;
+    /* toucher en dehors du cadre de la fenêtre la ferme (test par coordonnées : fiable sur iPad) */
+    const outside=e=>{if(e.target!==dlg)return false;const r=dlg.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom};
+    dlg.addEventListener("pointerdown",e=>{down=outside(e)});
+    dlg.addEventListener("pointerup",e=>{if(down&&outside(e))dlg.close();down=false});
+    dlg.addEventListener("click",e=>{if(outside(e))dlg.close()});}
 }
 
 /* ---------- professeur ---------- */
