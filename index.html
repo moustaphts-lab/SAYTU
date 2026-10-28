@@ -1346,7 +1346,7 @@ function timetableGrid(o){
 }
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
-const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,maxDays:0,maxCourse:4,compact:true,useAvail:true};
+const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,maxDays:0,maxCourse:0,compact:true,useAvail:true};
 function generateTimetable(o,D){
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
@@ -1367,7 +1367,7 @@ function generateTimetable(o,D){
   const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size]));
   const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
   /* heures restantes de chaque matière (déjà déduites de tous les créneaux programmés, y compris cette semaine) ; plafond par matière dans la semaine */
-  const jobs=D.assigns.map(a=>{const rem=Math.max(0,D.remaining[a.id]||0);const cap=Math.max(0,Math.floor(o.maxCourse*60/len)-Math.round((existing[a.id]||0)/len));
+  const jobs=D.assigns.map(a=>{const rem=Math.max(0,D.remaining[a.id]||0);const cap=o.maxCourse?Math.max(0,Math.floor(o.maxCourse*60/len)-Math.round((existing[a.id]||0)/len)):1e9;
     return{a,n:Math.min(cap,Math.ceil(rem/len))}}).filter(j=>j.n>0);
   const restricted=()=>true;
   const availMin=a=>o.useAvail?av(a.teacher_id).reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9;
@@ -1403,7 +1403,7 @@ function generateTimetable(o,D){
 }
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
-  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","maxDays","maxCourse","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxGroup","maxTeacher","maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
   cfg.off=[];
   /* jours et créneaux de la semaine type (Référentiel > Jours et horaires) */
   const T2=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
@@ -1427,8 +1427,7 @@ function genDialog(ctx){
         <p class="sub" style="margin:6px 0 0" id="gOffTxt"></p></div>
       <div class="grid2">
         <label>Max d'heures par jour (professeur)<input id="gMaxT" type="number" min="1" max="12" step="0.5" value="${cfg.maxTeacher}"></label>
-        <label>Jours de présence max par professeur<input id="gMaxD" type="number" min="0" max="6" step="1" value="${cfg.maxDays||0}"><small class="sub">0 = sans limite</small></label>
-        <label>Max d'heures par matière dans la semaine<input id="gMaxC" type="number" min="1" max="12" step="1" value="${cfg.maxCourse||4}"></label></div>
+        <label>Jours de présence max par professeur<input id="gMaxD" type="number" min="0" max="6" step="1" value="${cfg.maxDays||0}"><small class="sub">0 = sans limite</small></label></div>
       ${!ctx.published&&drafts.length?`<div class="seg" role="radiogroup" aria-label="Brouillons existants" style="display:grid;grid-template-columns:1fr 1fr">
         <button type="button" data-rep="1" aria-pressed="${cfg.replace}">Refaire la semaine<br><small style="font-weight:500">remplace les ${drafts.length} cours en brouillon</small></button>
         <button type="button" data-rep="0" aria-pressed="${!cfg.replace}">Compléter<br><small style="font-weight:500">garde les ${drafts.length} cours déjà placés</small></button></div>`:""}
@@ -1439,7 +1438,7 @@ function genDialog(ctx){
     async()=>{
       const offL=[...document.querySelectorAll("#gGrid [data-gc]")].filter(b=>b.getAttribute("aria-pressed")!=="true").map(b=>b.dataset.gc);
       cfg={...cfg,days:SD.filter(d=>!ST.every(t=>offL.includes(d+"|"+t))),off:offL,
-        maxTeacher:Number(gMaxT.value)||6,maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),maxCourse:Math.max(1,Number(gMaxC.value)||4),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
+        maxTeacher:Number(gMaxT.value)||6,maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
       try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,maxCourse:cfg.maxCourse,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
