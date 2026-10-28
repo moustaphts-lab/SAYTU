@@ -516,6 +516,10 @@ async function loadSchedule(){
   catch(e){S.sched={...SCHED_DEFAULT}}
   return S.sched;
 }
+/* débuts des créneaux d'une journée : on avance de « durée » en « durée » ; un créneau qui toucherait la pause repart à la fin de la pause */
+function dayStarts(st,en,len,lf,lt){const out=[];let t=st;
+  while(t+len<=en){if(lf!=null&&lt!=null&&t<lt&&lf<t+len){if(t+len<=lf){out.push(t);t+=len;continue}t=Math.max(t,lt);continue}out.push(t);t+=len}
+  return out}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
@@ -1355,7 +1359,7 @@ function generateTimetable(o,D){
   D.slots.forEach(x=>{const a=x.teaching_assignments;add("g",a.group_id,x.day_of_week,T(x.start_time),T(x.end_time));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));tday(a.teacher_id).add(x.day_of_week);asl(x.assignment_id,x.day_of_week).push({s:T(x.start_time),e:T(x.end_time)});if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
     existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
   const len=o.len,maxChain=Math.max(1,Math.floor(360/o.len)),start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
-  const times=[];for(let t=start;t+len<=end;t+=len){if(lf!=null&&lt!=null&&ov({s:t,e:t+len},{s:lf,e:lt}))continue;times.push(t)}
+  const times=dayStarts(start,end,len,lf,lt);
   /* demi-journées sans cours : un créneau qui finit avant la pause (ou avant 13 h sans pause) est « matin », sinon « après-midi » */
   const off=new Set(o.off||[]);
   const blocked=(d,t)=>off.has(d+"|"+F(t));
@@ -1406,7 +1410,7 @@ function genDialog(ctx){
   const F2=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
   const SD=[...cfg.days].sort();
   const ST=(()=>{const out=[],lf=cfg.lunchFrom?T2(cfg.lunchFrom):null,lt=cfg.lunchTo?T2(cfg.lunchTo):null;
-    for(let t=T2(cfg.start);t+cfg.len<=T2(cfg.end);t+=cfg.len){if(lf!=null&&lt!=null&&t<lt&&lf<t+cfg.len)continue;out.push(F2(t))}return out})();
+    dayStarts(T2(cfg.start),T2(cfg.end),cfg.len,lf,lt).forEach(t=>out.push(F2(t)));return out})();
   const drafts=ctx.slots.filter(x=>!x.published);
   if(cfg.replace==null)cfg.replace=!ctx.published&&drafts.length>0;
   /* base de travail : en mode « refaire », les brouillons de la semaine sont ignorés et leurs heures redeviennent à placer */
@@ -1831,7 +1835,7 @@ async function viewRef(v){
 /* ---------- jours et horaires (réglage unique pour toute l'université) ---------- */
 function slotsOf(sc){const out=[];const len=sc.len,st=hmin(sc.start),en=hmin(sc.end),lf=sc.lunchFrom?hmin(sc.lunchFrom):null,lt=sc.lunchTo?hmin(sc.lunchTo):null;
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
-  for(let t=st;t+len<=en;t+=len){if(lf!=null&&lt!=null&&t<lt&&lf<t+len)continue;out.push(F(t)+"–"+F(t+len))}return out}
+  dayStarts(st,en,len,lf,lt).forEach(t=>out.push(F(t)+"–"+F(t+len)));return out}
 async function viewSchedule(el){
   const sc=await loadSchedule();
   el.innerHTML=`<div class="sechead"><h2>Jours et horaires</h2></div>
@@ -1844,7 +1848,7 @@ async function viewSchedule(el){
       <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
-    <p class="sub">Une date particulière sans cours (jour férié, activité) ne se règle pas ici (réglage « jours sans cours » à venir).</p>`;
+    <p class="sub">Une journée ou un créneau sans cours (jour férié, activité) se marque semaine par semaine, dans « Générer la semaine ».</p>`;
   const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
