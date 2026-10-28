@@ -103,6 +103,7 @@ table.gt td{padding:0}.gc{width:100%;height:34px;border-radius:9px;border:1px so
 .dh .dh-h[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 .dh button[aria-pressed="false"]{text-decoration:line-through;background:repeating-linear-gradient(135deg,var(--surface) 0 5px,var(--bg) 5px 10px)}
 @media(max-width:560px){.dhgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.pwwrap{position:relative;display:block}.pwwrap input{width:100%;padding-right:48px!important}.pweye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;background:none;color:var(--muted);display:grid;place-items:center;border-radius:10px;cursor:pointer}.pweye:hover{color:var(--accent);background:var(--accent-soft)}
 .pbar{height:5px;border-radius:9px;background:var(--line,#e3e8e6);overflow:hidden;margin-top:5px;min-width:70px}.pbar i{display:block;height:100%;background:var(--accent)}
 .weeknav{display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line,#e3e8e6);border-radius:16px;padding:8px;margin:4px 0 18px}
 .weeknav .wbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line,#e3e8e6);background:var(--bg,#f3f5f4);color:inherit;display:grid;place-items:center;cursor:pointer;flex:none}
@@ -585,6 +586,16 @@ function renderShell(){
 /* réaffichage dans le même onglet : on garde la position de la page (sinon on repart en haut à chaque choix) */
 function rerender(){const y=window.scrollY,v0=document.getElementById("view");if(v0)v0.style.minHeight=v0.offsetHeight+"px";
   Promise.resolve(renderShell()).then(()=>{const v=document.getElementById("view");window.scrollTo(0,y);requestAnimationFrame(()=>{window.scrollTo(0,y);if(v)v.style.minHeight=""})})}
+
+/* mot de passe : bouton « afficher / masquer » sur chaque champ mot de passe */
+const EYE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0112 5c6.4 0 10 7 10 7a17.6 17.6 0 01-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 005.4-1.6"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/></svg>';
+function enhancePasswords(root){(root||document).querySelectorAll('input[type="password"]:not([data-pw])').forEach(inp=>{
+  inp.dataset.pw="1";const w=document.createElement("span");w.className="pwwrap";inp.parentNode.insertBefore(w,inp);w.appendChild(inp);
+  const b=document.createElement("button");b.type="button";b.className="pweye";b.setAttribute("aria-label","Afficher le mot de passe");b.innerHTML=EYE;
+  b.onclick=()=>{const show=inp.type==="password";inp.type=show?"text":"password";b.innerHTML=show?EYE_OFF:EYE;b.setAttribute("aria-label",show?"Masquer le mot de passe":"Afficher le mot de passe");inp.focus()};
+  w.appendChild(b)})}
+new MutationObserver(()=>enhancePasswords()).observe(document.documentElement,{childList:true,subtree:true});
 /* Tableaux en cartes sur téléphone : chaque cellule reprend le titre de sa colonne */
 function labelTables(root){root.querySelectorAll("table").forEach(tb=>{const hs=[...tb.querySelectorAll("thead th")].map(h=>h.textContent.trim());
   if(!hs.length)return;tb.querySelectorAll("tbody tr").forEach(tr=>[...tr.children].forEach((td,i)=>{if(hs[i]&&!td.dataset.label){td.dataset.label=hs[i];const w=document.createElement('div');w.className='cv';while(td.firstChild)w.appendChild(td.firstChild);td.appendChild(w)}}))})}
