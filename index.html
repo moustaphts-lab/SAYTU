@@ -1124,17 +1124,71 @@ function ttExportWeek(fmt,by,ents,slots,c){
     if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
     const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"landscape"});
     const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight();
-    ents.forEach(([id,name],i)=>{if(i)doc.addPage();
-      doc.setFillColor(11,110,91);doc.rect(0,0,PW,3,"F");
-      doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(22,32,46);doc.text("UCAB Touba · Emploi du temps",12,14);
-      doc.setFontSize(12);doc.text(BYL+" : "+name,12,21);
-      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);doc.text(wtxt+" · Édité le "+new Date().toLocaleDateString("fr-FR"),12,27);
-      doc.autoTable({startY:31,head:[head],body:build(slots.filter(s=>c.KEY[by](s)==id)),theme:"grid",margin:{left:12,right:12,bottom:12},
-        styles:{font:"helvetica",fontSize:8,cellPadding:2,textColor:[22,32,46],valign:"top",lineColor:[214,222,219],lineWidth:.2},
-        headStyles:{fillColor:[11,110,91],textColor:255,fontStyle:"bold",halign:"center"},
-        columnStyles:{0:{cellWidth:22,fontStyle:"bold",fillColor:[243,246,244]}},
-        didParseCell:d=>{if(d.section==="body"&&d.column.index>0&&d.cell.raw){if(String(d.cell.raw).startsWith("ANNULÉ"))d.cell.styles.textColor=[178,58,58];else d.cell.styles.fillColor=[226,241,236]}}});
-      doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text(`Page ${i+1} / ${ents.length}`,PW-12,PH-6,{align:"right"});
+    const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+    const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+    const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+    const tint=(c,k)=>c.map(v=>Math.round(v+(255-v)*k));
+    const st=T(sc.start),en=T(sc.end),len=sc.len,lf=sc.lunchFrom?T(sc.lunchFrom):null,lt=sc.lunchTo?T(sc.lunchTo):null,hasL=lf!=null&&lt!=null&&lf>st&&lt<en;
+    const starts=dayStarts(st,en,len,lf,lt);
+    const days=sc.days;
+    const year=S.year?"Année universitaire "+S.year:"";
+    const dur=m=>{const h=Math.floor(m/60),r=m%60;return h+" h"+(r?" "+String(r).padStart(2,"0"):"")};
+    const ML=12,MR=12,TC=20,GAP=1.6,TOP=46,BOT=PH-26,PB=hasL?7:0;
+    const cw=(PW-ML-MR-TC)/days.length,x0=ML+TC;
+    ents.forEach(([id,name],pi)=>{if(pi)doc.addPage();
+      const list=slots.filter(s=>c.KEY[by](s)==id);
+      /* l'échelle verticale couvre la journée (et s'élargit si un cours sort des horaires) ; la pause est une fine bande */
+      let lo=st,hi=en;list.forEach(s=>{lo=Math.min(lo,T(s.start_time));hi=Math.max(hi,T(s.end_time))});
+      const span=(hasL?(lf-lo)+(hi-lt):(hi-lo)),k=(BOT-TOP-PB)/span;
+      const y=m=>!hasL||m<=lf?TOP+(m-lo)*k:(m>=lt?TOP+(lf-lo)*k+PB+(m-lt)*k:TOP+(lf-lo)*k+PB*(m-lf)/(lt-lf));
+      const live=list.filter(s=>!c.isCancel(s)),tot=live.reduce((a,s)=>a+T(s.end_time)-T(s.start_time),0);
+      /* en-tête */
+      doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(70,80,92);
+      doc.text("UCAB Touba"+(year?"  ·  "+year:"")+"  ·  Semaine du "+weekRange(W)+(c.pub?"":"  ·  brouillon, non publiée"),ML,15);
+      doc.setFont("helvetica","bold");doc.setFontSize(24);doc.setTextColor(17,24,32);doc.text(String(name),ML,26);
+      doc.setFont("helvetica","normal");doc.setFontSize(11);doc.setTextColor(70,80,92);doc.text(BYL+"  ·  "+dur(tot)+" cette semaine",PW-MR,26,{align:"right"});
+      doc.setFillColor(11,110,91);doc.rect(ML,29,PW-ML-MR,0.9,"F");
+      /* jours */
+      doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(17,24,32);
+      days.forEach((d,i)=>{const cx=x0+i*cw+cw/2;doc.text(DAYS[d].toUpperCase(),cx,37,{align:"center"});
+        doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(93,104,121);doc.text(addDays(W,d-1).toLocaleDateString("fr-FR",{day:"numeric",month:"long"}),cx,41.5,{align:"center"});
+        doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(17,24,32)});
+      /* heures + cases vides */
+      starts.forEach(t=>{const a=y(t),b=y(t+len);
+        doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(17,24,32);doc.text(F(t),ML+TC-3,a+4,{align:"right"});
+        doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(93,104,121);doc.text(F(t+len),ML+TC-3,a+8,{align:"right"});
+        days.forEach((d,i)=>{doc.setDrawColor(205,212,210);doc.setLineWidth(0.25);doc.setFillColor(255,255,255);doc.roundedRect(x0+i*cw+GAP/2,a+GAP/2,cw-GAP,b-a-GAP,1.4,1.4,"FD")})});
+      if(hasL){const py=y(lf)+PB/2;doc.setDrawColor(150,160,165);doc.setLineWidth(0.25);doc.setLineDashPattern([1,1],0);doc.line(x0,py,PW-MR,py);doc.setLineDashPattern([],0);
+        doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text("PAUSE",ML+TC-3,py+1,{align:"right"})}
+      /* cours */
+      list.slice().sort((a,b)=>T(a.start_time)-T(b.start_time)).forEach(s=>{
+        const i=days.indexOf(s.day_of_week);if(i<0)return;
+        const t=s.teaching_assignments,a=y(T(s.start_time)),b=y(T(s.end_time)),x=x0+i*cw+GAP/2,w=cw-GAP,h=b-a-GAP,yy=a+GAP/2;
+        const cancel=c.isCancel(s),col=cancel?[178,58,58]:hex(ttColor(t.courses.code));
+        doc.setFillColor(...(cancel?[248,240,240]:tint(col,0.86)));doc.setDrawColor(...col);doc.setLineWidth(0.45);
+        if(!s.published&&!cancel)doc.setLineDashPattern([1.2,0.8],0);
+        doc.roundedRect(x,yy,w,h,1.4,1.4,"FD");doc.setLineDashPattern([],0);
+        doc.setFillColor(...col);doc.rect(x+0.2,yy+0.6,1.3,h-1.2,"F");
+        const tx=x+3.5,mw=w-6;let ty=yy+6;
+        doc.setFont("helvetica","bold");doc.setFontSize(h>22?14:11.5);doc.setTextColor(17,24,32);
+        doc.text(cancel?"ANNULÉ":t.courses.code,tx,ty);ty+=h>22?5:4.4;
+        doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(40,48,58);
+        const lines=[];
+        if(cancel)lines.push(t.courses.code);
+        lines.push(...doc.splitTextToSize(t.courses.name,mw).slice(0,h>30?2:1));
+        if(by!=="teacher")lines.push(t.teachers.first_name+" "+t.teachers.last_name.toUpperCase());
+        if(by!=="group")lines.push(t.student_groups.code);
+        if(by!=="room")lines.push("salle : "+s.rooms.code);
+        lines.forEach(l=>{if(ty<yy+h-5){doc.text(doc.splitTextToSize(String(l),mw)[0],tx,ty);ty+=4}});
+        doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(17,24,32);doc.text(dur(T(s.end_time)-T(s.start_time))+(s.published||cancel?"":" · brouillon"),x+w-2.2,yy+h-2.2,{align:"right"});
+      });
+      /* légende : volume de la semaine par matière */
+      const sum={};live.forEach(s=>{const k=s.teaching_assignments.courses.code;sum[k]=(sum[k]||0)+T(s.end_time)-T(s.start_time)});
+      const leg=Object.entries(sum).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,m])=>k+" "+dur(m)).join("   ·   ");
+      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(40,48,58);doc.text(doc.splitTextToSize(leg||"Aucun cours cette semaine.",PW-ML-MR).slice(0,2),ML,BOT+7);
+      doc.setDrawColor(205,212,210);doc.setLineWidth(0.3);doc.line(ML,PH-11,PW-MR,PH-11);
+      doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text("UCAB Touba  ·  édité le "+new Date().toLocaleDateString("fr-FR"),ML,PH-6.5);
+      doc.text(`${pi+1} / ${ents.length}`,PW-MR,PH-6.5,{align:"right"});
     });
     doc.save(file+".pdf");
   }catch(e){toast(errMsg(e),true)}
