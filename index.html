@@ -103,6 +103,7 @@ ul.chk .ok i{background:var(--ok)}ul.chk .warn i{background:var(--warn)}ul.chk .
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
 .stat b{display:block;font:700 26px var(--f-display);letter-spacing:-.02em}
 .stat span{font-size:13px;color:var(--muted)}
+.stats.mini{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.stats.mini .stat{display:flex;align-items:baseline;gap:8px;padding:8px 14px;box-shadow:none;flex:1 1 auto}.stats.mini .stat b{display:inline;font-size:20px}.stats.mini .stat span{font-size:13px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .tbl{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -561,9 +562,11 @@ function renderShell(){
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
-  tab.fn(document.getElementById("view")).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
+  return tab.fn(document.getElementById("view")).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
 }
-function rerender(){renderShell()}
+/* réaffichage dans le même onglet : on garde la position de la page (sinon on repart en haut à chaque choix) */
+function rerender(){const y=window.scrollY,v0=document.getElementById("view");if(v0)v0.style.minHeight=v0.offsetHeight+"px";
+  Promise.resolve(renderShell()).then(()=>{const v=document.getElementById("view");window.scrollTo(0,y);requestAnimationFrame(()=>{window.scrollTo(0,y);if(v)v.style.minHeight=""})})}
 /* Tableaux en cartes sur téléphone : chaque cellule reprend le titre de sa colonne */
 function labelTables(root){root.querySelectorAll("table").forEach(tb=>{const hs=[...tb.querySelectorAll("thead th")].map(h=>h.textContent.trim());
   if(!hs.length)return;tb.querySelectorAll("tbody tr").forEach(tr=>[...tr.children].forEach((td,i)=>{if(hs[i]&&!td.dataset.label){td.dataset.label=hs[i];const w=document.createElement('div');w.className='cv';while(td.firstChild)w.appendChild(td.firstChild);td.appendChild(w)}}))})}
@@ -936,7 +939,7 @@ async function viewPlanning(v){
 
   v.innerHTML=`<h1>Emplois du temps</h1>
     ${weekNavHtml(W,pub?`<span class="pill p-ok">Publiée le ${pubDate}</span>`:(slots.length?'<span class="pill p-warn">Brouillon, non publiée</span>':'<span class="pill p-mute">Vide</span>'))}
-    <div class="stats"><div class="stat"><b>${live.length}</b><span>Cours · ${hrs(weekMin)}</span></div>
+    <div class="stats mini"><div class="stat"><b>${live.length}</b><span>Cours · ${hrs(weekMin)}</span></div>
       <div class="stat"><b style="color:${answered<tList.length?"var(--warn)":"var(--ok)"}">${answered}/${tList.length}</b><span>Professeurs ayant répondu</span></div>
       <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>Conflits</span></div>
       <div class="stat"><b style="color:${outCount?"var(--warn)":"inherit"}">${outCount}</b><span>Hors disponibilités</span></div>
