@@ -178,6 +178,11 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-size:100% 64px}
 .tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
 .logobox{width:64px;height:64px;border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;overflow:hidden;background:#fff}.logobox img{width:100%;height:100%;object-fit:contain}.logobox .sub{font-size:11px;text-align:center}
+.hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.hcard{padding:16px 18px}.hcard h2{font-size:17px}.hwide{grid-column:1/-1}
+.hnext .hn-t{font:700 34px var(--f-display);letter-spacing:-.02em;margin:2px 0}.hnext .hn-t span{font-size:20px;color:var(--muted);font-weight:600}.hnext b{font-size:16px}
+.hlist{display:grid}.hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.hrow:last-child{border-bottom:0}
+@media (max-width:600px){.hrow{flex-direction:column;align-items:stretch}.hrow .row{justify-content:flex-start}.hrow>div:last-child{align-self:flex-start}}
+.sact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
 .ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
 .tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
@@ -572,6 +577,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  accueil:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
   etab:'<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6M9 11h.01M15 11h.01"/>',
   get admindash(){return this.dashboard},
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
@@ -592,6 +598,7 @@ function availableTabs(){
   const t=[];
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   else if(has("admin"))t.push({id:"admindash",label:"Tableau de bord",fn:viewAdminDash});
+  if(isProf())t.push({id:"accueil",label:"Aujourd'hui",fn:viewHome});
   if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable});
   if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
@@ -713,8 +720,10 @@ async function viewTeacher(v){
   const [week,all]=await Promise.all([
     q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",S.teacher.id).gte("session_date",from).lte("session_date",to).order("session_date").order("start_time")),
     q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes").eq("teacher_id",S.teacher.id))]);
-  const pastNot=await q(sb.from("schedule_sessions").select("id,attendance_records(id)").eq("teacher_id",S.teacher.id).neq("status","annulee").lt("session_date",iso(new Date())));
-  const missing=pastNot.filter(s=>!s.attendance_records).length;
+  const pastNot=await q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",S.teacher.id).neq("status","annulee").lte("session_date",iso(new Date())).order("session_date").order("start_time"));
+  const toDo=pastNot.filter(s=>!s.attendance_records&&sEnd(s)<=new Date());
+  const missing=toDo.length;
+  let pend=new Set();try{pend=new Set((await q(sb.from("absence_requests").select("session_id").eq("teacher_id",S.teacher.id).eq("status","en_attente"))).map(r=>r.session_id))}catch(e){}
   const val=all.filter(a=>a.status==="valide").reduce((s,a)=>s+a.retained_minutes,0);
   const wait=all.filter(a=>a.status==="soumis").reduce((s,a)=>s+a.declared_minutes,0);
   const toFix=all.filter(a=>a.status==="correction_demandee").length;
@@ -727,6 +736,7 @@ async function viewTeacher(v){
       <div class="stat"><b style="color:${missing?"var(--warn)":"inherit"}">${missing}</b><span>Séances passées à émarger</span></div>
       <div class="stat"><b style="color:${toFix?"var(--accent)":"inherit"}">${toFix}</b><span>Corrections demandées</span></div>
     </div>
+    ${missing>1?`<div class="row" style="margin:-6px 0 14px"><button class="btn primary" id="tAll">Émarger les ${missing} séances passées aux horaires prévus</button></div>`:""}
     <div class="weeknav">
       <button class="wbtn" id="wPrev" aria-label="Semaine précédente"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       <div class="wmid"><small>Semaine du</small><b>${S.week.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</b></div>
@@ -739,8 +749,9 @@ async function viewTeacher(v){
         <div class="panel">${week.filter(s=>s.session_date===d).map(s=>{const a=s.attendance_records;const started=new Date(s.session_date+"T"+s.start_time)<=now;
           let act="";
           if(s.status==="annulee")act=`<span class="pill p-mute">Annulée</span>`;
+          else if(!a&&sEnd(s)<=now)act=`<button class="btn sm" data-em="${s.id}">Autre horaire</button><button class="btn primary sm" data-qe="${s.id}">J'ai fait ce cours</button>`;
           else if(!a&&started)act=`<button class="btn primary sm" data-em="${s.id}">Émarger</button>`;
-          else if(!a)act=`<span class="sub">À venir</span>`;
+          else if(!a)act=pend.has(s.id)?`<span class="pill p-warn">Demande d'absence envoyée</span>`:`<button class="btn sm" data-abs="${s.id}">Prévenir d'une absence</button>`;
           else if(a.status==="soumis"||a.status==="correction_demandee")act=`<button class="btn sm" data-em="${s.id}">${a.status==="correction_demandee"?"Corriger":"Modifier"}</button>`;
           return `<div class="srow"><div class="stime">${hm(s.start_time)}<span>${hm(s.end_time)}</span></div>
             <div><b>${sessionLabel(s)}</b><div class="sub">${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · ${esc(s.rooms?.code)}${s.note?" · "+esc(s.note):""}</div>
@@ -753,6 +764,9 @@ async function viewTeacher(v){
   wNext.onclick=()=>{S.week=addDays(S.week,7);rerender()};
   wNow.onclick=()=>{S.week=mondayOf(new Date());rerender()};
   v.querySelectorAll("[data-em]").forEach(b=>b.onclick=()=>emargeDialog(week.find(s=>s.id==b.dataset.em)));
+  v.querySelectorAll("[data-qe]").forEach(b=>b.onclick=async()=>{b.disabled=true;await quickEmarge([week.find(s=>s.id==b.dataset.qe)])});
+  v.querySelectorAll("[data-abs]").forEach(b=>b.onclick=()=>absenceDialog(week.find(s=>s.id==b.dataset.abs)));
+  const ta=document.getElementById("tAll");if(ta)ta.onclick=()=>bulkEmargeDialog(toDo);
 }
 
 function emargeDialog(s){
@@ -776,6 +790,114 @@ function emargeDialog(s){
   });
 }
 function toMin(t){const [h,m]=t.split(":").map(Number);return h*60+m}
+
+/* ---------- professeur : écran « Aujourd'hui », émargement rapide, demandes d'absence ---------- */
+const ABS_ST={en_attente:["Demande envoyée","p-warn"],annulee:["Séance annulée","p-mute"],reportee:["Séance reportée","p-info"],refusee:["Demande refusée","p-bad"],retiree:["Demande retirée","p-mute"]};
+const sEnd=s=>new Date(s.session_date+"T"+String(s.end_time).slice(0,5)+":00");
+const sStart=s=>new Date(s.session_date+"T"+String(s.start_time).slice(0,5)+":00");
+const dayWord=d=>{const t=iso(new Date()),tm=iso(addDays(new Date(),1));if(d===t)return"Aujourd'hui";if(d===tm)return"Demain";const x=new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return x.charAt(0).toUpperCase()+x.slice(1)};
+/* « J'ai fait ce cours » : émargement aux horaires prévus, en un geste */
+async function quickEmarge(list){let ok=0;const errs=[];
+  for(const s of list){try{await q(sb.rpc("submit_attendance",{p_session_id:s.id,p_start:hm(s.start_time),p_end:hm(s.end_time),p_comment:null}));ok++}catch(e){errs.push(errMsg(e))}}
+  toast(ok?(ok>1?`${ok} séances émargées`:"Séance émargée")+(errs.length?` · ${errs.length} refusée(s) : ${errs[0]}`:""):errs[0]||"Rien à émarger",errs.length>0);rerender()}
+function bulkEmargeDialog(list){
+  openDialog(`<h3>Émarger ${list.length} séances</h3>
+    <p style="margin:0">Chaque séance sera déclarée aux horaires prévus. Si une séance s'est déroulée autrement, émargez-la seule avec « Autre horaire ».</p>
+    <div class="rl">${list.map(s=>`<div class="rlrow"><b>${fdate(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</b><span class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))}</span></div>`).join("")}</div>
+    <p class="sub" style="margin:0">Je confirme avoir dispensé ces cours. Chaque déclaration est horodatée et conservée.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Émarger les ${list.length} séances</button></div>`,
+  async()=>{await quickEmarge(list)})}
+function absenceDialog(s){
+  openDialog(`<h3>Prévenir d'une absence</h3>
+    <dl class="kv"><dt>Cours</dt><dd>${sessionLabel(s)}</dd><dt>Quand</dt><dd>${dayWord(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</dd><dt>Groupe</dt><dd>${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))}</dd></dl>
+    <label>Motif<select id="abR"><option>Raison de santé</option><option>Mission ou déplacement</option><option>Raison familiale</option><option>Autre engagement professionnel</option><option value="">Autre</option></select></label>
+    <label>Précision (facultatif)<input id="abP" maxlength="200" placeholder="Ex. convocation au ministère"></label>
+    <label>Proposition de rattrapage (facultatif)<input id="abX" maxlength="200" placeholder="Ex. jeudi 10 h–12 h, ou la semaine suivante"></label>
+    <p class="sub" style="margin:0">La direction des études reçoit votre demande et décide d'annuler ou de reporter la séance. Vous verrez sa réponse ici.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok">Envoyer la demande</button></div>`,
+  async()=>{const r=[abR.value,abP.value.trim()].filter(Boolean).join(" : ");if(!r)throw new Error("Indiquez le motif.");
+    await q(sb.rpc("request_absence",{p_session:s.id,p_reason:r,p_proposal:abX.value.trim()||null}));toast("Demande envoyée à la direction des études");rerender()})}
+async function viewHome(v){
+  const now=new Date(),today=iso(now),T=S.teacher;
+  const nextW=addDays(mondayOf(now),7),nwk=iso(nextW);
+  const [sess,reqs,ans,pubN]=await Promise.all([
+    q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",T.id).gte("session_date",iso(addDays(now,-60))).lte("session_date",iso(addDays(now,14))).order("session_date").order("start_time")),
+    q(sb.from("absence_requests").select("id,session_id,reason,proposal,status,answer,created_at,decided_at").eq("teacher_id",T.id).order("created_at",{ascending:false})).catch(()=>[]),
+    q(sb.from("availability_weeks").select("week_start").eq("teacher_id",T.id).eq("week_start",nwk).maybeSingle()),
+    q(sb.from("published_weeks").select("week_start").eq("week_start",nwk).maybeSingle())]);
+  const reqOf=id=>reqs.find(r=>r.session_id===id&&r.status==="en_attente");
+  const live=sess.filter(s=>s.status!=="annulee");
+  const cur=live.find(s=>sStart(s)<=now&&now<sEnd(s));
+  const next=live.find(s=>sStart(s)>now);
+  const toDo=live.filter(s=>!s.attendance_records&&sEnd(s)<=now);
+  const toFix=live.filter(s=>s.attendance_records?.status==="correction_demandee");
+  const upcoming=sess.filter(s=>sStart(s)>now).slice(0,12);
+  const recent=reqs.filter(r=>r.status==="en_attente"||(r.decided_at&&(now-new Date(r.decided_at))/864e5<=21));
+  const big=(s,label)=>`<div class="hnext"><small class="sub">${label}</small><div class="hn-t">${hm(s.start_time)}<span>–${hm(s.end_time)}</span></div>
+    <b>${sessionLabel(s)}</b><div class="sub">${esc(dayWord(s.session_date))} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · salle ${esc(s.rooms?.code||"?")}</div>
+    ${s.note?`<div class="sub" style="margin-top:4px">${esc(s.note)}</div>`:""}
+    ${label!=="En ce moment"?(reqOf(s.id)?`<div style="margin-top:8px"><span class="pill p-warn">Demande d'absence envoyée</span></div>`:`<div class="row" style="margin-top:10px"><button class="btn sm" data-abs="${s.id}">Prévenir d'une absence</button></div>`):""}</div>`;
+  const first=(T.first_name||"").trim();
+  const dl=now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  v.innerHTML=`<h1>Bonjour${first?" "+esc(first):""}</h1><p class="lead">${dl.charAt(0).toUpperCase()+dl.slice(1)}</p>
+    <div class="hgrid">
+      <section class="panel hcard">${cur?big(cur,"En ce moment"):next?big(next,"Prochain cours"):`<p class="empty" style="padding:8px 0">Aucun cours programmé dans les deux prochaines semaines.</p>`}
+        ${cur&&next?`<p class="sub" style="margin:10px 0 0">Ensuite : ${esc(dayWord(next.session_date))} à ${hm(next.start_time)} · ${esc(next.teaching_assignments?.courses?.code||"")}</p>`:""}</section>
+
+      <section class="panel hcard"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">À émarger</h2>${toDo.length?`<span class="pill p-warn">${toDo.length}</span>`:""}</div>
+        ${toDo.length?`<div class="hlist">${toDo.slice(0,8).map(s=>`<div class="hrow"><div><b>${fdate(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</b><div class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))}</div></div>
+            <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-em="${s.id}">Autre horaire</button><button class="btn sm primary" data-qe="${s.id}">J'ai fait ce cours</button></div></div>`).join("")}</div>
+          ${toDo.length>8?`<p class="sub" style="margin:6px 0 0">… et ${toDo.length-8} autre(s).</p>`:""}
+          ${toDo.length>1?`<div class="row" style="margin-top:10px"><button class="btn primary" id="hAll">Tout émarger aux horaires prévus (${toDo.length})</button></div>`:""}`
+        :`<p class="sub" style="margin:8px 0 0">✓ Toutes vos séances passées sont émargées.</p>`}
+        ${toFix.length?`<div class="gpwarn" style="margin-top:10px">${toFix.length} émargement(s) à corriger à la demande du responsable : ${toFix.map(s=>`<button class="lnk" data-em="${s.id}">${fdate(s.session_date)} ${esc(s.teaching_assignments?.courses?.code||"")}</button>`).join(", ")}</div>`:""}</section>
+
+      <section class="panel hcard"><h2 style="margin:0 0 6px">Disponibilités · semaine du ${weekRange(nextW)}</h2>
+        ${pubN?`<p style="margin:0">L'emploi du temps de cette semaine est publié.</p><div class="row" style="margin-top:10px"><button class="btn" id="hTt">Voir mon emploi du temps</button></div>`
+          :ans?`<p style="margin:0">✓ Vous avez donné vos disponibilités. Vous pouvez les modifier jusqu'à la publication de l'emploi du temps.</p><div class="row" style="margin-top:10px"><button class="btn" id="hAv">Modifier</button></div>`
+          :`<p style="margin:0"><b style="color:var(--warn)">Pas encore données.</b> Indiquez vos créneaux avant que la direction publie l'emploi du temps : sans réponse, elle décide sans vous.</p><div class="row" style="margin-top:10px"><button class="btn primary" id="hAv">Donner mes disponibilités</button></div>`}</section>
+
+      ${recent.length?`<section class="panel hcard"><h2 style="margin:0 0 6px">Mes demandes d'absence</h2><div class="hlist">${recent.map(r=>{const s=sess.find(x=>x.id===r.session_id);const[l,c]=ABS_ST[r.status];
+        return `<div class="hrow"><div><b>${s?fdate(s.session_date)+" · "+hm(s.start_time)+" · "+(s.teaching_assignments?.courses?.code||""):"Séance"}</b><div class="sub">${esc(r.reason)}${r.proposal?" · proposition : "+esc(r.proposal):""}</div>${r.answer&&r.status!=="en_attente"?`<div class="sub">Réponse : ${esc(r.answer)}</div>`:""}</div>
+          <div class="row" style="gap:6px;flex-wrap:nowrap"><span class="pill ${c}">${l}</span>${r.status==="en_attente"?`<button class="btn sm" data-wd="${r.id}">Retirer</button>`:""}</div></div>`}).join("")}</div></section>`:""}
+
+      <section class="panel hcard hwide"><h2 style="margin:0 0 6px">Mes prochains cours</h2>
+        ${upcoming.length?`<div class="hlist">${upcoming.map(s=>{const r=reqOf(s.id);return `<div class="hrow"><div><b>${esc(dayWord(s.session_date))} · ${hm(s.start_time)}–${hm(s.end_time)}</b><div class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · ${esc(s.rooms?.code||"")}${s.note?" · "+esc(s.note):""}</div></div>
+          <div>${s.status==="annulee"?'<span class="pill p-mute">Annulée</span>':r?'<span class="pill p-warn">Demande envoyée</span>':`<button class="btn sm" data-abs="${s.id}">Prévenir d'une absence</button>`}</div></div>`}).join("")}</div>`:`<p class="sub" style="margin:0">Aucun cours publié pour les deux prochaines semaines.</p>`}</section>
+    </div>`;
+  const find=id=>sess.find(x=>x.id==id);
+  v.querySelectorAll("[data-qe]").forEach(b=>b.onclick=async()=>{b.disabled=true;await quickEmarge([find(b.dataset.qe)])});
+  v.querySelectorAll("[data-em]").forEach(b=>b.onclick=()=>emargeDialog(find(b.dataset.em)));
+  v.querySelectorAll("[data-abs]").forEach(b=>b.onclick=()=>absenceDialog(find(b.dataset.abs)));
+  v.querySelectorAll("[data-wd]").forEach(b=>b.onclick=async()=>{try{await q(sb.rpc("withdraw_absence",{p_id:Number(b.dataset.wd)}));toast("Demande retirée");rerender()}catch(e){toast(errMsg(e),true)}});
+  const go=(tab,f)=>{f&&f();S.tab=tab;try{history.replaceState(null,"","#"+tab)}catch(e){}renderShell()};
+  const ha=document.getElementById("hAll");if(ha)ha.onclick=()=>bulkEmargeDialog(toDo);
+  const hv=document.getElementById("hAv");if(hv)hv.onclick=()=>go("dispos",()=>{S.avWeek=nextW});
+  const ht=document.getElementById("hTt");if(ht)ht.onclick=()=>go("monplanning",()=>{S.ttWeek=nextW});
+}
+
+/* ---------- directeur : demandes d'absence des professeurs ---------- */
+async function absenceCard(el){
+  let reqs=[];try{reqs=await q(sb.from("absence_requests").select("id,session_id,reason,proposal,created_at,teacher_id,teachers(first_name,last_name,phone),schedule_sessions(id,session_date,start_time,end_time,status,teaching_assignments(courses(code,name),assignment_groups(group_id,student_groups(code))),student_groups(code),rooms(code))").eq("status","en_attente").order("created_at"))}catch(e){el.innerHTML="";return}
+  if(!reqs.length){el.innerHTML="";return}
+  el.innerHTML=`<div class="panel" style="padding:14px 16px;border-color:var(--warn)"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Demandes d'absence</h2><span class="pill p-warn">${reqs.length} en attente</span></div>
+    <div class="hlist" style="margin-top:8px">${reqs.map(r=>{const s=r.schedule_sessions;return `<div class="hrow"><div><b>${esc(r.teachers.first_name+" "+r.teachers.last_name)} · ${fdate(s.session_date)} ${hm(s.start_time)}–${hm(s.end_time)}</b>
+      <div class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · ${esc(s.rooms?.code||"")}</div><div class="sub">Motif : ${esc(r.reason)}${r.proposal?" · Proposition : "+esc(r.proposal):""}</div></div>
+      <button class="btn sm primary" data-ab="${r.id}">Traiter</button></div>`}).join("")}</div></div>`;
+  el.querySelectorAll("[data-ab]").forEach(b=>b.onclick=()=>{const r=reqs.find(x=>x.id==b.dataset.ab),s=r.schedule_sessions,t=r.teachers;
+    const lbl=`${s.teaching_assignments?.courses?.code||""} (${grpLabel(s.teaching_assignments,s.student_groups?.code)}) du ${fdl(s.session_date)} à ${hm(s.start_time)}`;
+    openDialog(`<h3>Demande de ${esc(t.first_name+" "+t.last_name)}</h3>
+      <dl class="kv"><dt>Séance</dt><dd>${sessionLabel(s)}</dd><dt>Quand</dt><dd>${fdate(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</dd><dt>Motif</dt><dd>${esc(r.reason)}</dd>${r.proposal?`<dt>Proposition</dt><dd>${esc(r.proposal)}</dd>`:""}</dl>
+      <label>Réponse au professeur (facultatif pour annuler, utile pour refuser)<input id="abA" maxlength="200"></label>
+      <p class="sub" style="margin:0">Pour <b>reporter</b>, ouvrez l'emploi du temps, touchez le cours puis « Reporter » : la demande se règle toute seule.</p>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" value="cancel" formnovalidate>Plus tard</button><button class="btn danger" value="refuse" formnovalidate>Refuser</button><button class="btn" value="report" formnovalidate>Reporter…</button><button class="btn primary" value="annul" formnovalidate>Annuler la séance</button></div>`,
+    async(act)=>{const a=abA.value.trim();
+      if(act==="refuse"){await q(sb.rpc("refuse_absence",{p_id:r.id,p_answer:a||null}));toast("Demande refusée");rerender();
+        setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, la Direction des études.`}]}),400);return}
+      if(act==="report"){S.ttWeek=mondayOf(new Date(s.session_date+"T12:00:00"));S.ttTab="grille";S.planView="teacher";S.planId=r.teacher_id;S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell();setTimeout(()=>toast("Touchez le cours, puis « Reporter »."),500);return}
+      if(act==="annul"){await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+(a||"absence du professeur ("+r.reason+")")}).eq("id",s.id));toast("Séance annulée");rerender();
+        setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, la Direction des études.`}]}),400)}})});
+}
 
 /* ---------- responsable ---------- */
 async function viewReview(v){
@@ -995,6 +1117,8 @@ async function viewPlanning(v){
   slots.forEach(x=>decorateTA(x.teaching_assignments));assignsAll.forEach(decorateTA);
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
   const sessOf={};sessW.forEach(s=>{if(s.slot_id)sessOf[s.slot_id]=s});
+  let absP=[];try{absP=await q(sb.from("absence_requests").select("session_id,reason,proposal").eq("status","en_attente"))}catch(e){}
+  const absOf=sl=>{const s=sessOf[sl.id];return s?absP.find(r=>r.session_id===s.id):null};
   const isCancel=sl=>sessOf[sl.id]?.status==="annulee";
   const cancelIds=new Set(slots.filter(isCancel).map(s=>s.id));
   const live=slots.filter(s=>!isCancel(s));
@@ -1246,7 +1370,7 @@ async function viewPlanning(v){
     const att=!!(s&&s.attendance_records&&(Array.isArray(s.attendance_records)?s.attendance_records.length:s.attendance_records.id));
     const can=sl.published&&s&&!att;
     openDialog(`<h3>${esc(t.courses.code)} · ${esc(t.courses.name)}</h3>
-      <dl class="kv"><dt>Jour</dt><dd>${dayLong(sl.day_of_week)}</dd><dt>Horaire</dt><dd class="mono">${hm(sl.start_time)}–${hm(sl.end_time)}</dd><dt>Professeur</dt><dd>${esc(t.teachers.first_name+" "+t.teachers.last_name)}</dd><dt>Groupe</dt><dd>${esc(t.student_groups.code)}</dd><dt>Salle</dt><dd>${esc(sl.rooms.code)}</dd>${s?.note?`<dt>Note</dt><dd>${esc(s.note)}</dd>`:""}</dl>
+      <dl class="kv"><dt>Jour</dt><dd>${dayLong(sl.day_of_week)}</dd><dt>Horaire</dt><dd class="mono">${hm(sl.start_time)}–${hm(sl.end_time)}</dd><dt>Professeur</dt><dd>${esc(t.teachers.first_name+" "+t.teachers.last_name)}</dd><dt>Groupe</dt><dd>${esc(t.student_groups.code)}</dd><dt>Salle</dt><dd>${esc(sl.rooms.code)}</dd>${s?.note?`<dt>Note</dt><dd>${esc(s.note)}</dd>`:""}${absOf(sl)?`<dt>Demande d'absence</dt><dd style="color:var(--warn)">${esc(absOf(sl).reason)}${absOf(sl).proposal?" · proposition : "+esc(absOf(sl).proposal):""}</dd>`:""}</dl>
       <div class="row" style="gap:6px">${isCancel(sl)?'<span class="pill p-bad">Annulé</span>':sl.published?'<span class="pill p-ok">Publié</span>':'<span class="pill p-mute">Brouillon</span>'}${att?'<span class="pill p-info">Émargé</span>':""}${confIds.has(sl.id)?'<span class="pill p-bad">Conflit</span>':""}${outside(sl)?'<span class="pill p-warn">Hors disponibilités</span>':""}${declared.has(t.teacher_id)?"":'<span class="pill p-warn">Professeur sans réponse</span>'}</div>
       ${att?'<p class="sub" style="margin:0">Ce cours a déjà été émargé : il ne peut plus être déplacé ni annulé.</p>':""}
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" value="cancel" formnovalidate>Fermer</button>
@@ -1914,13 +2038,14 @@ async function viewDashboard(v){
   const presets=DPRESETS.filter(([k])=>k!=="semestre"||sem);
   v.innerHTML=`<h1>Tableau de bord</h1>
     <p class="lead">${fdl(S.dFrom)} au ${fdl(S.dTo)}${S.dPreset==="semestre"&&sem?" · "+esc(sem.label):""}</p>
-    ${has("planificateur")?'<div id="dPlan" style="margin-bottom:18px"></div>':""}
+    ${has("planificateur")?'<div id="dAbs" style="margin-bottom:14px"></div><div id="dPlan" style="margin-bottom:18px"></div>':""}
     <div class="dtools" style="margin-bottom:${S.dPreset==="perso"?"10":"18"}px">
       <div class="seg" role="group" aria-label="Période">${presets.map(([k,l])=>`<button data-pre="${k}" aria-pressed="${S.dPreset===k}">${l}</button>`).join("")}</div>
       ${xbar("dX")}</div>
     ${S.dPreset==="perso"?`<div class="row" style="margin-bottom:18px"><label>Du<input id="dF" type="date" value="${S.dFrom}"></label><label>Au<input id="dT" type="date" value="${S.dTo}"></label><button class="btn" id="dOk">Afficher</button></div>`:""}
     <div id="dBody"><p class="empty">Chargement…</p></div>`;
   v.querySelectorAll("[data-pre]").forEach(b=>b.onclick=()=>{S.dPreset=b.dataset.pre;rerender()});
+  const dab=document.getElementById("dAbs");if(dab)absenceCard(dab);
   const dpl=document.getElementById("dPlan");if(dpl)plannerWeekCard(dpl).catch(e=>{dpl.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
   if(S.dPreset==="perso")dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
 
