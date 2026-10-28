@@ -34,6 +34,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);-webkit-t
 header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 header.top .bar{display:flex;align-items:center;gap:12px;padding-block:10px;min-height:56px}
 .brand{display:flex;align-items:center;gap:10px;font:700 18px var(--f-display);letter-spacing:-.01em}
+.brand img.blogo{width:34px;height:34px;border-radius:10px;object-fit:contain;background:#fff;flex:none}
 .brand i{width:34px;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:700 17px var(--f-display);font-style:normal}
 .brand small{display:block;font:400 12px var(--f-body);color:var(--muted);letter-spacing:0}
 .burger{display:none;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer;flex:0 0 auto;padding:0}
@@ -176,6 +177,12 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-gut span{position:absolute;right:8px;transform:translateY(-50%);font:500 11.5px var(--f-body);color:var(--muted)}.tt-gut span:first-child{transform:none;top:4px!important}
 .tt-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-size:100% 64px}
 .tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
+.logobox{width:64px;height:64px;border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;overflow:hidden;background:#fff}.logobox img{width:100%;height:100%;object-fit:contain}.logobox .sub{font-size:11px;text-align:center}
+.annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
+.ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
+.tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
+.tt-closed span{font-size:11px;font-weight:700;color:var(--warn);text-align:center;padding:3px 8px;margin-top:8px;border-radius:999px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.gt .gc.cl[aria-pressed=false]{background:repeating-linear-gradient(135deg,var(--warn-soft) 0 5px,transparent 5px 10px)}
 .tt-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--muted) 10%,transparent) 7px 14px);display:grid;place-items:center;pointer-events:none}.tt-lunch span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
 .tt-av{position:absolute;left:0;right:0;background:var(--ok-soft);opacity:.7;border-left:3px solid var(--ok)}
 .tt-now{position:absolute;left:0;right:0;height:0;border-top:1.5px dashed color-mix(in srgb,var(--bad) 70%,transparent);z-index:0;pointer-events:none}.tt-now::before{content:attr(data-t);position:absolute;left:2px;top:-9px;font:600 10px/1 var(--f-body);color:#fff;background:var(--bad);border-radius:6px;padding:2px 5px}
@@ -373,9 +380,10 @@ function makePayslipPdf(jsPDF, slip, payments){
   const doc=new jsPDF({unit:"mm",format:"a4"}); const W=210, L=16, R=W-16;
 
   doc.setFillColor(...accent); doc.rect(0,0,W,4,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text("UCAB Touba",L,18);
+  const LX=pdfLogo(doc,L,9,16)?L+19:L;
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text(APPN(),LX,18);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
-  doc.text("Service financier",L,23.5);
+  doc.text((S.cfg&&S.cfg.pdf_header?S.cfg.pdf_header+" · ":"")+"Service financier",LX,23.5);
   doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...ink);
   doc.text("Bulletin de rémunération",R,16,{align:"right"});
   doc.setFont("courier","normal"); doc.setFontSize(10); doc.text(slip.number,R,22,{align:"right"});
@@ -443,6 +451,16 @@ const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
 const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()), filter:"soumis", planView:"group", planId:null};
+/* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
+const CFG_DEFAULT={name:"UCAB Touba",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null};
+const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+  document.title=APPN()+" · "+(S.cfg.subtitle||"Enseignements");return S.cfg}
+function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
+  return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
+/* logo et lignes d'en-tête / de pied de page dans les PDF */
+function pdfLogo(doc,x,y,size){const l=S.cfg&&S.cfg.logo;if(!l)return false;try{doc.addImage(l,/^data:image\/jpe?g/.test(l)?"JPEG":"PNG",x,y,size,size);return true}catch(e){return false}}
+function pdfFooterText(){return (S.cfg&&S.cfg.pdf_footer)||""}
 const $app = document.getElementById("app");
 
 /* ---------- utilitaires ---------- */
@@ -481,7 +499,7 @@ function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c
 function renderLogin(msg){
   $app.classList.remove("hasnav");
   $app.innerHTML=`<div class="wrap loginpage"><div class="login">
-    <div class="brand"><i>U</i><div>UCAB Touba<small>Enseignements</small></div></div>
+    ${brandHtml(S.cfg?.subtitle||"Enseignements")}
     <h1>Connexion</h1>
     <p class="lead">Emplois du temps, émargement et paie des enseignants.</p>
     <form class="panel" id="loginForm">
@@ -500,6 +518,7 @@ function renderLogin(msg){
 }
 
 async function boot(){
+  await loadSettings();
   const {data:{session}}=await sb.auth.getSession();
   if(!session){renderLogin();return}
   S.user=session.user;
@@ -508,7 +527,7 @@ async function boot(){
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
-    await loadSchedule();
+    await loadSchedule();await loadClosures();await loadAnnonces();
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
@@ -529,6 +548,20 @@ async function loadSchedule(){
   catch(e){S.sched={...SCHED_DEFAULT}}
   return S.sched;
 }
+/* ---------- calendrier : jours ou demi-journées sans cours (fériés, vacances, examens, événements) ---------- */
+const CLOSE_KIND={ferie:"Jour férié",vacances:"Vacances",examens:"Examens",evenement:"Événement"};
+const CLOSE_PART={jour:"Toute la journée",matin:"Matin",apres_midi:"Après-midi"};
+async function loadClosures(){try{S.closures=await q(sb.from("calendar_closures").select("*").order("date_from"))}catch(e){S.closures=S.closures||[]}return S.closures}
+function closuresOn(d){return (S.closures||[]).filter(c=>c.date_from<=d&&c.date_to>=d)}
+function lunchBounds(){const sc=S.sched||SCHED_DEFAULT;return[sc.lunchFrom?hmin(sc.lunchFrom):780,sc.lunchTo?hmin(sc.lunchTo):780]}
+/* fermeture qui touche ce créneau (minutes depuis minuit), ou null */
+function closureAt(d,st,en){const [lf,lt]=lunchBounds();return closuresOn(d).find(c=>c.part==="jour"||(c.part==="matin"&&st<lf)||(c.part==="apres_midi"&&en>lt))||null}
+/* nombre de semaines de cours réellement ouvertes entre deux dates (les fermetures sont retirées) */
+function openWeeks(from,to){const sc=S.sched||SCHED_DEFAULT;let n=0;
+  for(let d=new Date(from+"T12:00:00"),e=new Date(to+"T12:00:00");d<=e;d=addDays(d,1)){const w=d.getDay()||7;if(!sc.days.includes(w))continue;
+    const cs=closuresOn(iso(d));if(cs.some(c=>c.part==="jour"))continue;n+=cs.length?0.5:1}
+  return n/Math.max(1,sc.days.length)}
+
 /* débuts des créneaux d'une journée : on avance de « durée » en « durée » ; un créneau qui toucherait la pause repart à la fin de la pause */
 function dayStarts(st,en,len,lf,lt){const out=[];let t=st;
   while(t+len<=en){if(lf!=null&&lt!=null&&t<lt&&lf<t+len){if(t+len<=lf){out.push(t);t+=len;continue}t=Math.max(t,lt);continue}out.push(t);t+=len}
@@ -539,6 +572,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  etab:'<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6M9 11h.01M15 11h.01"/>',
   get admindash(){return this.dashboard},
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   monplanning:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 17.5h3"/>',
@@ -570,6 +604,7 @@ function availableTabs(){
     t.push({id:"tarifs",label:"Tarifs",fn:viewRates});}
   if(has("finance")||has("direction")||has("planificateur")||has("responsable"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
   if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
+  if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
   if(has("admin")||has("direction")||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   return t;
 }
@@ -581,11 +616,11 @@ function renderShell(){
   const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      <div class="brand"><i>U</i><div>UCAB Touba<small>Année universitaire ${esc(S.year||"")}</small></div></div>
+      ${brandHtml("Année universitaire "+(S.year||""))}
       <span class="yr">Année universitaire ${esc(S.year||"")}</span>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top"><div class="brand"><i>U</i><div>UCAB Touba<small>Année universitaire ${esc(S.year||"")}</small></div></div><p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`).join("")}</nav></div>
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml("Année universitaire "+(S.year||""))}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`).join("")}</nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
   const setNav=o=>{document.body.classList.toggle("nav-open",o);burger.setAttribute("aria-expanded",o);burger.setAttribute("aria-label",o?"Fermer le menu":"Ouvrir le menu")};
   document.body.classList.remove("nav-open");
@@ -599,7 +634,38 @@ function renderShell(){
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
-  return tab.fn(document.getElementById("view")).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
+  return tab.fn(document.getElementById("view")).then(()=>showAnnonces()).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
+}
+/* ---------- annonces : message court affiché en haut de l'écran (professeurs, ou tout le monde) ---------- */
+async function loadAnnonces(){const t=iso(new Date());
+  try{S.annonces=(await q(sb.from("announcements").select("*").lte("starts_on",t).order("created_at",{ascending:false}))).filter(a=>!a.ends_on||a.ends_on>=t)}catch(e){S.annonces=[]}}
+function showAnnonces(el){const v=el||document.getElementById("view");if(!v||!S.annonces)return;
+  let hid=[];try{hid=JSON.parse(sessionStorage.getItem("ucab_ann_hid")||"[]")}catch(e){}
+  const L=S.annonces.filter(a=>(a.audience==="tous"||isProf())&&!hid.includes(a.id));
+  if(!L.length)return;
+  const box=document.createElement("div");box.className="annbar";
+  box.innerHTML=L.map(a=>`<div class="ann"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6M19 6a7 7 0 0 1 0 12"/></svg><div><b>Annonce</b><p>${esc(a.message)}</p>${a.ends_on?`<small>Jusqu'au ${fdl(a.ends_on)}</small>`:""}</div><button type="button" class="btn sm" data-annhide="${a.id}" aria-label="Masquer l'annonce">Masquer</button></div>`).join("");
+  v.prepend(box);
+  box.querySelectorAll("[data-annhide]").forEach(b=>b.onclick=()=>{hid.push(Number(b.dataset.annhide));try{sessionStorage.setItem("ucab_ann_hid",JSON.stringify(hid))}catch(e){}b.closest(".ann").remove();if(!box.children.length)box.remove()});
+}
+/* gestion des annonces (directeur des études, secrétaire, administrateur) */
+async function annonceDialog(){
+  const t=iso(new Date());
+  const list=(await q(sb.from("announcements").select("*").order("starts_on",{ascending:false}))).filter(a=>!a.ends_on||a.ends_on>=t);
+  const AUD={professeurs:"Professeurs",tous:"Tout le monde"};
+  openDialog(`<h3>Annonces</h3>
+    <p class="sub" style="margin:0">Un message court affiché en haut de l'écran à la connexion, par exemple « Disponibilités à donner avant jeudi 18 h ». Il disparaît après la date de fin.</p>
+    ${list.length?`<div class="rl">${list.map(a=>`<div class="rlrow" style="align-items:flex-start"><div style="flex:1"><b style="font-weight:600">${esc(a.message)}</b><div class="sub">${AUD[a.audience]} · ${a.starts_on>t?"à partir du "+fdl(a.starts_on):"en ligne"}${a.ends_on?" · jusqu'au "+fdl(a.ends_on):" · sans date de fin"}</div></div><button type="button" class="btn sm danger" data-anndel="${a.id}">Retirer</button></div>`).join("")}</div>`:`<p class="sub" style="margin:0">Aucune annonce en cours.</p>`}
+    <div class="panel" style="padding:12px 14px;display:grid;gap:10px"><b>Nouvelle annonce</b>
+      <label>Message<textarea id="anM" rows="3" maxlength="500" placeholder="Ex. Merci de donner vos disponibilités de la semaine prochaine avant jeudi 18 h."></textarea></label>
+      <div class="grid2"><label>Pour<select id="anA"><option value="professeurs">Les professeurs</option><option value="tous">Tout le monde</option></select></label>
+        <label>À partir du<input id="anF" type="date" value="${t}"></label><label>Jusqu'au (facultatif)<input id="anT" type="date" value="${iso(addDays(new Date(),7))}"></label></div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button><button class="btn primary" value="ok">Publier l'annonce</button></div>`,
+  async()=>{const m=anM.value.trim();if(!m)throw new Error("Écrivez le message.");if(anT.value&&anT.value<anF.value)throw new Error("La date de fin doit être après la date de début.");
+    await q(sb.from("announcements").insert({message:m,audience:anA.value,starts_on:anF.value||t,ends_on:anT.value||null}));
+    await loadAnnonces();toast("Annonce publiée");
+    rerender()});
+  document.querySelectorAll("[data-anndel]").forEach(b=>b.onclick=async()=>{try{await q(sb.from("announcements").update({ends_on:iso(addDays(new Date(),-1))}).eq("id",b.dataset.anndel));await loadAnnonces();toast("Annonce retirée");annonceDialog()}catch(e){toast(errMsg(e),true)}});
 }
 /* réaffichage dans le même onglet : on garde la position de la page (sinon on repart en haut à chaque choix) */
 function rerender(){const y=window.scrollY,v0=document.getElementById("view");if(v0)v0.style.minHeight=v0.offsetHeight+"px";
@@ -1023,7 +1089,7 @@ async function viewPlanning(v){
     <div class="row" style="margin-bottom:12px">
       <button class="btn primary" id="addSlot" ${assigns.length?"":"disabled"}>Ajouter un cours</button>
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer la semaine</button>
-      <button class="btn" id="copyPrev" ${assigns.length?"":"disabled"}>Copier la semaine précédente</button>
+      <button class="btn" id="copyPrev" ${assigns.length?"":"disabled"}>Reprendre la semaine précédente</button>
       <button class="btn" id="ttExport" ${slots.length?"":"disabled"}>${DLI}Imprimer / exporter</button>
       ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button><button class="btn danger" id="unpubBtn">Retirer la publication</button>`+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
     </div>
@@ -1059,6 +1125,8 @@ async function viewPlanning(v){
     const empty=gm.filter(x=>!x.m),low=gm.filter(x=>x.m&&x.m<med/2);
     L.push(empty.length?{k:"warn",t:`Groupe(s) sans aucun cours : ${empty.map(x=>x.g.code).join(", ")}`}:{k:"ok",t:"Chaque groupe a des cours cette semaine"});
     if(low.length)L.push({k:"warn",t:`Peu d'heures pour : ${low.map(x=>x.g.code+" ("+hrs(x.m)+")").join(", ")} · la moitié des groupes a ${hrs(med)} ou plus`});
+    const onClosed=live.filter(s=>closureAt(iso(addDays(W,s.day_of_week-1)),toMin(s.start_time),toMin(s.end_time)));
+    if(onClosed.length)L.push({k:"warn",t:`${onClosed.length} cours placé(s) sur un jour sans cours du calendrier : ${[...new Set(onClosed.map(s=>closureAt(iso(addDays(W,s.day_of_week-1)),toMin(s.start_time),toMin(s.end_time)).label))].join(", ")}`});
     const idle=assigns.filter(a=>remaining[a.id]>0&&!live.some(s=>s.assignment_id===a.id)).length;
     if(idle)L.push({k:"info",t:`${idle} matière(s) non terminée(s) sans cours cette semaine`});
     return L};
@@ -1093,16 +1161,34 @@ async function viewPlanning(v){
       const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`}));
       setTimeout(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`,items}),400)})};
 
-  /* ----- copier la semaine précédente ----- */
+  /* ----- reprendre la semaine précédente : on recopie ce qui est encore possible, et on dit pourquoi le reste ne l'est pas ----- */
   copyPrev.onclick=async()=>{
-    const prev=await q(sb.from("timetable_slots").select("assignment_id,day_of_week,start_time,end_time,room_id").eq("week_start",prevWk));
+    const prev=await q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code),teachers(last_name),student_groups!teaching_assignments_group_id_fkey(code))").eq("week_start",prevWk).order("day_of_week").order("start_time"));
     if(!prev.length){toast("La semaine précédente est vide.",true);return}
-    const keep=prev.filter(x=>assigns.some(a=>a.id===x.assignment_id&&remaining[a.id]>0));
-    openDialog(`<h3>Copier la semaine précédente ?</h3>
-      <p style="margin:0">${keep.length} cours sur ${prev.length} seront recopiés ${slots.length?"<b>en plus</b> des "+slots.length+" déjà présents ":""}dans la semaine du ${weekRange(W)}${pub?", et publiés immédiatement":" en brouillon"}. Les matières terminées sont ignorées. Un cours en conflit n'est pas recopié.</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok" ${keep.length?"":"disabled"}>Copier</button></div>`,
-    async()=>{let ok=0,ko=0;for(const x of keep){try{await q(sb.from("timetable_slots").insert({...x,week_start:wk,published:false}));ok++}catch(e){ko++}}
-      toast(`${ok} cours copié(s)`+(ko?` · ${ko} non copié(s) (conflit ou hors semestre)`:""),ko>0);rerender()})};
+    prev.forEach(x=>decorateTA(x.teaching_assignments));
+    const ov=(x,y)=>x.day_of_week===y.day_of_week&&x.start_time<y.end_time&&y.start_time<x.end_time;
+    const budget={};assigns.forEach(a=>budget[a.id]=remaining[a.id]);
+    const taken=live.map(x=>({...x,_t:x.teaching_assignments.teacher_id,_g:x.teaching_assignments._g}));
+    const res=prev.map(x=>{const a=assigns.find(y=>y.id===x.assignment_id),tid=x.teaching_assignments.teacher_id,g=x.teaching_assignments._g;
+      const lbl=`${DAYS[x.day_of_week]} ${hm(x.start_time)} · ${x.teaching_assignments.courses.code} · ${x.teaching_assignments.student_groups?.code||""} · ${x.teaching_assignments.teachers.last_name}`;
+      let why=null;const d=iso(addDays(W,x.day_of_week-1)),cl=closureAt(d,toMin(x.start_time),toMin(x.end_time));
+      if(!a)why="hors du semestre en cours";
+      else if(budget[a.id]<=0)why="matière terminée";
+      else if(!sc.days.includes(x.day_of_week))why="jour sans cours dans la semaine type";
+      else if(cl)why="jour sans cours : "+cl.label;
+      else if(declared.has(tid)&&!avOf(tid).some(y=>y.day_of_week===x.day_of_week&&y.start_time<=x.start_time&&y.end_time>=x.end_time))why="le professeur n'est pas disponible";
+      else{const c=taken.find(y=>ov(y,x)&&(y._t===tid||y.room_id===x.room_id||y._g.some(k=>g.includes(k))));
+        if(c)why=c._t===tid?"le professeur a déjà un cours":c.room_id===x.room_id?"la salle est déjà occupée":"le groupe a déjà un cours"}
+      if(!why){budget[a.id]-=toMin(x.end_time)-toMin(x.start_time);taken.push({...x,_t:tid,_g:g})}
+      return{x,lbl,why,noAns:!declared.has(tid)}});
+    const ok=res.filter(r=>!r.why),ko=res.filter(r=>r.why),na=ok.filter(r=>r.noAns).length;
+    openDialog(`<h3>Reprendre la semaine précédente</h3>
+      <p style="margin:0">Semaine du ${weekRange(addDays(W,-7))} → semaine du ${weekRange(W)}. <b>${ok.length} cours sur ${prev.length}</b> peuvent être repris${slots.length?" (en plus de ceux déjà placés cette semaine)":""} ${pub?"et seront publiés immédiatement":"en brouillon"}.</p>
+      ${na?`<div class="gpwarn">${na} cours concernent des professeurs qui n'ont pas encore donné leurs disponibilités pour cette semaine : ils sont repris, à vérifier.</div>`:""}
+      ${ko.length?`<div><div class="sub" style="margin-bottom:6px">${ko.length} cours ne peuvent pas être repris :</div><div class="rl">${ko.map(r=>`<div class="rlrow"><b>${esc(r.lbl)}</b><span class="sub">${esc(r.why)}</span></div>`).join("")}</div></div>`:""}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok" ${ok.length?"":"disabled"}>Reprendre ${ok.length} cours</button></div>`,
+    async()=>{let n=0;const errs=[];for(const r of ok){const x=r.x;try{await q(sb.from("timetable_slots").insert({assignment_id:x.assignment_id,day_of_week:x.day_of_week,start_time:x.start_time,end_time:x.end_time,room_id:x.room_id,week_start:wk,published:false}));n++}catch(e){errs.push(r.lbl+" : "+errMsg(e))}}
+      toast(`${n} cours repris`+(errs.length?` · ${errs.length} refusé(s)`:""),errs.length>0);if(errs.length)console.warn(errs);rerender()})};
 
   /* ----- export ----- */
   ttExport.onclick=()=>openDialog(`<h3>Imprimer / exporter la semaine</h3>
@@ -1193,7 +1279,7 @@ function ttExportWeek(fmt,by,ents,slots,c){
       .filter((r,i)=>r.slice(1).some(Boolean)||std.some(([a,b])=>a+"–"+b===r[0]))};
   const wtxt="Semaine du "+weekRange(W)+(c.pub?"":" · non publiée");
   const file=slug("emploi-du-temps-"+iso(W)+"-"+(ents.length===1?ents[0][1]:BYL+"s"));
-  if(fmt==="xlsx"){exportExcel(file,ents.map(([id,name])=>({name,title:"UCAB Touba · Emploi du temps · "+BYL+" "+name,subtitle:wtxt,head,rows:build(slots.filter(s=>c.MATCH(by,s,id)))})));return}
+  if(fmt==="xlsx"){exportExcel(file,ents.map(([id,name])=>({name,title:APPN()+" · Emploi du temps · "+BYL+" "+name,subtitle:wtxt,head,rows:build(slots.filter(s=>c.MATCH(by,s,id)))})));return}
   try{
     if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
     const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"landscape"});
@@ -1218,7 +1304,8 @@ function ttExportWeek(fmt,by,ents,slots,c){
       const live=list.filter(s=>!c.isCancel(s)),tot=live.reduce((a,s)=>a+T(s.end_time)-T(s.start_time),0);
       /* en-tête */
       doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(70,80,92);
-      doc.text("UCAB Touba"+(year?"  ·  "+year:"")+"  ·  Semaine du "+weekRange(W)+(c.pub?"":"  ·  brouillon, non publiée"),ML,15);
+      pdfLogo(doc,PW-MR-11,6,11);
+      doc.text(APPN()+(S.cfg&&S.cfg.pdf_header?"  ·  "+S.cfg.pdf_header:"")+(year?"  ·  "+year:"")+"  ·  Semaine du "+weekRange(W)+(c.pub?"":"  ·  brouillon, non publiée"),ML,15);
       doc.setFont("helvetica","bold");doc.setFontSize(24);doc.setTextColor(17,24,32);doc.text(String(name),ML,26);
       doc.setFont("helvetica","normal");doc.setFontSize(11);doc.setTextColor(70,80,92);doc.text(BYL+"  ·  "+dur(tot)+" cette semaine",PW-MR,26,{align:"right"});
       doc.setFillColor(11,110,91);doc.rect(ML,29,PW-ML-MR,0.9,"F");
@@ -1261,7 +1348,7 @@ function ttExportWeek(fmt,by,ents,slots,c){
       const leg=Object.entries(sum).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,m])=>k+" "+dur(m)).join("   ·   ");
       doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(40,48,58);doc.text(doc.splitTextToSize(leg||"Aucun cours cette semaine.",PW-ML-MR).slice(0,2),ML,BOT+7);
       doc.setDrawColor(205,212,210);doc.setLineWidth(0.3);doc.line(ML,PH-11,PW-MR,PH-11);
-      doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text("UCAB Touba  ·  édité le "+new Date().toLocaleDateString("fr-FR"),ML,PH-6.5);
+      doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text(APPN()+(pdfFooterText()?"  ·  "+pdfFooterText():"")+"  ·  édité le "+new Date().toLocaleDateString("fr-FR"),ML,PH-6.5);
       doc.text(`${pi+1} / ${ents.length}`,PW-MR,PH-6.5,{align:"right"});
     });
     doc.save(file+".pdf");
@@ -1297,7 +1384,8 @@ function relanceDialog(W,list){
 function semesterRisk(a,doneMin,today){
   if(!a.semesters)return null;
   const s=new Date(a.semesters.start_date+"T12:00:00"),e=new Date(a.semesters.end_date+"T12:00:00"),t=new Date(today+"T12:00:00");
-  const total=Math.max(1,(e-s)/864e5/7),elapsed=Math.max(0,Math.min(total,(t-s)/864e5/7)),left=Math.max(0,total-elapsed);
+  /* semaines comptées sans les jours fermés du calendrier */
+  const total=Math.max(1,openWeeks(a.semesters.start_date,a.semesters.end_date)),left=t>e?0:Math.min(total,openWeeks(t<s?a.semesters.start_date:today,a.semesters.end_date)),elapsed=Math.max(0,total-left);
   const need=a.planned_hours*60-doneMin;if(need<=0)return null;
   const rate=elapsed>=1&&doneMin>0?doneMin/elapsed:null;
   const missing=rate!=null?Math.max(0,a.planned_hours*60-(doneMin+rate*left)):null;
@@ -1331,9 +1419,11 @@ async function plannerWeekCard(el){
       <div class="stat"><b>${wSlots.length}</b><span>cours · ${hrs(wMin)}</span></div>
       <div class="stat"><b style="color:${conf.length?"var(--bad)":"var(--ok)"}">${conf.length}</b><span>conflits</span></div>
       <div class="stat"><b style="color:${risks.length?"var(--warn)":"var(--ok)"}">${risks.length}</b><span>matières en retard</span></div></div>
+    ${(()=>{const cs=(S.closures||[]).filter(c=>c.date_from<=wEnd&&c.date_to>=wk);return cs.length?`<div class="gpwarn" style="margin-bottom:10px">Sans cours cette semaine : ${cs.map(c=>esc(c.label)+" ("+(c.date_from===c.date_to?fdl(c.date_from):"du "+fdl(c.date_from)+" au "+fdl(c.date_to))+(c.part!=="jour"?", "+CLOSE_PART[c.part].toLowerCase():"")+")").join(" · ")}</div>`:""})()}
     ${risks.length?`<div class="sub" style="margin-bottom:6px">Matières qui risquent de ne pas atteindre leur volume avant la fin du semestre</div>
       <div class="pw-r">${risks.slice(0,5).map(({a,r})=>`<div><b>${esc(a.courses?.code)}</b> · ${esc(a.student_groups?.code)} <span class="sub">— ${r.missing!=null?"il manquerait environ "+hrs(Math.round(r.missing/30)*30):"pas encore commencée, "+hrs(r.need)+" à faire"} · ${r.left>0.5?"il faut "+hrs(Math.round(r.pace/30)*30)+" par semaine":"semestre terminé"}</span></div>`).join("")}${risks.length>5?`<div class="sub">… et ${risks.length-5} autre(s), voir Emplois du temps > Avancement</div>`:""}</div>`:""}
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="pwOpen">Ouvrir l'emploi du temps</button>${noAns.length?`<button class="btn" id="pwRel">Relancer ${noAns.length} professeur(s) sans réponse</button>`:""}</div></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="pwOpen">Ouvrir l'emploi du temps</button>${noAns.length?`<button class="btn" id="pwRel">Relancer ${noAns.length} professeur(s) sans réponse</button>`:""}<button class="btn" id="pwAnn">Annonces${(S.annonces||[]).length?" ("+S.annonces.length+" en ligne)":""}</button></div></div>`;
+  pwAnn.onclick=()=>annonceDialog();
   pwOpen.onclick=()=>{S.ttWeek=W;S.ttTab="grille";S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell()};
   const rb=document.getElementById("pwRel");if(rb)rb.onclick=()=>relanceDialog(W,noAns);
 }
@@ -1571,6 +1661,8 @@ function timetableGrid(o){
   const col=d=>{const list=lane(o.mine.filter(x=>x.day_of_week===d));
     return `<div class="tt-col ${d===todayDow?"today":""}" data-day="${d}" style="height:${H}px">
       ${sc.lunchFrom&&sc.lunchTo&&T(sc.lunchTo)>lo&&T(sc.lunchFrom)<hi?`<div class="tt-lunch" style="top:${y(Math.max(lo,T(sc.lunchFrom)))}px;height:${(Math.min(hi,T(sc.lunchTo))-Math.max(lo,T(sc.lunchFrom)))/60*HH}px" title="Pause"><span>Pause</span></div>`:""}
+      ${o.week?closuresOn(iso(addDays(o.week,d-1))).map(c=>{const [lf,lt]=lunchBounds();const a=c.part==="apres_midi"?Math.max(lo,lt):lo,b=c.part==="matin"?Math.min(hi,lf):hi;
+        return b>a?`<div class="tt-closed" style="top:${y(a)}px;height:${(b-a)/60*HH}px" title="${esc(CLOSE_KIND[c.kind]+" · "+c.label)}"><span>${esc(c.label)}</span></div>`:""}).join(""):""}
       ${av.filter(a=>a.day_of_week===d).map(a=>`<div class="tt-av" style="top:${y(T(a.start_time))}px;height:${(T(a.end_time)-T(a.start_time))/60*HH}px" title="Disponible ${hm(a.start_time)}–${hm(a.end_time)}"></div>`).join("")}
       ${d===todayDow&&nowMin>lo&&nowMin<hi?`<div class="tt-now" data-t="${String(Math.floor(nowMin/60)).padStart(2,"0")}:${String(nowMin%60).padStart(2,"0")}" style="top:${y(nowMin)}px"></div>`:""}
       ${list.map(x=>{const c=colorOf(x.teaching_assignments.courses.code),dur=T(x.end_time)-T(x.start_time),w=100/x._n;
@@ -1616,7 +1708,7 @@ function generateTimetable(o,D){
   /* rythme attendu : heures restantes réparties sur les semaines restantes du semestre (sert à signaler les retards, pas à limiter) */
   const wk0=D.week?new Date(D.week):null;
   jobs.forEach(j=>{const sem=j.a.semesters;let left=1;
-    if(wk0&&sem?.end_date){left=Math.max(1,Math.ceil(((new Date(sem.end_date+"T12:00:00")-wk0)/864e5+1)/7))}
+    if(wk0&&sem?.end_date){left=Math.max(1,Math.ceil(openWeeks(D.week.slice(0,10),sem.end_date)))}
     j.pace=Math.min(j.n,Math.max(1,Math.ceil(Math.max(0,D.remaining[j.a.id]||0)/left/len)));j.done=0;j.why={};
     j.usedDays=new Set(D.slots.filter(x=>x.assignment_id===j.a.id).map(x=>x.day_of_week))});
   const placed=[];
@@ -1665,6 +1757,9 @@ function genDialog(ctx){
   const SD=[...cfg.days].sort();
   const ST=(()=>{const out=[],lf=cfg.lunchFrom?T2(cfg.lunchFrom):null,lt=cfg.lunchTo?T2(cfg.lunchTo):null;
     dayStarts(T2(cfg.start),T2(cfg.end),cfg.len,lf,lt).forEach(t=>out.push(F2(t)));return out})();
+  /* les fermetures du calendrier sont déjà marquées « sans cours » */
+  const CL={};SD.forEach(d=>ST.forEach(t=>{const c=closureAt(iso(addDays(ctx.week,d-1)),T2(t),T2(t)+cfg.len);if(c){CL[d+"|"+t]=c;cfg.off.push(d+"|"+t)}}));
+  const clNames=[...new Set(Object.values(CL).map(c=>c.label))];
   const drafts=ctx.slots.filter(x=>!x.published);
   if(cfg.replace==null)cfg.replace=!ctx.published&&drafts.length>0;
   /* base de travail : en mode « refaire », les brouillons de la semaine sont ignorés et leurs heures redeviennent à placer */
@@ -1677,8 +1772,8 @@ function genDialog(ctx){
       <div class="panel" style="padding:10px 14px"><b>Semaine du ${weekRange(ctx.week)}</b><div class="sub">${ctx.assigns.length} matière(s) du semestre en cours · ${ctx.declared.size} professeur(s) ont donné leurs disponibilités</div></div>
       <div><div class="sub" style="margin-bottom:6px">Créneaux de cours cette semaine : touchez un créneau, un jour ou une heure pour le marquer <b>sans cours</b>. Les horaires viennent de Référentiel > Jours et horaires.</div>
         <div class="gtwrap"><table class="gt" id="gGrid"><thead><tr><th></th>${SD.map(d=>`<th><button type="button" data-gd="${d}">${DAYS[d].slice(0,3)}. ${dayDate(ctx.week,d)}</button></th>`).join("")}</tr></thead>
-        <tbody>${ST.map(t=>`<tr><th><button type="button" data-gt="${t}">${t}–${F2(T2(t)+cfg.len)}</button></th>${SD.map(d=>`<td><button type="button" class="gc" data-gc="${d}|${t}" aria-pressed="${!cfg.off.includes(d+"|"+t)}" aria-label="${DAYS[d]} ${t}"></button></td>`).join("")}</tr>`).join("")}</tbody></table></div>
-        <p class="sub" style="margin:6px 0 0" id="gOffTxt"></p></div>
+        <tbody>${ST.map(t=>`<tr><th><button type="button" data-gt="${t}">${t}–${F2(T2(t)+cfg.len)}</button></th>${SD.map(d=>`<td><button type="button" class="gc ${CL[d+"|"+t]?"cl":""}" data-gc="${d}|${t}" aria-pressed="${!cfg.off.includes(d+"|"+t)}" aria-label="${DAYS[d]} ${t}" ${CL[d+"|"+t]?`title="${esc(CL[d+"|"+t].label)}"`:""}></button></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <p class="sub" style="margin:6px 0 0" id="gOffTxt"></p>${clNames.length?`<p class="sub" style="margin:4px 0 0">Déjà marqué d'après le calendrier : ${esc(clNames.join(", "))}.</p>`:""}</div>
       <div class="grid2">
         <label>Jours de présence max par professeur<input id="gMaxD" type="number" min="0" max="6" step="1" value="${cfg.maxDays||0}"><small class="sub">0 = sans limite</small></label></div>
       ${!ctx.published&&drafts.length?`<div class="seg" role="radiogroup" aria-label="Brouillons existants" style="display:grid;grid-template-columns:1fr 1fr">
@@ -1766,10 +1861,12 @@ function exportPdf(file,title,subtitle,sheets,landscape){
     const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:landscape?"landscape":"portrait"});
     const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     doc.setFillColor(11,110,91);doc.rect(0,0,W,3,"F");
-    doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(22,32,46);doc.text("UCAB Touba",14,16);
-    doc.setFontSize(12);doc.text(title,14,23);
+    const LX=pdfLogo(doc,14,7,14)?31:14;
+    doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(22,32,46);doc.text(APPN(),LX,13);
+    if(S.cfg&&S.cfg.pdf_header){doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);doc.text(S.cfg.pdf_header,LX,18)}
+    doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(22,32,46);doc.text(title,14,25);
     doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);
-    doc.text(subtitle+" · Édité le "+new Date().toLocaleDateString("fr-FR"),14,29);
+    doc.text(subtitle+" · Édité le "+new Date().toLocaleDateString("fr-FR"),14,30.5);
     let y=36;
     sheets.forEach(s=>{
       if(!s.rows.length&&!s.keepEmpty)return;
@@ -1781,7 +1878,7 @@ function exportPdf(file,title,subtitle,sheets,landscape){
       y=doc.lastAutoTable.finalY+9;
     });
     const n=doc.internal.getNumberOfPages();
-    for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text(`Page ${i} / ${n}`,W-14,H-8,{align:"right"})}
+    for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(93,104,121);doc.text(`Page ${i} / ${n}`,W-14,H-8,{align:"right"});if(pdfFooterText())doc.text(pdfFooterText(),14,H-8)}
     doc.save(file+".pdf");
   }catch(e){toast(errMsg(e),true)}
 }
@@ -1934,7 +2031,7 @@ async function viewSummary(v){
 }
 
 /* ---------- référentiel ---------- */
-const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",horaires:"Jours et horaires",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
+const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",horaires:"Jours et horaires",fermetures:"Jours sans cours",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
 const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
 const SETUP_STEPS=[["Départements","departments","structure"],["Filières","programs","structure"],["Groupes","student_groups","structure"],["Année","academic_years","calendrier"],["Semestres","semesters","calendrier"],["Matières","courses","matieres"],["Salles","rooms","salles"],["Enseignants","teachers","enseignants"]];
 
@@ -2091,6 +2188,7 @@ async function viewRef(v){
   const body=document.getElementById("refBody");
   if(sec==="comptes"){await viewAccounts(body);return}
   if(sec==="horaires"){await viewSchedule(body);return}
+  if(sec==="fermetures"){await viewClosures(body);return}
   const defs=refDefs(await refLookups());
   body.innerHTML=BLOCKS_BY_SEC[sec].map(k=>`<div id="blk-${k}"></div>`).join("");
   await Promise.all(BLOCKS_BY_SEC[sec].map(k=>renderBlock(defs[k],document.getElementById("blk-"+k))));
@@ -2113,7 +2211,7 @@ async function viewSchedule(el){
       <div><div class="sub" style="margin-bottom:6px">Créneaux d'une journée</div><div class="chips" id="shPrev"></div></div>
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
-    <p class="sub">Une journée ou un créneau sans cours (jour férié, activité) se marque semaine par semaine, dans « Générer la semaine ».</p>`;
+    <p class="sub">Les jours fériés, vacances, examens et événements se déclarent dans « Jours sans cours ». Pour un créneau ponctuel, utilisez « Générer la semaine ».</p>`;
   const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),groupMax:Number(shGm.value)||8,teacherMax:Number(shTm.value)||6,lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
@@ -2128,6 +2226,49 @@ async function viewSchedule(el){
       if(!r.length)throw new Error("Enregistrement refusé.");
       await loadSchedule();toast("Jours et horaires enregistrés")}
     catch(e){shErr.textContent=errMsg(e)}};
+}
+
+/* ---------- jours sans cours du calendrier ---------- */
+async function viewClosures(el){
+  const [list,sems]=await Promise.all([q(sb.from("calendar_closures").select("*").order("date_from")),q(sb.from("semesters").select("label,start_date,end_date,academic_years(label,is_current)").order("start_date"))]);
+  S.closures=list;
+  const today=iso(new Date());S.clPast=!!S.clPast;
+  const shown=list.filter(c=>S.clPast||c.date_to>=today);
+  const per=c=>c.date_from===c.date_to?fdl(c.date_from):`du ${fdl(c.date_from)} au ${fdl(c.date_to)}`;
+  const KC={ferie:"p-warn",vacances:"p-info",examens:"p-bad",evenement:"p-ok"};
+  const cur=sems.filter(x=>x.academic_years?.is_current);
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Jours sans cours</h2><button class="btn sm primary" id="clAdd">Ajouter</button></div>
+    <p class="sub" style="margin-top:0">Jours fériés, vacances, examens, Magal, Gamou… Le générateur ne place aucun cours ces jours-là, on ne peut pas y déplacer un cours, et le rythme des matières est calculé sans eux.</p>
+    ${cur.length?`<div class="stats mini">${cur.map(x=>{const tot=(new Date(x.end_date)-new Date(x.start_date))/864e5/7,op=openWeeks(x.start_date,x.end_date);return `<div class="stat"><b>${op.toFixed(1).replace(".",",")}</b><span>semaines de cours en ${esc(x.label)} (sur ${tot.toFixed(1).replace(".",",")})</span></div>`}).join("")}</div>`:""}
+    <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);margin-bottom:8px"><input type="checkbox" id="clPast" ${S.clPast?"checked":""}> Afficher aussi les dates passées</label>
+    <div class="panel tbl">${shown.length?`<table><thead><tr><th>Dates</th><th>Moment</th><th>Type</th><th>Libellé</th><th></th></tr></thead><tbody>
+      ${shown.map(c=>`<tr><td>${per(c)}</td><td>${CLOSE_PART[c.part]}</td><td><span class="pill ${KC[c.kind]}">${CLOSE_KIND[c.kind]}</span></td><td>${esc(c.label)}</td>
+        <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-cle="${c.id}">Modifier</button><button class="btn sm danger" data-cld="${c.id}">Supprimer</button></div></td></tr>`).join("")}</tbody></table>`
+      :`<p class="empty">Aucun jour sans cours à venir. Ajoutez les jours fériés et les vacances du semestre.</p>`}</div>`;
+  clPast.onchange=()=>{S.clPast=clPast.checked;rerender()};
+  const form=c=>{c=c||{part:"jour",kind:"ferie"};
+    openDialog(`<h3>${c.id?"Modifier":"Ajouter"} un jour sans cours</h3>
+      <label>Libellé<input id="clL" required maxlength="80" placeholder="Ex. Grand Magal, Tabaski, vacances de fin de semestre…" value="${esc(c.label||"")}"></label>
+      <div class="grid2"><label>Du<input id="clF" type="date" required value="${c.date_from||""}"></label><label>Au (inclus)<input id="clT" type="date" required value="${c.date_to||""}"></label>
+        <label>Type<select id="clK">${Object.entries(CLOSE_KIND).map(([k,l])=>`<option value="${k}" ${c.kind===k?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label>Moment<select id="clP">${Object.entries(CLOSE_PART).map(([k,l])=>`<option value="${k}" ${c.part===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
+      <p class="sub" style="margin:0" id="clInfo"></p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{if(clT.value<clF.value)throw new Error("La date de fin doit être après la date de début.");
+      const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value};
+      if(c.id)await q(sb.from("calendar_closures").update(row).eq("id",c.id));else await q(sb.from("calendar_closures").insert(row));
+      await loadClosures();toast("Enregistré");rerender()});
+    const info=async()=>{clInfo.textContent="";if(!clF.value||!clT.value||clT.value<clF.value)return;
+      try{const n=(await q(sb.from("timetable_slots").select("id,week_start,day_of_week").gte("week_start",iso(mondayOf(new Date(clF.value+"T12:00:00")))).lte("week_start",clT.value)))
+          .filter(x=>{const d=iso(addDays(new Date(x.week_start+"T12:00:00"),x.day_of_week-1));return d>=clF.value&&d<=clT.value}).length;
+        if(n)clInfo.innerHTML=`<span style="color:var(--warn)">Attention : ${n} cours sont déjà placés sur ces dates. Ils restent en place : déplacez-les ou annulez-les dans l'emploi du temps.</span>`}catch(e){}};
+    clF.onchange=()=>{if(!clT.value||clT.value<clF.value)clT.value=clF.value;info()};clT.onchange=info;info()};
+  clAdd.onclick=()=>form();
+  el.querySelectorAll("[data-cle]").forEach(b=>b.onclick=()=>form(list.find(c=>c.id==b.dataset.cle)));
+  el.querySelectorAll("[data-cld]").forEach(b=>b.onclick=()=>{const c=list.find(x=>x.id==b.dataset.cld);
+    openDialog(`<h3>Supprimer « ${esc(c.label)} » ?</h3><p style="margin:0">Ces dates redeviennent des jours de cours.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+    async()=>{const r=await q(sb.from("calendar_closures").delete().eq("id",c.id).select());if(!r.length)throw new Error("Suppression refusée.");await loadClosures();toast("Supprimé");rerender()})});
 }
 
 /* ---------- comptes et rôles ---------- */
@@ -2198,6 +2339,96 @@ function showCredentials(title,email,pwd){
   document.getElementById("dlg").addEventListener("close",()=>rerender(),{once:true});
 }
 
+/* ---------- administrateur : établissement (identité, année universitaire, sauvegarde) ---------- */
+const BACKUP_KEY="ucab_last_backup";
+const lastBackup=()=>{try{return localStorage.getItem(BACKUP_KEY)}catch(e){return null}};
+async function viewEtab(v){
+  const [cfg,years,sems]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date"))]);
+  const cur=years.find(y=>y.is_current);
+  const lb=lastBackup();
+  const semOf=y=>sems.filter(x=>x.academic_year_id===y.id);
+  let logo=cfg.logo||null;
+  v.innerHTML=`<h1>Établissement</h1><p class="lead">L'identité affichée dans l'application et sur les documents, l'année universitaire et la sauvegarde des données.</p>
+    <section class="adsec panel" style="padding:16px 18px"><h2>Identité</h2>
+      <form id="idForm" style="display:grid;gap:12px">
+        <div class="grid2"><label>Nom de l'établissement<input id="eN" required maxlength="80" value="${esc(cfg.name)}"></label><label>Sous-titre (écran de connexion)<input id="eS" maxlength="80" value="${esc(cfg.subtitle)}"></label>
+          <label>Ligne d'en-tête des PDF<input id="eH" maxlength="120" placeholder="Ex. Direction des études" value="${esc(cfg.pdf_header)}"></label><label>Pied de page des PDF<input id="eF" maxlength="160" placeholder="Ex. adresse, téléphone" value="${esc(cfg.pdf_footer)}"></label></div>
+        <div class="row" style="align-items:center;gap:14px"><div id="eLogoBox" class="logobox">${logo?`<img src="${esc(logo)}" alt="Logo">`:'<span class="sub">Pas de logo</span>'}</div>
+          <label class="btn sm" style="flex-direction:row;cursor:pointer">Choisir un logo<input id="eL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="eLx" ${logo?"":"hidden"}>Retirer le logo</button>
+          <span class="sub">PNG ou JPEG, carré de préférence. Il est réduit automatiquement.</span></div>
+        <div class="panel" style="padding:12px 14px;background:var(--bg)"><div class="sub" style="margin-bottom:8px">Aperçu</div><div id="ePrev"></div></div>
+        <div class="err" id="eErr"></div>
+        <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
+
+    <section class="adsec panel" style="padding:16px 18px"><h2>Année universitaire</h2>
+      <div class="rl">${years.map(y=>`<div class="rlrow"><div style="flex:1"><b>${esc(y.label)}</b> ${y.is_current?'<span class="pill p-ok">En cours</span>':""}<div class="sub">du ${fdl(y.start_date)} au ${fdl(y.end_date)} · ${semOf(y).map(x=>esc(x.label)).join(", ")||"aucun semestre"}</div></div>${y.is_current?"":`<button class="btn sm" data-cur="${y.id}">Mettre en cours</button>`}</div>`).join("")||'<p class="sub">Aucune année.</p>'}</div>
+      <p class="sub">L'année en cours est celle affichée en haut de l'écran et utilisée par défaut. Les années passées restent consultables : rien n'est effacé.</p>
+      <div class="row"><button class="btn primary" id="newYear">Préparer la nouvelle année</button></div></section>
+
+    <section class="adsec panel" style="padding:16px 18px"><h2>Sauvegarde des données</h2>
+      <p style="margin:0 0 10px">Un fichier Excel avec toutes les données : comptes, référentiel, affectations, emplois du temps, émargements${has("finance")||has("direction")?", paie":""} et journal. Gardez-en une copie dans l'établissement, par exemple chaque mois.</p>
+      ${has("finance")||has("direction")?"":`<p class="sub" style="margin:0 0 10px">Les montants de paie ne sont pas inclus : l'administrateur n'y a pas accès. Le responsable financier les exporte depuis la Paie.</p>`}
+      <div class="row" style="align-items:center"><button class="btn primary" id="bkBtn">${DLI}Télécharger la sauvegarde</button><span class="sub">${lb?"Dernière sauvegarde depuis cet appareil : "+new Date(lb).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):"Aucune sauvegarde faite depuis cet appareil."}</span></div></section>`;
+
+  /* identité */
+  const prev=()=>{const n=eN.value.trim()||"…";ePrev.innerHTML=`<div class="row" style="gap:24px;align-items:center">${(()=>{const c0=S.cfg;S.cfg={...c0,name:n,logo};const h=brandHtml(eS.value.trim()||"Enseignements");S.cfg=c0;return h})()}
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff;color:#16202e;font-size:12px;min-width:220px"><b style="font-size:14px">${esc(n)}</b>${eH.value.trim()?`<div style="color:#5d6879">${esc(eH.value.trim())}</div>`:""}<div style="color:#5d6879;margin-top:6px;border-top:1px solid #dde1e8;padding-top:4px;font-size:10px">${esc(eF.value.trim()||"(pied de page)")}</div></div></div>`;
+    eLogoBox.innerHTML=logo?`<img src="${esc(logo)}" alt="Logo">`:'<span class="sub">Pas de logo</span>';eLx.hidden=!logo};
+  ["eN","eS","eH","eF"].forEach(i=>document.getElementById(i).oninput=prev);prev();
+  eL.onchange=()=>{const f=eL.files[0];if(!f)return;if(f.size>5e6){toast("Image trop lourde (5 Mo maximum).",true);return}
+    const img=new Image(),url=URL.createObjectURL(f);img.onload=()=>{const m=256,k=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);logo=c.toDataURL("image/png");URL.revokeObjectURL(url);prev()};img.onerror=()=>toast("Image illisible.",true);img.src=url};
+  eLx.onclick=()=>{logo=null;eL.value="";prev()};
+  idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
+    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,updated_at:new Date().toISOString()}).eq("id",1).select());
+      if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
+
+  /* année en cours */
+  v.querySelectorAll("[data-cur]").forEach(b=>b.onclick=()=>{const y=years.find(x=>x.id==b.dataset.cur);
+    openDialog(`<h3>Mettre ${esc(y.label)} en cours ?</h3><p style="margin:0">Elle sera affichée en haut de l'écran pour tout le monde${cur?" à la place de "+esc(cur.label):""}. Les données des autres années ne changent pas.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Confirmer</button></div>`,
+    async()=>{await rpcOrScript("set_current_year",{p_year:y.id});S.year=y.label;toast("Année en cours : "+y.label);rerender()})});
+
+  /* nouvelle année */
+  newYear.onclick=()=>{
+    const base=cur||years[years.length-1];
+    const plus=d=>{if(!d)return"";const x=new Date(d+"T12:00:00");x.setFullYear(x.getFullYear()+1);return iso(x)};
+    const nextLabel=base?base.label.replace(/(\d{4})\D+(\d{4})/,(m,a,b)=>`${+a+1}-${+b+1}`):"";
+    const bs=base?semOf(base):[];
+    const rows=bs.length?bs.map(x=>({label:x.label,start:plus(x.start_date),end:plus(x.end_date),from:x.id})):[{label:"Semestre 1",start:"",end:"",from:""},{label:"Semestre 2",start:"",end:"",from:""}];
+    openDialog(`<h3>Préparer la nouvelle année</h3>
+      <p class="sub" style="margin:0">L'assistant crée l'année et ses semestres. Il peut recopier les affectations (qui enseigne quoi à quel groupe) pour gagner du temps. L'année ${base?esc(base.label):"actuelle"} reste intacte et consultable.</p>
+      <div class="grid2"><label>Libellé<input id="nyL" required value="${esc(nextLabel)}"></label><span></span>
+        <label>Début<input id="nyS" type="date" required value="${base?plus(base.start_date):""}"></label><label>Fin<input id="nyE" type="date" required value="${base?plus(base.end_date):""}"></label></div>
+      <div class="panel tbl"><table><thead><tr><th>Semestre</th><th>Début</th><th>Fin</th><th>Affectations reprises de</th></tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr><td><input data-ny="label" data-i="${i}" value="${esc(r.label)}" required></td><td><input type="date" data-ny="start" data-i="${i}" value="${r.start}" required></td><td><input type="date" data-ny="end" data-i="${i}" value="${r.end}" required></td>
+          <td><select data-ny="from" data-i="${i}"><option value="">— aucune —</option>${years.map(y=>semOf(y).map(x=>`<option value="${x.id}" ${x.id===r.from?"selected":""}>${esc(y.label+" · "+x.label)}</option>`).join("")).join("")}</select></td></tr>`).join("")}</tbody></table></div>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="nyC" checked> Recopier les affectations (les enseignants désactivés sont ignorés ; vous pourrez tout ajuster dans Affectations)</label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="nyCur"> En faire tout de suite l'année en cours (sinon, plus tard avec « Mettre en cours »)</label>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer l'année</button></div>`,
+    async()=>{const get=(k,i)=>document.querySelector(`[data-ny="${k}"][data-i="${i}"]`).value;
+      const p_sems=rows.map((r,i)=>({label:get("label",i).trim(),start:get("start",i),end:get("end",i),from:get("from",i)||null}));
+      const r=await rpcOrScript("new_academic_year",{p_label:nyL.value.trim(),p_start:nyS.value,p_end:nyE.value,p_sems,p_copy:nyC.checked,p_current:nyCur.checked});
+      if(nyCur.checked)S.year=nyL.value.trim();
+      toast(`Année ${nyL.value.trim()} créée`+(nyC.checked?` · ${r.copied} affectation(s) recopiée(s)`:""));rerender()});
+  };
+
+  /* sauvegarde */
+  bkBtn.onclick=async()=>{bkBtn.disabled=true;
+    try{const r=await rpcOrScript("admin_backup",{});const T=r.tables||{};
+      const NAMES={app_settings:"Établissement",academic_years:"Années",semesters:"Semestres",departments:"Départements",programs:"Filières",student_groups:"Groupes",rooms:"Salles",courses:"Matières",course_programs:"Matières-filières",teacher_statuses:"Statuts",teachers:"Enseignants",profiles:"Comptes",user_roles:"Rôles",teaching_assignments:"Affectations",assignment_groups:"Regroupements",school_schedule:"Horaires",calendar_closures:"Jours sans cours",teacher_availability:"Disponibilités",availability_weeks:"Réponses dispos",timetable_slots:"Créneaux",published_weeks:"Semaines publiées",schedule_sessions:"Séances",attendance_records:"Émargements",announcements:"Annonces",hourly_rates:"Tarifs",pay_periods:"Périodes de paie",payroll_items:"Lignes de paie",payslips:"Bulletins",payments:"Paiements",audit_logs:"Journal"};
+      const cell=x=>{if(x==null)return"";if(typeof x==="object")x=JSON.stringify(x);x=String(x);return x.length>32000?x.slice(0,32000)+"…":x};
+      const sheets=Object.entries(T).map(([t,rows])=>{const head=[...new Set(rows.flatMap(o=>Object.keys(o)))].filter(k=>!(t==="app_settings"&&k==="logo"));
+        return{name:NAMES[t]||t,title:(NAMES[t]||t)+" ("+t+")",subtitle:rows.length+" ligne(s) · sauvegarde du "+new Date().toLocaleString("fr-FR"),head:head.length?head:["(vide)"],rows:rows.map(o=>head.map(k=>cell(o[k])))}});
+      exportExcel("sauvegarde-"+iso(new Date()),sheets);
+      try{localStorage.setItem(BACKUP_KEY,new Date().toISOString())}catch(e){}
+      toast("Sauvegarde téléchargée · "+sheets.length+" tableaux");setTimeout(rerender,600)}
+    catch(e){toast(errMsg(e),true)}finally{bkBtn.disabled=false}};
+}
+/* appel d'une fonction de la base ; message clair si le script d'installation n'a pas encore été exécuté */
+async function rpcOrScript(fn,args){try{return await q(sb.rpc(fn,args))}
+  catch(e){if(/Could not find the function|PGRST202|does not exist/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « admin_sauvegarde_annee.sql » doit être exécuté dans Supabase.");throw e}}
+
 /* ---------- tableau de bord de l'administrateur ---------- */
 function goAccounts(o){Object.assign(S,{accTab:o.tab||"all",accState:o.state||"",accRole:o.role||"",accQ:"",accWithStaff:!!o.withStaff,accOpen:o.open||null,accBulk:!!o.bulk});
   S.tab="referentiel";S.refSec="comptes";try{history.replaceState(null,"","#referentiel")}catch(e){}renderShell()}
@@ -2229,6 +2460,7 @@ async function viewAdminDash(v){
     return `<div class="adcard ${ppl.length?"":"vide"}"><h4>${l}</h4>${ppl.length?ppl.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}${posteOf(setOf(u)).teaches?' <span class="sub">· enseigne</span>':""}</button><span class="sub">${info.length?fdt(inf(u.id).last_sign_in_at):""}</span></div>`).join(""):`<span class="sub" style="color:var(--warn)">Personne à ce poste</span>`}</div>`}).join("");
   const custom=act.filter(u=>posteOf(setOf(u)).key==="custom");
   const pct=profAcc.length?Math.round(profIn.length*100/profAcc.length):0;
+  const lb=lastBackup(),bkOld=!lb||(Date.now()-new Date(lb))/864e5>30;
   v.innerHTML=`<h1>Tableau de bord</h1><p class="lead">L'état des comptes en un coup d'œil. Touchez un chiffre ou un nom pour l'ouvrir dans Comptes.</p>
     <div class="stats">
       <button class="stat" data-go="on"><b>${act.length}</b><span>comptes actifs</span></button>
@@ -2237,11 +2469,12 @@ async function viewAdminDash(v){
       <button class="stat" data-go="never"><b style="color:${neverIn.length?"var(--warn)":"inherit"}">${info.length?neverIn.length:"—"}</b><span>jamais connectés</span></button></div>
 
     <section class="adsec panel" style="padding:14px 16px"><h2>Points à régler</h2>
-    ${noRole.length||profNoT.length||tNoAcc.length||admins.length<2?`<ul class="chk">
+    ${noRole.length||profNoT.length||tNoAcc.length||admins.length<2||bkOld?`<ul class="chk">
       ${admins.length<2?`<li class="warn"><i>!</i><span><b>${admins.length?"Un seul administrateur":"Aucun administrateur actif"}.</b> S'il perd son accès, plus personne ne pourra gérer les comptes. Donnez ce poste à une deuxième personne de confiance.</span></li>`:""}
       ${noRole.length?`<li class="warn"><i>!</i><span>${noRole.length} compte(s) sans poste : la personne ne voit rien après connexion. Choisissez son poste : <span class="chips" style="display:inline-flex">${noRole.map(chip).join("")}</span></span></li>`:""}
       ${profNoT.length?`<li class="bad"><i>✕</i><span>${profNoT.length} compte(s) professeur sans fiche enseignant liée : ils ne voient pas leurs cours. Liez-les : <span class="chips" style="display:inline-flex">${profNoT.map(chip).join("")}</span></span></li>`:""}
-      ${tNoAcc.length?`<li class="info"><i>i</i><span style="flex:1">${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger (${esc(tNoAcc.slice(0,6).map(t=>t.first_name+" "+t.last_name).join(", "))}${tNoAcc.length>6?"…":""}).</span><button class="btn sm primary" id="adBulk">Créer les comptes</button></li>`:""}</ul>`
+      ${tNoAcc.length?`<li class="info"><i>i</i><span style="flex:1">${tNoAcc.length} enseignant(s) sans compte : ils ne peuvent ni déclarer leurs disponibilités ni émarger (${esc(tNoAcc.slice(0,6).map(t=>t.first_name+" "+t.last_name).join(", "))}${tNoAcc.length>6?"…":""}).</span><button class="btn sm primary" id="adBulk">Créer les comptes</button></li>`:""}
+      ${bkOld?`<li class="info"><i>i</i><span style="flex:1">${lb?"Dernière sauvegarde des données il y a plus d'un mois.":"Aucune sauvegarde des données faite depuis cet appareil."} Gardez une copie dans l'établissement.</span><button class="btn sm" id="adBk">Sauvegarder</button></li>`:""}</ul>`
       :`<ul class="chk"><li class="ok"><i>✓</i><span>Rien à régler : chaque compte a un poste, chaque professeur a sa fiche, et il y a au moins deux administrateurs.</span></li></ul>`}</section>
 
     <section class="adsec"><h2>Équipe administrative</h2><div class="adgrid">${team}
@@ -2253,12 +2486,14 @@ async function viewAdminDash(v){
       ${profAcc.length&&info.length?`<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div><p class="sub" style="margin:6px 0 0">${pct} % des professeurs se sont déjà connectés.</p>`:""}
       ${info.length&&profAcc.length>profIn.length?`<div class="row" style="margin-top:10px"><button class="btn sm" id="adNever">Voir les professeurs jamais connectés</button></div>`:""}</section>
 
-    <section class="adsec panel" style="padding:14px 16px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Activité récente</h2><button class="btn sm" id="adLog">Voir tout le journal</button></div>
+    <section class="adsec panel" style="padding:14px 16px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Activité récente</h2><div class="row" style="gap:8px"><button class="btn sm" id="adAnn">Annonces${(S.annonces||[]).length?" ("+S.annonces.length+")":""}</button><button class="btn sm" id="adLog">Voir tout le journal</button></div></div>
       ${logs.length?`<div class="feed" style="margin-top:8px">${logs.map(r=>`<div><time>${fdt(r.occurred_at)}</time><span><b>${esc(nm(r.actor))}</b> ${esc(say(r))}</span></div>`).join("")}</div>`:`<p class="empty">Aucune opération enregistrée.</p>`}</section>`;
   v.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>goAccounts({tab:"all",state:b.dataset.go}));
   v.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>goAccounts({tab:"all",open:b.dataset.open}));
   const bk=document.getElementById("adBulk");if(bk)bk.onclick=()=>goAccounts({tab:"prof",bulk:true});
   const nv=document.getElementById("adNever");if(nv)nv.onclick=()=>goAccounts({tab:"prof",state:"never",withStaff:true});
+  adAnn.onclick=()=>annonceDialog();
+  const abk=document.getElementById("adBk");if(abk)abk.onclick=()=>{S.tab="etab";try{history.replaceState(null,"","#etab")}catch(e){}renderShell()};
   adLog.onclick=()=>{S.tab="journal";try{history.replaceState(null,"","#journal")}catch(e){}renderShell()};
 }
 
@@ -2415,7 +2650,17 @@ async function viewAccounts(el){
           const row=document.querySelector("#dlgForm .row:last-child");if(row)row.prepend(sb2);
           return "keep"});return "keep"}
       if(act==="act"){const to=u.active===false;
+        /* départ : avertir de ce qui reste en cours */
+        const W2=[];
+        if(!to){const pk=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||"")))).key;
+          if(pk&&pk!=="prof"&&pk!=="custom"){const same=profiles.filter(x=>x.id!==u.id&&x.active!==false&&posteOf(new Set(rolesOf(x.id).map(r=>r.role+"|"+(r.department_id||"")))).key===pk);
+            if(!same.length)W2.push(`C'est la seule personne au poste « ${POSTES.find(p=>p[0]===pk)[1]} » : plus personne ne pourra faire ce travail. Donnez d'abord ce poste à quelqu'un d'autre.`)}
+          if(t){try{const d=await q(sb.rpc("admin_departure_check",{p_user:u.id}));
+              if(d.sessions)W2.push(`${d.sessions} séance(s) de cours sont encore programmées à partir du ${fdl(d.next)}. Prévenez le directeur des études pour qu'il les réattribue (Affectations > changer le professeur).`);
+              else if(d.assignments)W2.push(`${d.assignments} affectation(s) de ce semestre sont encore à son nom. Prévenez le directeur des études.`)}
+            catch(e){W2.push("Pensez à vérifier avec le directeur des études si des cours sont encore programmés pour ce professeur.")}}}
         openDialog(`<h3>${to?"Réactiver":"Désactiver"} le compte ?</h3><p style="margin:0">${to?"La personne pourra de nouveau se connecter.":"La personne ne pourra plus se connecter. Ses données et son historique sont conservés."}</p>
+          ${W2.length?`<ul class="chk">${W2.map(x=>`<li class="warn"><i>!</i><span>${esc(x)}</span></li>`).join("")}</ul>`:""}
           <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn ${to?"primary":"danger"}" value="ok">${to?"Réactiver":"Désactiver"}</button></div>`,
         async()=>{await callUsers({action:"set_active",user_id:u.id,active:to});toast(to?"Compte réactivé":"Compte désactivé");rerender()});return "keep"}
     })});
@@ -2424,7 +2669,7 @@ async function viewAccounts(el){
 /* mot de passe provisoire : la personne choisit le sien avant d'accéder à l'application */
 function renderForcePw(){
   $app.classList.remove("hasnav");
-  $app.innerHTML=`<div class="wrap loginpage"><div class="login"><div class="brand"><i>U</i><div>UCAB Touba<small>Enseignements</small></div></div>
+  $app.innerHTML=`<div class="wrap loginpage"><div class="login">${brandHtml(S.cfg?.subtitle||"Enseignements")}
     <h1>Choisissez votre mot de passe</h1>
     <p class="lead">Vous utilisez un mot de passe provisoire. Choisissez-en un personnel pour continuer.</p>
     <form class="panel" id="fpForm"><label>Nouveau mot de passe (8 caractères minimum)<input id="fp1" type="password" minlength="8" required autocomplete="new-password"></label>
