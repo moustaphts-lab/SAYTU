@@ -521,6 +521,10 @@ async function loadSchedule(){
 function dayStarts(st,en,len,lf,lt){const out=[];let t=st;
   while(t+len<=en){if(lf!=null&&lt!=null&&t<lt&&lf<t+len){if(t+len<=lf){out.push(t);t+=len;continue}t=Math.max(t,lt);continue}out.push(t);t+=len}
   return out}
+/* tronc commun : groupe principal + groupes réunis d'une affectation */
+function grpIds(ta){return ta?[ta.group_id,...(ta.assignment_groups||[]).map(x=>x.group_id)]:[]}
+function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student_groups?.code).filter(Boolean);return [code,...ex].filter(Boolean).join(" + ")}
+function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
@@ -615,7 +619,7 @@ function openDialog(html,onSubmit){
 }
 
 /* ---------- professeur ---------- */
-const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name)),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at,entered_for_teacher)";
+const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name),assignment_groups(student_groups(code))),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at,entered_for_teacher)";
 
 async function viewTeacher(v){
   const from=iso(S.week),to=iso(addDays(S.week,6));
@@ -652,7 +656,7 @@ async function viewTeacher(v){
           else if(!a)act=`<span class="sub">À venir</span>`;
           else if(a.status==="soumis"||a.status==="correction_demandee")act=`<button class="btn sm" data-em="${s.id}">${a.status==="correction_demandee"?"Corriger":"Modifier"}</button>`;
           return `<div class="srow"><div class="stime">${hm(s.start_time)}<span>${hm(s.end_time)}</span></div>
-            <div><b>${sessionLabel(s)}</b><div class="sub">${esc(s.student_groups?.code)} · ${esc(s.rooms?.code)}${s.note?" · "+esc(s.note):""}</div>
+            <div><b>${sessionLabel(s)}</b><div class="sub">${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · ${esc(s.rooms?.code)}${s.note?" · "+esc(s.note):""}</div>
               <div style="margin-top:6px">${s.status==="annulee"?"":(!a?(started?`<span class="pill p-warn">À émarger</span>`:""):pill(a.status))}</div>
               ${a?`<div class="sub">Déclaré ${hm(a.declared_start)}–${hm(a.declared_end)}${a.retained_minutes!=null?" · retenu "+hrs(a.retained_minutes):""}</div>`:""}
               ${a?.entered_for_teacher?`<div class="sub">Saisi par délégation${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>`:""}
@@ -885,7 +889,7 @@ async function viewPlanning(v){
   if(!S.ttTab)S.ttTab="grille";
   const W=S.ttWeek,wk=iso(W),wEnd=iso(addDays(W,6)),prevWk=iso(addDays(W,-7));
   const sc=S.sched||SCHED_DEFAULT;
-  const SLOTSEL="id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))";
+  const SLOTSEL="id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups(code))";
   const [slots,allSlots,cancelled,sessW,conf,groups,teachers,rooms,assignsAll,sems,avails,answers,pub]=await Promise.all([
     q(sb.from("timetable_slots").select(SLOTSEL).eq("week_start",wk).order("start_time")),
     q(sb.from("timetable_slots").select("assignment_id,start_time,end_time,week_start")),
@@ -895,12 +899,13 @@ async function viewPlanning(v){
     q(sb.from("student_groups").select("id,code,name,size,programs(code,department_id,departments(code,name))").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name,active").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity").order("code")),
-    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name),teachers(first_name,last_name),student_groups(code)").order("id")),
     q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",wk)),
     q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",wk)),
     q(sb.from("published_weeks").select("published_at").eq("week_start",wk).maybeSingle())]);
   const mins=x=>toMin(x.end_time)-toMin(x.start_time);
+  slots.forEach(x=>decorateTA(x.teaching_assignments));assignsAll.forEach(decorateTA);
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
   const sessOf={};sessW.forEach(s=>{if(s.slot_id)sessOf[s.slot_id]=s});
   const isCancel=sl=>sessOf[sl.id]?.status==="annulee";
@@ -915,7 +920,8 @@ async function viewPlanning(v){
   const lists={group:groups.map(g=>[g.id,g.code]),teacher:teachers.map(t=>[t.id,t.first_name+" "+t.last_name]),room:rooms.map(r=>[r.id,r.code])};
   if(!S.planId||!lists[S.planView].some(x=>x[0]==S.planId))S.planId=lists[S.planView][0]?.[0];
   const KEY={group:s=>s.teaching_assignments.group_id,teacher:s=>s.teaching_assignments.teacher_id,room:s=>s.room_id};
-  const mine=slots.filter(s=>KEY[S.planView](s)==S.planId);
+  const MATCH=(by,s,id)=>by==="group"?s.teaching_assignments._g.includes(Number(id)):KEY[by](s)==id;
+  const mine=slots.filter(s=>MATCH(S.planView,s,S.planId));
   const confIds=new Set(conf.flatMap(c=>[c.slot_a,c.slot_b]));
   const drafts=slots.filter(s=>!s.published).length;
   const avOf=tid=>avails.filter(a=>a.teacher_id===tid);
@@ -946,11 +952,11 @@ async function viewPlanning(v){
   const deps=[...new Map(groups.filter(g=>g.programs?.departments).map(g=>[g.programs.department_id,g.programs.departments])).entries()];
   if(S.ovDep==null||(S.ovDep!=="all"&&!deps.some(([id])=>id==S.ovDep)))S.ovDep=deps[0]?.[0]??"all";
   const paneEnsemble=()=>{const gs=groups.filter(g=>S.ovDep==="all"||g.programs?.department_id==S.ovDep);
-    const cell=(g,d)=>live.concat(slots.filter(isCancel)).filter(s=>s.teaching_assignments.group_id===g.id&&s.day_of_week===d).sort((a,b)=>a.start_time.localeCompare(b.start_time))
+    const cell=(g,d)=>live.concat(slots.filter(isCancel)).filter(s=>s.teaching_assignments._g.includes(g.id)&&s.day_of_week===d).sort((a,b)=>a.start_time.localeCompare(b.start_time))
       .map(s=>`<button type="button" class="ovc ${isCancel(s)?"cancel":""} ${s.published?"":"draft"} ${confIds.has(s.id)?"conf":""}" data-sl="${s.id}" style="--c:${ttColor(s.teaching_assignments.courses.code)}"><span class="mono">${hm(s.start_time)}–${hm(s.end_time)}</span><b>${esc(s.teaching_assignments.courses.code)}</b><span>${esc(s.teaching_assignments.teachers.last_name)} · ${esc(s.rooms.code)}</span></button>`).join("")||'<span class="ovn">—</span>';
     return `<div class="row" style="margin-bottom:12px"><label>Département<select id="ovDep"><option value="all">Tous</option>${deps.map(([id,d])=>`<option value="${id}" ${id==S.ovDep?"selected":""}>${esc(d.name)}</option>`).join("")}</select></label></div>
     <div class="panel ovwrap"><table class="ov"><thead><tr><th>Groupe</th>${sc.days.map(d=>`<th>${DAYS[d]} <small>${dayDate(W,d)}</small></th>`).join("")}</tr></thead><tbody>
-    ${gs.map(g=>{const m=live.filter(s=>s.teaching_assignments.group_id===g.id).reduce((a,x)=>a+mins(x),0);
+    ${gs.map(g=>{const m=live.filter(s=>s.teaching_assignments._g.includes(g.id)).reduce((a,x)=>a+mins(x),0);
       return `<tr><th><b>${esc(g.code)}</b><div class="sub">${m?hrs(m):"aucun cours"}</div></th>${sc.days.map(d=>`<td>${cell(g,d)}</td>`).join("")}</tr>`}).join("")||`<tr><td colspan="${sc.days.length+1}"><p class="empty">Aucun groupe.</p></td></tr>`}</tbody></table></div>
     <p class="sub">Touchez un cours pour le modifier, l'annuler ou le reporter. Cours barrés : annulés.</p>`};
   const paneDispos=()=>`<div class="panel tbl">${tList.length?`<table><thead><tr><th>Professeur</th><th>Réponse pour la semaine</th><th>Placé</th><th></th></tr></thead><tbody>
@@ -1005,8 +1011,8 @@ async function viewPlanning(v){
     const noAns=[...new Set(live.map(s=>s.teaching_assignments.teacher_id))].filter(t=>!declared.has(t)).map(t=>teachers.find(x=>x.id===t)).filter(Boolean);
     L.push(noAns.length?{k:"warn",t:`Cours placés pour ${noAns.length} professeur(s) sans réponse : ${noAns.map(t=>t.last_name).join(", ")}`}:{k:"ok",t:"Tous les professeurs placés ont donné leurs disponibilités"});
     L.push(outCount?{k:"warn",t:`${outCount} cours hors des disponibilités déclarées`}:{k:"ok",t:"Tous les cours respectent les disponibilités"});
-    const gIds=[...new Set(assigns.filter(a=>remaining[a.id]>0).map(a=>a.group_id))];
-    const gm=gIds.map(id=>({g:groups.find(x=>x.id===id),m:live.filter(s=>s.teaching_assignments.group_id===id).reduce((a,x)=>a+mins(x),0)})).filter(x=>x.g);
+    const gIds=[...new Set(assigns.filter(a=>remaining[a.id]>0).flatMap(a=>a._g))];
+    const gm=gIds.map(id=>({g:groups.find(x=>x.id===id),m:live.filter(s=>s.teaching_assignments._g.includes(id)).reduce((a,x)=>a+mins(x),0)})).filter(x=>x.g);
     const nz=gm.map(x=>x.m).filter(Boolean).sort((a,b)=>a-b),med=nz.length?nz[Math.floor(nz.length/2)]:0;
     const empty=gm.filter(x=>!x.m),low=gm.filter(x=>x.m&&x.m<med/2);
     L.push(empty.length?{k:"warn",t:`Groupe(s) sans aucun cours : ${empty.map(x=>x.g.code).join(", ")}`}:{k:"ok",t:"Chaque groupe a des cours cette semaine"});
@@ -1041,10 +1047,10 @@ async function viewPlanning(v){
       <label>Lesquels<select id="xWho"><option value="all">Tous (une page par ${"élément"})</option><option value="cur">Seulement celui affiché dans la grille</option></select></label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn" value="xlsx">${DLI}Excel</button><button class="btn primary" value="pdf">${DLI}PDF</button></div>`,
     async(act)=>{const by=xBy.value,who=xWho.value;
-      let ents=lists[by].filter(([id])=>slots.some(s=>KEY[by](s)==id));
+      let ents=lists[by].filter(([id])=>slots.some(s=>MATCH(by,s,id)));
       if(who==="cur")ents=lists[by].filter(([id])=>by===S.planView&&id==S.planId);
       if(!ents.length)throw new Error(who==="cur"?"Choisissez d'abord, dans la grille, le même type d'affichage (groupe, professeur ou salle).":"Aucun cours à exporter.");
-      ttExportWeek(act,by,ents,slots.filter(s=>true),{W,pub:!!pub,isCancel,KEY})});
+      ttExportWeek(act,by,ents,slots.filter(s=>true),{W,pub:!!pub,isCancel,KEY,MATCH})});
 
   /* ----- créneaux ----- */
   const aLabel=a=>`${a.courses.code} · ${a.student_groups.code} · ${a.teachers.last_name}`;
@@ -1094,7 +1100,7 @@ async function viewPlanning(v){
     async(act)=>{if(act==="edit"){slotDialog(sl);return "keep"}if(act==="del"){delSlot(sl);return "keep"}if(act==="annul"){cancelSlot(sl);return "keep"}if(act==="report"){slotDialog(sl,true);return "keep"}if(act==="restore"){await restoreSlot(sl)}})});
   if(S.ttTab==="grille")enableTtDrag(v,{
     check:(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),t=sl.teaching_assignments;
-      const o=live.find(x=>x.id!==id&&x.day_of_week===d&&toMin(x.start_time)<b&&a<toMin(x.end_time)&&(x.teaching_assignments.teacher_id===t.teacher_id||x.teaching_assignments.group_id===t.group_id||x.room_id===sl.room_id));
+      const o=live.find(x=>x.id!==id&&x.day_of_week===d&&toMin(x.start_time)<b&&a<toMin(x.end_time)&&(x.teaching_assignments.teacher_id===t.teacher_id||x.teaching_assignments._g.some(g=>t._g.includes(g))||x.room_id===sl.room_id));
       return o?`Conflit avec ${o.teaching_assignments.courses.code}`:""},
     onDrop:async(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),tid=sl.teaching_assignments.teacher_id;
       try{await q(sb.from("timetable_slots").update({day_of_week:d,start_time:a,end_time:b}).eq("id",id));
@@ -1119,7 +1125,7 @@ function ttExportWeek(fmt,by,ents,slots,c){
       .filter((r,i)=>r.slice(1).some(Boolean)||std.some(([a,b])=>a+"–"+b===r[0]))};
   const wtxt="Semaine du "+weekRange(W)+(c.pub?"":" · non publiée");
   const file=slug("emploi-du-temps-"+iso(W)+"-"+(ents.length===1?ents[0][1]:BYL+"s"));
-  if(fmt==="xlsx"){exportExcel(file,ents.map(([id,name])=>({name,title:"UCAB Touba · Emploi du temps · "+BYL+" "+name,subtitle:wtxt,head,rows:build(slots.filter(s=>c.KEY[by](s)==id))})));return}
+  if(fmt==="xlsx"){exportExcel(file,ents.map(([id,name])=>({name,title:"UCAB Touba · Emploi du temps · "+BYL+" "+name,subtitle:wtxt,head,rows:build(slots.filter(s=>c.MATCH(by,s,id)))})));return}
   try{
     if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
     const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"landscape"});
@@ -1136,7 +1142,7 @@ function ttExportWeek(fmt,by,ents,slots,c){
     const ML=12,MR=12,TC=20,GAP=1.6,TOP=46,BOT=PH-26,PB=hasL?7:0;
     const cw=(PW-ML-MR-TC)/days.length,x0=ML+TC;
     ents.forEach(([id,name],pi)=>{if(pi)doc.addPage();
-      const list=slots.filter(s=>c.KEY[by](s)==id);
+      const list=slots.filter(s=>c.MATCH(by,s,id));
       /* l'échelle verticale couvre la journée (et s'élargit si un cours sort des horaires) ; la pause est une fine bande */
       let lo=st,hi=en;list.forEach(s=>{lo=Math.min(lo,T(s.start_time));hi=Math.max(hi,T(s.end_time))});
       const span=(hasL?(lf-lo)+(hi-lt):(hi-lo)),k=(BOT-TOP-PB)/span;
@@ -1200,9 +1206,9 @@ async function viewAssign(v){
   const [sems,groups,courses,teachers,assigns,slotsAll,cancelled]=await Promise.all([
     q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
     q(sb.from("student_groups").select("id,code,name,size,program_id,programs(code,name,level,department_id,departments(code,name))").order("code")),
-    q(sb.from("courses").select("id,code,name,total_hours,department_id,program_id").order("code")),
+    q(sb.from("courses").select("id,code,name,total_hours,department_id,program_id,course_programs(program_id)").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name,department_id,active,departments(code)").order("last_name")),
-    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours").order("id")),
+    q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id)").order("id")),
     q(sb.from("timetable_slots").select("assignment_id,start_time,end_time")),
     q(sb.from("schedule_sessions").select("assignment_id,start_time,end_time").in("status",["annulee","reportee"]))]);
   const today=iso(new Date());
@@ -1214,12 +1220,18 @@ async function viewAssign(v){
   const mins=x=>toMin(x.end_time)-toMin(x.start_time);
   const done={};slotsAll.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)+mins(x)});cancelled.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)-mins(x)});
   const semA=assigns.filter(a=>a.semester_id===sem);
-  const mineA=semA.filter(a=>a.group_id===G.id);
+  const gids=a=>[a.group_id,...(a.assignment_groups||[]).map(x=>x.group_id)];
+  const gcode=id=>groups.find(g=>g.id===id)?.code||"?";
+  const inProg=c=>c.program_id===G.program_id||(c.course_programs||[]).some(x=>x.program_id===G.program_id);
+  const mineA=semA.filter(a=>gids(a).includes(G.id));
   /* lignes : matières de la filière du groupe + matières déjà affectées à ce groupe + matières ajoutées à la main */
   S.asgExtra=S.asgExtra||{};const extra=S.asgExtra[G.id]||[];
-  const ids=[...new Set([...courses.filter(c=>c.program_id===G.program_id).map(c=>c.id),...mineA.map(a=>a.course_id),...extra])];
+  const ids=[...new Set([...courses.filter(inProg).map(c=>c.id),...mineA.map(a=>a.course_id),...extra])];
   const rows=ids.map(cid=>{const c=courses.find(x=>x.id===cid);const ex=mineA.filter(a=>a.course_id===cid);
-    return{c,a:ex[0]||null,dup:ex.length>1,teacher:ex[0]?.teacher_id||null,hours:ex[0]?Number(ex[0].planned_hours):Number(c.total_hours)||0}});
+    /* même matière déjà affectée à un autre groupe ce semestre : on peut rejoindre ce cours (tronc commun) */
+    const joinable=ex.length?[]:semA.filter(a=>a.course_id===cid&&!gids(a).includes(G.id));
+    return{c,a:ex[0]||null,dup:ex.length>1,teacher:ex[0]?.teacher_id||null,hours:ex[0]?Number(ex[0].planned_hours):Number(c.total_hours)||0,
+      shared:ex[0]?gids(ex[0]).filter(x=>x!==G.id):[],extraHere:ex[0]?ex[0].group_id!==G.id:false,joinable}});
   const tName=t=>t.first_name+" "+t.last_name;
   const act=teachers.filter(t=>t.active!==false);
   const own=act.filter(t=>t.department_id===dep),oth=act.filter(t=>t.department_id!==dep);
@@ -1237,10 +1249,13 @@ async function viewAssign(v){
     <div class="asg-layout">
       <div>
         <div class="panel" style="padding:10px 14px;margin-bottom:10px"><b>${esc(G.name)}</b> <span class="sub">· ${esc(G.programs?.code||"")} · ${G.size} étudiants · ${assignedCount}/${rows.length} matière(s) affectée(s)</span></div>
-        ${!courses.some(c=>c.program_id===G.program_id)?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière n'est rattachée à la filière ${esc(G.programs?.code||"")}. Rattachez-les dans Référentiel > Matières (champ « Filière et niveau »), ou ajoutez-les ci-dessous.</div>`:""}
+        ${!courses.some(inProg)?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière n'est rattachée à la filière ${esc(G.programs?.code||"")}. Rattachez-les dans Référentiel > Matières (champ « Filières »), ou ajoutez-les ci-dessous.</div>`:""}
         <div class="panel tbl"><table id="aTable"><thead><tr><th>Matière</th><th>Professeur</th><th>Volume (h)</th><th>Programmé</th><th></th></tr></thead><tbody>
         ${rows.map((r,i)=>{const d=r.a?Math.max(0,done[r.a.id]||0):0;
-          return `<tr data-i="${i}"><td><b>${esc(r.c.code)}</b><div class="sub">${esc(r.c.name)}</div>${r.dup?'<span class="pill p-bad">En double</span>':""}${r.c.program_id!==G.program_id?'<span class="pill p-mute">Autre filière</span>':""}</td>
+          return `<tr data-i="${i}"><td><b>${esc(r.c.code)}</b><div class="sub">${esc(r.c.name)}</div>${r.dup?'<span class="pill p-bad">En double</span>':""}${!inProg(r.c)?'<span class="pill p-mute">Autre filière</span>':""}
+            ${r.shared.length?`<div style="margin-top:4px"><span class="pill p-info">Commun avec ${esc(r.shared.map(gcode).join(", "))}</span></div>`:""}
+            ${r.joinable.length?`<div style="margin-top:6px">${r.joinable.map(a=>`<button class="btn sm" type="button" data-join="${a.id}">Rejoindre le cours de ${esc(gids(a).map(gcode).join(" + "))} (${esc(tName(teachers.find(t=>t.id===a.teacher_id)||{first_name:"",last_name:"?"}))})</button>`).join(" ")}</div>`:""}
+            ${r.a?`<div style="margin-top:6px"><button class="btn sm" type="button" data-grp="${r.a.id}">Groupes réunis…</button></div>`:""}</td>
           <td><select class="aT" data-i="${i}" aria-label="Professeur pour ${esc(r.c.code)}">${tOpts(r.teacher)}</select></td>
           <td><input class="aH" data-i="${i}" type="number" min="0.5" step="0.5" value="${r.hours}" style="width:84px" aria-label="Volume ${esc(r.c.code)}"></td>
           <td class="num">${r.a?`${hrs(d)}<div class="pbar"><i style="width:${Math.min(100,Math.round(d/(r.hours*60||1)*100))}%"></i></div>`:"—"}</td>
@@ -1256,7 +1271,7 @@ async function viewAssign(v){
     </div>`;
   const cur=()=>rows.map((r,i)=>({...r,teacherNew:Number(v.querySelector(`.aT[data-i="${i}"]`).value)||null,hoursNew:Number(v.querySelector(`.aH[data-i="${i}"]`).value)||0}));
   const drawLoad=()=>{const c=cur(),m={};
-    semA.filter(a=>a.group_id!==G.id).forEach(a=>{(m[a.teacher_id]??={n:0,h:0});m[a.teacher_id].n++;m[a.teacher_id].h+=Number(a.planned_hours)});
+    semA.filter(a=>!gids(a).includes(G.id)).forEach(a=>{(m[a.teacher_id]??={n:0,h:0});m[a.teacher_id].n++;m[a.teacher_id].h+=Number(a.planned_hours)});
     c.forEach(r=>{if(r.teacherNew){(m[r.teacherNew]??={n:0,h:0});m[r.teacherNew].n++;m[r.teacherNew].h+=r.hoursNew}});
     const list=act.filter(t=>m[t.id]||t.department_id===dep).sort((a,b)=>(m[b.id]?.h||0)-(m[a.id]?.h||0));
     const max=Math.max(1,...list.map(t=>m[t.id]?.h||0));
@@ -1268,6 +1283,23 @@ async function viewAssign(v){
       td.innerHTML=changed?(r.a&&!r.teacherNew?'<span class="pill p-bad">À retirer</span>':'<span class="pill p-warn">Modifiée</span>'):(r.a?'<span class="pill p-ok">Affectée</span>':'<span class="pill p-mute">Non affectée</span>')})};
   drawLoad();
   v.querySelectorAll(".aT,.aH").forEach(e=>e.oninput=drawLoad);
+  v.querySelectorAll("[data-join]").forEach(b=>b.onclick=async()=>{
+    try{await q(sb.from("assignment_groups").insert({assignment_id:Number(b.dataset.join),group_id:G.id}));toast("Groupe ajouté au cours commun");rerender()}catch(e){toast(errMsg(e),true)}});
+  v.querySelectorAll("[data-grp]").forEach(b=>b.onclick=()=>{const a=semA.find(x=>x.id==b.dataset.grp),cur0=new Set(gids(a)),c=courses.find(x=>x.id===a.course_id);
+    const size=()=>[...document.querySelectorAll("#rgList input:checked")].reduce((s,i)=>s+(groups.find(g=>g.id==i.value)?.size||0),0);
+    openDialog(`<h3>Groupes réunis · ${esc(c.code)}</h3>
+      <p class="sub" style="margin:0">Les groupes cochés suivent ce cours <b>ensemble</b> : même professeur, même salle, même moment, même volume. Une seule séance est émargée et payée. Le groupe principal ne peut pas être retiré ici.</p>
+      <div id="rgList" style="display:grid;gap:4px;max-height:44vh;overflow:auto">${Object.entries(byDep).map(([k,gs])=>`<div class="sub" style="margin-top:6px">${esc(k)}</div>`+gs.map(g=>`<label style="flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var(--ink)"><input type="checkbox" value="${g.id}" ${cur0.has(g.id)?"checked":""} ${g.id===a.group_id?"disabled":""}> ${esc(g.code)} · ${esc(g.name)} <span class="sub">(${g.size})</span>${g.id===a.group_id?' <span class="pill p-mute">principal</span>':""}${(c.course_programs||[]).some(x=>x.program_id===g.program_id)?' <span class="pill p-info">filière de la matière</span>':""}</label>`).join("")).join("")}</div>
+      <p class="sub" style="margin:0" id="rgSize"></p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const want=new Set([...document.querySelectorAll("#rgList input:checked")].map(i=>Number(i.value)));want.delete(a.group_id);
+      const had=new Set((a.assignment_groups||[]).map(x=>x.group_id));
+      const add=[...want].filter(x=>!had.has(x)),del=[...had].filter(x=>!want.has(x));
+      if(add.length)await q(sb.from("assignment_groups").insert(add.map(g=>({assignment_id:a.id,group_id:g}))));
+      if(del.length)await q(sb.from("assignment_groups").delete().eq("assignment_id",a.id).in("group_id",del));
+      toast("Groupes réunis enregistrés"+(add.length&&(done[a.id]||0)>0?" · vérifiez l'emploi du temps : les créneaux déjà placés doivent convenir à tous les groupes":""));rerender()});
+    const upd=()=>{rgSize.textContent=`Effectif total : ${size()} étudiants — la salle devra être assez grande.`};upd();
+    document.querySelectorAll("#rgList input").forEach(i=>i.onchange=upd)});
   aSem.onchange=()=>{S.asgSem=Number(aSem.value);rerender()};
   aGrp.onchange=()=>{S.asgGroup=Number(aGrp.value);rerender()};
   aAdd.onchange=()=>{if(!aAdd.value)return;(S.asgExtra[G.id]??=[]).push(Number(aAdd.value));rerender()};
@@ -1276,6 +1308,8 @@ async function viewAssign(v){
     for(const r of c){try{
       if(!r.a&&r.teacherNew){if(r.hoursNew<=0)throw new Error("volume manquant");
         await q(sb.from("teaching_assignments").insert({semester_id:sem,course_id:r.c.id,group_id:G.id,teacher_id:r.teacherNew,planned_hours:r.hoursNew}));ok++}
+      else if(r.a&&!r.teacherNew&&r.extraHere){await q(sb.from("assignment_groups").delete().eq("assignment_id",r.a.id).eq("group_id",G.id));ok++}
+      else if(r.a&&!r.teacherNew&&r.shared.length){throw new Error("ce cours est commun à d'autres groupes : retirez d'abord ce groupe avec « Groupes réunis… », ou changez le professeur")}
       else if(r.a&&!r.teacherNew){if((done[r.a.id]||0)>0)throw new Error("a déjà des créneaux : changez plutôt le professeur");
         const d=await q(sb.from("teaching_assignments").delete().eq("id",r.a.id).select());if(!d.length)throw new Error("suppression refusée");ok++}
       else if(r.a){
@@ -1292,8 +1326,10 @@ async function viewAssign(v){
       <label>Semestre source<select id="cpSrc">${src.map(x=>`<option value="${x.id}">${esc(x.academic_years.label)} · ${esc(x.label)} (${assigns.filter(a=>a.semester_id===x.id).length})</option>`).join("")}</select></label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Reprendre</button></div>`,
     async()=>{const sid=Number(cpSrc.value);const have=new Set(semA.map(a=>a.course_id+"_"+a.group_id));
-      const todo=assigns.filter(a=>a.semester_id===sid&&!have.has(a.course_id+"_"+a.group_id)).map(a=>({semester_id:sem,course_id:a.course_id,group_id:a.group_id,teacher_id:a.teacher_id,planned_hours:a.planned_hours}));
-      if(todo.length)await q(sb.from("teaching_assignments").insert(todo));
+      const srcA=assigns.filter(a=>a.semester_id===sid&&!have.has(a.course_id+"_"+a.group_id));
+      for(const a of srcA){const n=await q(sb.from("teaching_assignments").insert({semester_id:sem,course_id:a.course_id,group_id:a.group_id,teacher_id:a.teacher_id,planned_hours:a.planned_hours}).select("id").single());
+        const ex=(a.assignment_groups||[]).map(x=>({assignment_id:n.id,group_id:x.group_id}));if(ex.length)await q(sb.from("assignment_groups").insert(ex))}
+      const todo=srcA;
       toast(`${todo.length} affectation(s) reprise(s)`);rerender()})};
 }
 
@@ -1303,11 +1339,12 @@ async function viewMyTimetable(v){
   if(!S.ttWeek)S.ttWeek=planDefaultWeek();
   const W=S.ttWeek,wk=iso(W);
   const [slots,assigns,avails,sess]=await Promise.all([
-    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code,name),teaching_assignments!inner(teacher_id,group_id,courses(code,name),teachers(first_name,last_name),student_groups(code))").eq("published",true).eq("week_start",wk).eq("teaching_assignments.teacher_id",tid).order("start_time")),
-    q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),student_groups(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
+    q(sb.from("timetable_slots").select("id,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code,name),teaching_assignments!inner(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups(code))").eq("published",true).eq("week_start",wk).eq("teaching_assignments.teacher_id",tid).order("start_time")),
+    q(sb.from("teaching_assignments").select("id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),courses(code,name),student_groups(code),semesters(label,start_date,end_date)").eq("teacher_id",tid)),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("teacher_id",tid).eq("week_start",wk)),
     q(sb.from("schedule_sessions").select("slot_id,status,note").eq("teacher_id",tid).gte("session_date",wk).lte("session_date",iso(addDays(W,6))))]);
   const mins=x=>{const t=s=>{const [h,m]=s.slice(0,5).split(":").map(Number);return h*60+m};return t(x.end_time)-t(x.start_time)};
+  slots.forEach(x=>decorateTA(x.teaching_assignments));assigns.forEach(decorateTA);
   const sOf={};sess.forEach(x=>{if(x.slot_id)sOf[x.slot_id]=x});
   const cancelled=new Set(slots.filter(x=>sOf[x.id]?.status==="annulee").map(x=>x.id));
   const total=slots.filter(x=>!cancelled.has(x.id)).reduce((a,x)=>a+mins(x),0);
@@ -1421,7 +1458,8 @@ function generateTimetable(o,D){
   const free=(k,id,day,s,e)=>!(busy[k][id]?.[day]||[]).some(x=>ov(x,{s,e}));
   const load=(k,id,day)=>(busy[k][id]?.[day]||[]).reduce((a,x)=>a+x.e-x.s,0);
   const existing={};const aslots={};const asl=(id,d)=>((aslots[id]??={})[d]??=[]);const tdays={};const tday=id=>(tdays[id]??=new Set());
-  D.slots.forEach(x=>{const a=x.teaching_assignments;add("g",a.group_id,x.day_of_week,T(x.start_time),T(x.end_time));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));tday(a.teacher_id).add(x.day_of_week);asl(x.assignment_id,x.day_of_week).push({s:T(x.start_time),e:T(x.end_time)});if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
+  const GS=a=>a._g||[a.group_id];
+  D.slots.forEach(x=>{const a=x.teaching_assignments;GS(a).forEach(g=>add("g",g,x.day_of_week,T(x.start_time),T(x.end_time)));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));tday(a.teacher_id).add(x.day_of_week);asl(x.assignment_id,x.day_of_week).push({s:T(x.start_time),e:T(x.end_time)});if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
     existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
   const len=o.len,maxChain=Math.max(1,Math.floor(360/o.len)),start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
   const times=dayStarts(start,end,len,lf,lt);
@@ -1452,22 +1490,22 @@ function generateTimetable(o,D){
         const tav=av(a.teacher_id);
         if(o.useAvail&&!tav.some(x=>x.day_of_week===d&&T(x.start_time)<=t&&T(x.end_time)>=e)){fail(D.declared.has(a.teacher_id)?"hors disponibilités du professeur":"pas de réponse du professeur pour cette semaine");continue}
         if(!free("t",a.teacher_id,d,t,e)){fail("professeur déjà occupé");continue}
-        if(!free("g",a.group_id,d,t,e)){fail("groupe déjà occupé");continue}
+        if(!GS(a).every(g=>free("g",g,d,t,e))){fail(GS(a).length>1?"un des groupes réunis est déjà occupé":"groupe déjà occupé");continue}
         if(o.maxDays>0&&!tday(a.teacher_id).has(d)&&tday(a.teacher_id).size>=o.maxDays){fail("limite de jours de présence du professeur");continue}
         const same=asl(a.id,d);
         if(same.length){let run=1,cur=t,ch=true;while(ch){ch=false;for(const x of same){if(x.e===cur){run++;cur=x.s;ch=true;break}}}
           cur=e;ch=true;while(ch){ch=false;for(const x of same){if(x.s===cur){run++;cur=x.e;ch=true;break}}}
           if(run>maxChain){fail("trop d'heures de suite pour la même matière");continue}}
-        if(load("g",a.group_id,d)+len>o.maxGroup*60){fail("limite d'heures par jour du groupe");continue}
+        if(GS(a).some(g=>load("g",g,d)+len>o.maxGroup*60)){fail("limite d'heures par jour du groupe");continue}
         if(load("t",a.teacher_id,d)+len>o.maxTeacher*60){fail("limite d'heures par jour du professeur");continue}
-        const need=gsize[a.group_id]||0;const room=rooms.find(r=>r.capacity>=need&&free("r",r.id,d,t,e));
+        const need=GS(a).reduce((s2,g)=>s2+(gsize[g]||0),0);const room=rooms.find(r=>r.capacity>=need&&free("r",r.id,d,t,e));
         if(!room){fail(rooms.some(r=>r.capacity>=need)?"aucune salle libre":"aucune salle assez grande");continue}
         const adj=(busy.t[a.teacher_id]?.[d]||[]).some(x=>x.e===t||x.s===e);
-        const score=o.compact?((tday(a.teacher_id).has(d)?0:500)+(usedDays.has(d)?10:0)+(asl(a.id,d).some(x=>x.e===t||x.s===e)?60:0)+(adj&&!asl(a.id,d).some(x=>x.e===t||x.s===e)?-4:0)+load("g",a.group_id,d)/6+times.indexOf(t)*0.5+d*0.01)
-          :((usedDays.has(d)?1000:0)+load("g",a.group_id,d)/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01);
+        const score=o.compact?((tday(a.teacher_id).has(d)?0:500)+(usedDays.has(d)?10:0)+(asl(a.id,d).some(x=>x.e===t||x.s===e)?60:0)+(adj&&!asl(a.id,d).some(x=>x.e===t||x.s===e)?-4:0)+Math.max(...GS(a).map(g=>load("g",g,d)))/6+times.indexOf(t)*0.5+d*0.01)
+          :((usedDays.has(d)?1000:0)+Math.max(...GS(a).map(g=>load("g",g,d)))/6+load("t",a.teacher_id,d)/30+times.indexOf(t)*0.5+d*0.01);
         if(!best||score<best.score)best={score,d,t,e,room}}
       if(!best)return false;
-      add("g",a.group_id,best.d,best.t,best.e);add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);tday(a.teacher_id).add(best.d);asl(a.id,best.d).push({s:best.t,e:best.e});j.done++;
+      GS(a).forEach(g=>add("g",g,best.d,best.t,best.e));add("t",a.teacher_id,best.d,best.t,best.e);add("r",best.room.id,best.d,best.t,best.e);usedDays.add(best.d);tday(a.teacher_id).add(best.d);asl(a.id,best.d).push({s:best.t,e:best.e});j.done++;
       placed.push({assignment_id:a.id,a,day_of_week:best.d,start_time:F(best.t),end_time:F(best.e),room_id:best.room.id,room_code:best.room.code});return true};
   let active=jobs.slice();
   while(active.length){const next=[];for(const j of active){if(placeOne(j)&&j.done<j.n)next.push(j)}active=next}
@@ -1779,12 +1817,16 @@ function refDefs(L){
     statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",head:[1,0],
       cols:[["Code",code],["Libellé",r=>esc(r.label)]],
       fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
-    matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département et à une filière (niveau). La filière permet de proposer les bonnes matières lors de l'affectation d'un groupe. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code),programs(code,level)",order:"code",
-      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Filière",r=>r.programs?esc(r.programs.code):'<span class="pill p-warn">À préciser</span>'],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
+    matieres:{title:"Matières",one:"matière",head:[1,0],hint:"Chaque matière appartient à un département et à une ou plusieurs filières. Plusieurs filières = matière commune (tronc commun) : elle sera proposée à chacune lors des affectations. Le volume horaire est le total prévu sur le semestre.",table:"courses",select:"*,departments(code),course_programs(program_id,programs(code))",order:"code",
+      cols:[["Code",code],["Intitulé",r=>esc(r.name)],["Filières",r=>{const L2=(r.course_programs||[]).map(x=>x.programs?.code).filter(Boolean).sort();return L2.length?esc(L2.join(", "))+(L2.length>1?' <span class="pill p-info">commune</span>':""):'<span class="pill p-warn">À préciser</span>'}],["Type",r=>esc(r.course_type)],["Volume",r=>`<span class="num">${r.total_hours} h</span>`],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Intitulé",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},
-        {k:"program_id",l:"Filière et niveau",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.code+" · "+p.name])},
+        {k:"_progs",l:"Filières qui suivent cette matière",t:"multi",virtual:1,opt:L.programs.map(p=>[p.id,p.code]),get:r=>(r.course_programs||[]).map(x=>x.program_id),hint:"Touchez une ou plusieurs filières. Plusieurs filières = matière commune."},
         {k:"course_type",l:"Type",t:"select",opt:[["CM","Cours magistral (CM)"],["TD","Travaux dirigés (TD)"],["TP","Travaux pratiques (TP)"]],req:1},{k:"total_hours",l:"Volume horaire (h)",t:"number",min:0,step:"0.5",req:1}],
-      check:o=>{const p=L.programs.find(x=>x.id===o.program_id);if(p&&p.department_id!==o.department_id)throw new Error("Cette filière appartient à un autre département.")}},
+      normalize:o=>({...o,program_id:(o._progs||[])[0]??null}),
+      after:async(o,saved,v,row)=>{const want=new Set(v._progs||[]),had=new Set((row?.course_programs||[]).map(x=>x.program_id));
+        const add=[...want].filter(x=>!had.has(x)),del=[...had].filter(x=>!want.has(x));
+        if(add.length)await q(sb.from("course_programs").insert(add.map(pid=>({course_id:saved.id,program_id:pid}))));
+        if(del.length)await q(sb.from("course_programs").delete().eq("course_id",saved.id).in("program_id",del))}},
     groupes:{title:"Groupes d'étudiants",one:"groupe",head:[1,0],hint:"Un groupe appartient à une filière. L'effectif sert à choisir une salle assez grande.",table:"student_groups",select:"*,programs(name,level)",order:"code",
       cols:[["Code",code],["Groupe",r=>esc(r.name)],["Filière",r=>esc((r.programs?.name||"")+" "+(r.programs?.level||""))],["Effectif",r=>`<span class="num">${r.size}</span>`]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"program_id",l:"Filière",t:"select",num:1,opt:L.programs.map(p=>[p.id,p.name+" "+p.level]),req:1},{k:"size",l:"Effectif",t:"number",min:0,req:1}]},
@@ -1818,12 +1860,14 @@ function fieldHtml(f,val){
   const id="f_"+f.k;
   if(f.t==="select")return `<label>${f.l}<select id="${id}" ${f.req?"required":""}>${f.req?"":'<option value="">—</option>'}${f.opt.map(([v,l])=>`<option value="${esc(v)}" ${String(v)===String(val)?"selected":""}>${esc(l)}</option>`).join("")}</select></label>`;
   if(f.t==="bool")return `<label style="flex-direction:row;align-items:center;gap:8px;align-self:end"><input id="${id}" type="checkbox" ${val?"checked":""}> ${f.l}</label>`;
+  if(f.t==="multi"){const set=new Set((val||[]).map(String));return `<div style="grid-column:1/-1"><div class="sub" style="margin-bottom:6px">${f.l}</div><div class="chips" id="${id}">${f.opt.map(([v,l])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${set.has(String(v))}" onclick="this.setAttribute('aria-pressed',this.getAttribute('aria-pressed')!=='true')">${esc(l)}</button>`).join("")}</div>${f.hint?`<div class="sub" style="margin-top:4px">${f.hint}</div>`:""}</div>`}
   return `<label>${f.l}<input id="${id}" type="${f.t||"text"}" ${f.req?"required":""} ${f.min!=null?`min="${f.min}"`:""} ${f.step?`step="${f.step}"`:""} value="${esc(val??"")}"></label>`;
 }
 function readFields(fields){
   const o={};
   fields.forEach(f=>{const el=document.getElementById("f_"+f.k);let v;
     if(f.t==="bool")v=el.checked;
+    else if(f.t==="multi")v=[...el.querySelectorAll("[aria-pressed=true]")].map(b=>Number(b.dataset.v));
     else{v=el.value.trim();
       if(f.t==="number")v=v===""?null:Number(v);
       else if(f.t==="select"&&f.num)v=v===""?null:Number(v);
@@ -1856,18 +1900,19 @@ function formDialog(def,row){
   const missing=def.fields.filter(f=>f.t==="select"&&f.req&&!f.opt.length);
   openDialog(`<h3>${row?"Modifier":"Ajouter"} : ${esc(def.one)}</h3>
     ${missing.length?`<div class="gpwarn">${missing.map(f=>esc(NEED[f.k]||"Aucun choix disponible pour « "+f.l+" ».")).join(" ")}</div>`:""}
-    <div class="grid2">${def.fields.map(f=>fieldHtml(f,vals[f.k])).join("")}</div>
+    <div class="grid2">${def.fields.map(f=>fieldHtml(f,f.get?f.get(vals):vals[f.k])).join("")}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok" ${missing.length?"disabled":""}>Enregistrer</button></div>`,
   async()=>{
     let o=readFields(def.fields);
     if(def.normalize)o=def.normalize(o);
     if(def.check)def.check(o);
     if(def.before)await def.before(o,row);
+    const virt={};def.fields.filter(f=>f.virtual).forEach(f=>{virt[f.k]=o[f.k];delete o[f.k]});
     let saved=row;
     if(row)await q(sb.from(def.table).update(o).eq("id",row.id));
     else if(def.after)saved=await q(sb.from(def.table).insert(o).select().single());
     else await q(sb.from(def.table).insert(o));
-    if(def.after)await def.after(o,saved);
+    if(def.after)await def.after(o,saved,virt,row);
     toast("Enregistré");rerender();
   });
 }
