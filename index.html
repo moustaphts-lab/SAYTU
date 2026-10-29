@@ -615,6 +615,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  comptes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',
   dept:'<path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-4h4v4M9 11h6M9 14h6"/>',
   suividg:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   synthdg:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
@@ -652,7 +653,8 @@ function availableTabs(){
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
   if(has("finance")||reader||has("caissier"))t.push({id:"paie",label:has("caissier")&&!has("finance")&&!reader?"Paiements":"Paie",fn:viewPayroll});
   if(has("finance")||reader){t.push({id:"tarifs",label:"Tarifs",fn:viewRates});t.push({id:"budget",label:"Budget",fn:viewBudget})}
-  if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
+  if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:"Référentiel",fn:v=>viewRef(v,"ref")});
+  if(has("admin"))t.push({id:"comptes",label:"Comptes",fn:v=>viewRef(v,"comptes")});
   if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
   if(has("admin")||reader||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   /* quelqu'un qui gère et enseigne : la gestion d'abord, puis « Mon enseignement » */
@@ -2469,10 +2471,11 @@ function deleteDialog(def,row){
     if(!r.length)throw new Error("Suppression refusée.");toast("Supprimé");rerender()});
 }
 
-async function viewRef(v){
-  const allowed=Object.keys(SEC_LABEL).filter(k=>k==="comptes"?has("admin"):has("planificateur"));
-  const sec=allowed.includes(S.refSec)?S.refSec:allowed[0];S.refSec=sec;
-  const isPl=has("planificateur");
+async function viewRef(v,mode){
+  const allowed=mode==="comptes"?["comptes"]:Object.keys(SEC_LABEL).filter(k=>k!=="comptes");
+  const key=mode==="comptes"?"accSec":"refSec";
+  const sec=allowed.includes(S[key])?S[key]:allowed[0];S[key]=sec;
+  const isPl=mode!=="comptes";
   let counts=null;
   if(isPl)try{counts=await Promise.all(SETUP_STEPS.map(([,t])=>q(sb.from(t).select("id")).then(r=>r.length)))}catch(e){counts=null}
   const nextIdx=counts?counts.findIndex(n=>!n):-1,doneN=counts?counts.filter(n=>n>0).length:0;
@@ -2483,8 +2486,8 @@ async function viewRef(v){
       ${doneN===SETUP_STEPS.length?"":`<div class="su-steps">${SETUP_STEPS.map(([l,,sc],i)=>`<button type="button" class="su ${counts[i]?"done":""} ${i===nextIdx?"next":""}" data-su="${sc}"><span class="su-i">${counts[i]?"✓":i+1}</span><span class="su-l">${l}</span><span class="su-c">${counts[i]||""}</span></button>`).join("")}</div>`}</div>`:""}
     <div class="chips secnav">${allowed.length>1?allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join(""):""}</div>
     <div id="refBody"></div>`;
-  v.querySelectorAll("[data-su]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.su;rerender()});
-  v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S.refSec=b.dataset.sec;rerender()});
+  v.querySelectorAll("[data-su]").forEach(b=>b.onclick=()=>{S[key]=b.dataset.su;rerender()});
+  v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S[key]=b.dataset.sec;rerender()});
   const body=document.getElementById("refBody");
   if(sec==="comptes"){await viewAccounts(body);return}
   if(sec==="horaires"){await viewSchedule(body);return}
@@ -2982,7 +2985,7 @@ async function viewDept(v){
 
 /* ---------- tableau de bord de l'administrateur ---------- */
 function goAccounts(o){Object.assign(S,{accTab:o.tab||"all",accState:o.state||"",accRole:o.role||"",accQ:"",accWithStaff:!!o.withStaff,accOpen:o.open||null,accBulk:!!o.bulk});
-  S.tab="referentiel";S.refSec="comptes";try{history.replaceState(null,"","#referentiel")}catch(e){}renderShell()}
+  S.tab="comptes";try{history.replaceState(null,"","#comptes")}catch(e){}renderShell()}
 async function viewAdminDash(v){
   let [profiles,roles,teachers,info,logs]=await Promise.all([
     q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
@@ -3083,7 +3086,7 @@ async function viewAccounts(el){
   const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
   const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>`;
   const posteCell=(u,rs)=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>(RIGHTS[r.role]||r.role)+(["responsable","chef_departement"].includes(r.role)?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabelU(u,rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
-  el.innerHTML=`<div class="row" style="justify-content:${has("planificateur")?"space-between":"flex-end"}">${has("planificateur")?'<h2 style="margin-top:0">Comptes</h2>':""}<div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
+  el.innerHTML=`<div class="row" style="justify-content:flex-end"><div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
       <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}">Personnel administratif (${staff.length})</button>
       <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button>
