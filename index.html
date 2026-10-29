@@ -472,7 +472,7 @@ const DEMO = [
   ["direction@univdemo.test","Direction générale"],
   ["admin@univdemo.test","Administrateur (comptes)"]];
 const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const ROLE_LABEL = {admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Direction générale (consultation et contrôle)"};
+const ROLE_LABEL = {chef_departement:"Chef de département",caissier:"Caissier",lecteur:"Consultation",admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Direction générale (consultation et contrôle)"};
 const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
@@ -480,7 +480,7 @@ const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()
 /* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
 const CFG_DEFAULT={name:"UCAB Touba",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   document.title=APPN()+" · "+(S.cfg.subtitle||"Enseignements");return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
@@ -559,7 +559,8 @@ async function boot(){
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
-    await loadSchedule();await loadClosures();await loadAnnonces();
+    await loadSchedule();await loadClosures();await loadAnnonces();await loadPostes();
+    try{const me=await q(sb.from("profiles").select("poste_id").eq("id",S.user.id).maybeSingle());S.myPoste=me?.poste_id||null}catch(e){S.myPoste=null}
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
@@ -604,6 +605,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  dept:'<path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-4h4v4M9 11h6M9 14h6"/>',
   suividg:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   synthdg:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   budget:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -625,25 +627,24 @@ const TABICON={
   journal:'<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11M9 8h6"/>'};
 const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABICON[id]||""}</svg>`;
 function availableTabs(){
-  const t=[];
-  if(has("direction"))t.push({id:"synthdg",label:"Synthèse",fn:viewDgSynth});
-  if(has("direction"))t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
-  if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
+  const t=[],reader=has("direction")||has("lecteur");
+  if(reader)t.push({id:"synthdg",label:"Synthèse",fn:viewDgSynth});
+  if(reader)t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
+  if(has("chef_departement"))t.push({id:"dept",label:"Mon département",fn:viewDept});
+  if(has("planificateur")||has("responsable")||has("finance"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   else if(has("admin"))t.push({id:"admindash",label:"Tableau de bord",fn:viewAdminDash});
   if(isProf())t.push({id:"accueil",label:"Aujourd'hui",fn:viewHome,me:1});
   if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable,me:1});
   if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability,me:1});
   if(isProf())t.push({id:"bulletins",label:"Heures et paiements",fn:viewMyPayslips,me:1});
-  if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
+  if(has("responsable")||has("chef_departement"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
   if(has("planificateur"))t.push({id:"affect",label:"Affectations",fn:viewAssign});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
-  if(has("finance")||has("direction")){
-    t.push({id:"paie",label:"Paie",fn:viewPayroll});
-    t.push({id:"tarifs",label:"Tarifs",fn:viewRates});
-    t.push({id:"budget",label:"Budget",fn:viewBudget});}
+  if(has("finance")||reader||has("caissier"))t.push({id:"paie",label:has("caissier")&&!has("finance")&&!reader?"Paiements":"Paie",fn:viewPayroll});
+  if(has("finance")||reader){t.push({id:"tarifs",label:"Tarifs",fn:viewRates});t.push({id:"budget",label:"Budget",fn:viewBudget})}
   if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
   if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
-  if(has("admin")||has("direction")||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
+  if(has("admin")||reader||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   /* quelqu'un qui gère et enseigne : la gestion d'abord, puis « Mon enseignement » */
   const me=t.filter(x=>x.me),other=t.filter(x=>!x.me);
   return other.length&&me.length?[...other,...me]:t;
@@ -653,14 +654,14 @@ function renderShell(){
   $app.classList.add("hasnav");
   const tabs=availableTabs();
   const name=S.user.user_metadata?.full_name||S.user.email;
-  const roles=[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
+  const roles=posteById(S.myPoste)?posteLabelU({poste_id:S.myPoste},S.roles):[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       ${brandHtml("Année universitaire "+(S.year||""))}
       <span class="yr">Année universitaire ${esc(S.year||"")}</span>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml("Année universitaire "+(S.year||""))}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}</nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
@@ -933,10 +934,10 @@ async function absenceCard(el){
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" value="cancel" formnovalidate>Plus tard</button><button class="btn danger" value="refuse" formnovalidate>Refuser</button><button class="btn" value="report" formnovalidate>Reporter…</button><button class="btn primary" value="annul" formnovalidate>Annuler la séance</button></div>`,
     async(act)=>{const a=abA.value.trim();
       if(act==="refuse"){await q(sb.rpc("refuse_absence",{p_id:r.id,p_answer:a||null}));toast("Demande refusée");rerender();
-        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?");return}
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?");return}
       if(act==="report"){S.ttWeek=mondayOf(new Date(s.session_date+"T12:00:00"));S.ttTab="grille";S.planView="teacher";S.planId=r.teacher_id;S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell();setTimeout(()=>toast("Touchez le cours, puis « Reporter »."),500);return}
       if(act==="annul"){await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+(a||"absence du professeur ("+r.reason+")")}).eq("id",s.id));toast("Séance annulée");rerender();
-        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?")}})});
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")}})});
 }
 
 /* ---------- responsable ---------- */
@@ -1396,9 +1397,9 @@ async function viewPlanning(v){
     const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=[]).push(x)});
     const items=Object.entries(byT).map(([tid,L])=>{const t=teachers.find(y=>y.id==tid);if(!t)return null;
       const lines=L.sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time)).map(x=>`- ${DAYS[x.day_of_week]} ${dayDate(W,x.day_of_week)} · ${hm(x.start_time)}–${hm(x.end_time)} · ${x.teaching_assignments.courses.code} · ${x.teaching_assignments.student_groups.code} · salle ${x.rooms.code}`).join("\n");
-      return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre emploi du temps de la semaine du ${weekRange(W)} est publié :\n${lines}\nDétails et émargement dans l'application : ${appUrl()}\nCordialement, la Direction des études.`}}).filter(Boolean);
+      return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre emploi du temps de la semaine du ${weekRange(W)} est publié :\n${lines}\nDétails et émargement dans l'application : ${appUrl()}\nCordialement, ${sig()}.`}}).filter(Boolean);
     notifyDialog({title:"Prévenir les professeurs",intro:`L'emploi du temps de la semaine du ${weekRange(W)} est publié. Envoyez à chaque professeur la liste de ses cours.`,
-      common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, la Direction des études.`,items})}
+      common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, ${sig()}.`,items})}
   const anb=document.getElementById("annBtn");if(anb)anb.onclick=announce;
   /* retirer la publication (refusé par le serveur si une séance de la semaine est déjà émargée) */
   const upb=document.getElementById("unpubBtn");
@@ -1411,8 +1412,8 @@ async function viewPlanning(v){
     async()=>{try{await q(sb.rpc("unpublish_week",{p_week:wk}))}catch(e){if(/Could not find the function|PGRST202/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « retirer_publication.sql » doit être exécuté dans Supabase.");throw e}
       toast("Publication retirée : la semaine est de nouveau en brouillon");rerender();
       const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=1)});
-      const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`}));
-      offerNotify(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`,items}),"Prévenir les professeurs ?")})};
+      const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`}));
+      offerNotify(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`,items}),"Prévenir les professeurs ?")})};
 
   /* ----- reprendre la semaine précédente : on recopie ce qui est encore possible, et on dit pourquoi le reste ne l'est pas ----- */
   copyPrev.onclick=async()=>{
@@ -1492,7 +1493,7 @@ async function viewPlanning(v){
     async()=>{const why=document.getElementById("cWhy").value.trim();await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+why}).eq("id",s.id));toast("Cours annulé");rerender();
       tellTeacher(sl,`votre cours ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) du ${dayLong(sl.day_of_week).toLowerCase()} de ${hm(sl.start_time)} à ${hm(sl.end_time)} est annulé. Motif : ${why}.`)})};
   const tellTeacher=(sl,txt)=>{const t=teachers.find(y=>y.id===sl.teaching_assignments.teacher_id);if(!t)return;
-    offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?")};
+    offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")};
   const restoreSlot=async sl=>{try{await q(sb.from("schedule_sessions").update({status:"planifiee",note:null}).eq("id",sessOf[sl.id].id));toast("Cours rétabli");rerender()}
     catch(e){toast(/overlap|exclu/i.test(e.message||"")?"Impossible de rétablir : l'horaire a été repris par un autre cours.":errMsg(e),true)}};
   v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{if(b.dataset.dragged)return;const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments,s=sessOf[sl.id];
@@ -1629,7 +1630,7 @@ function notifyDialog(o){ /* o = {title, intro, common, items:[{t:{id,first_name
 }
 const appUrl=()=>location.origin+location.pathname;
 function relanceDialog(W,list){
-  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${appUrl()}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, la Direction des études.`;
+  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${appUrl()}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, ${sig()}.`;
   notifyDialog({title:`Relancer ${list.length} professeur${list.length>1?"s":""} sans réponse`,intro:`Semaine du ${weekRange(W)}. Envoyez le message par WhatsApp ou SMS (le téléphone s'ouvre avec le texte prêt), ou copiez-le pour un groupe WhatsApp.`,
     common:msg(null),items:list.map(t=>({t,msg:msg(t)}))});
 }
@@ -1982,7 +1983,7 @@ function timetableGrid(o){
 }
 
 /* ---------- générateur automatique d'emploi du temps (version simple) ---------- */
-const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,maxDays:0,maxCourse:0,compact:true,useAvail:true};
+const GEN_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",maxGroup:6,maxTeacher:6,maxDays:0,compact:true,useAvail:true};
 function generateTimetable(o,D){
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
@@ -2003,10 +2004,9 @@ function generateTimetable(o,D){
   const rooms=[...D.rooms].sort((a,b)=>a.capacity-b.capacity);
   const gsize=Object.fromEntries(D.groups.map(g=>[g.id,g.size])),ghome=Object.fromEntries(D.groups.map(g=>[g.id,g.home_room_id]));
   const av=tid=>D.avails.filter(a=>a.teacher_id===tid);
-  /* heures restantes de chaque matière (déjà déduites de tous les créneaux programmés, y compris cette semaine) ; plafond par matière dans la semaine */
-  const jobs=D.assigns.map(a=>{const rem=Math.max(0,D.remaining[a.id]||0);const cap=o.maxCourse?Math.max(0,Math.floor(o.maxCourse*60/len)-Math.round((existing[a.id]||0)/len)):1e9;
+  /* heures restantes de chaque matière (déjà déduites de tous les créneaux programmés, y compris cette semaine) */
+  const jobs=D.assigns.map(a=>{const rem=Math.max(0,D.remaining[a.id]||0);const cap=1e9;
     return{a,n:Math.min(cap,Math.ceil(rem/len))}}).filter(j=>j.n>0);
-  const restricted=()=>true;
   const availMin=a=>o.useAvail?av(a.teacher_id).reduce((s,y)=>s+T(y.end_time)-T(y.start_time),0):1e9;
   const tTotal={};jobs.forEach(j=>{tTotal[j.a.teacher_id]=(tTotal[j.a.teacher_id]||0)+j.n});
   jobs.sort((x,y)=>availMin(x.a)-availMin(y.a)||(tTotal[y.a.teacher_id]-tTotal[x.a.teacher_id])||(x.a.teacher_id-y.a.teacher_id)||y.n-x.n);
@@ -2093,7 +2093,7 @@ function genDialog(ctx){
       cfg={...cfg,days:SD.filter(d=>!ST.every(t=>offL.includes(d+"|"+t))),off:offL,
         maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
-      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,maxCourse:cfg.maxCourse,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
+      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
       const res=generateTimetable(cfg,{week:iso(ctx.week)+"T12:00:00",assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
       preview(res);return "keep"});
@@ -2190,7 +2190,6 @@ function exportPdf(file,title,subtitle,sheets,landscape){
 async function qAll(make){let all=[],from=0;for(;;){const d=await q(make().range(from,from+999));all=all.concat(d);if(d.length<1000)return all;from+=1000}}
 
 /* ---------- tableau de bord ---------- */
-function rateClass(p){return p>=90?"p-ok":p>=70?"p-warn":"p-bad"}
 const DPRESETS=[["semaine","Semaine"],["mois","Mois"],["semestre","Semestre"],["perso","Perso."]];
 function trendChart(buckets){
   /* courbe : heures prévues (pointillés) et heures validées (aire) par semaine ou par jour */
@@ -2559,63 +2558,56 @@ async function viewClosures(el){
 }
 
 /* ---------- comptes et rôles ---------- */
-const SIMPLE_ROLES=["admin","planificateur","professeur","finance","direction"];
 async function callUsers(body){
   const {data,error}=await sb.functions.invoke("manage-users",{body});
   if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.error)m=j.error}catch(e){}throw new Error(m)}
   if(data&&data.error)throw new Error(data.error);
   return data;
 }
-/* postes : un choix simple qui accorde automatiquement les bons rôles */
-const POSTES=[["prof","Professeur",[]],["dir","Directeur des études",["planificateur|"]],["sec","Secrétaire",["planificateur|","responsable|"]],
-  ["aide","Aide du responsable financier",["responsable|"]],["fin","Responsable financier",["finance|"]],["dg","Direction générale",["direction|"]],["adm","Administrateur",["admin|"]]];
-function posteOf(set){
-  const teaches=set.has("professeur|"),rest=[...set].filter(k=>k!=="professeur|").sort();
-  if(!rest.length)return teaches?{key:"prof",teaches:true}:{key:"",teaches:false};
-  const p=POSTES.find(([k,,r])=>r.length&&[...r].sort().join()===rest.join());
-  return {key:p?p[0]:"custom",teaches};
-}
-function posteLabel(rs){
-  const o=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||""))));
-  if(!o.key)return "";
-  const l=o.key==="custom"?"Poste personnalisé":POSTES.find(p=>p[0]===o.key)[1];
-  return l+(o.teaches&&o.key!=="prof"?" · enseigne aussi":"");
-}
-function roleBoxes(deps,current){
-  const has_=(r,d)=>current.has(r+"|"+(d||""));
-  const box=(r,d,l)=>`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-role="${r}" data-dep="${d||""}" ${has_(r,d)?"checked":""}> ${l}</label>`;
-  const o=posteOf(current);
-  return `<label>Poste<select id="rPoste"><option value="" ${o.key===""?"selected":""}>Choisir le poste…</option>${POSTES.map(([k,l])=>`<option value="${k}" ${o.key===k?"selected":""}>${l}</option>`).join("")}<option value="custom" ${o.key==="custom"?"selected":""} ${o.key==="custom"?"":"hidden"}>Poste personnalisé (réglage avancé)</option></select></label>
-    <label id="rTeachL" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="rTeach" ${o.teaches?"checked":""}> Enseigne aussi (a des cours, des disponibilités et des émargements)</label>
+/* ---------- postes : un nom (modifiable par l'administrateur) posé sur une combinaison de droits ---------- */
+const RIGHTS={professeur:"Enseigner (cours, disponibilités, émargement)",planificateur:"Référentiel, affectations et emplois du temps",responsable:"Validation des heures émargées",
+  finance:"Paie, tarifs et paiements",direction:"Direction générale (consultation, visa de la paie)",admin:"Administration des comptes",
+  chef_departement:"Chef de département (son département : consultation et validation)",caissier:"Paiements seulement (sans calcul ni approbation de la paie)",lecteur:"Consultation sans modification"};
+const OPT_RIGHTS=["chef_departement","caissier","lecteur"];
+const OPT_DESC={chef_departement:"Voit l'emploi du temps et l'avancement des matières de son département, et valide les émargements de ce département.",
+  caissier:"Enregistre les paiements et prépare l'ordre de paiement, sans calculer ni approuver la paie ni toucher aux tarifs.",
+  lecteur:"Voit la synthèse, le suivi, le budget, la paie et le journal, sans rien pouvoir modifier (contrôleur, auditeur, conseil)."};
+const rightsOn=()=>S.cfg?.enabled_rights||[];
+/* signature des messages WhatsApp / SMS : le nom et le poste de la personne qui envoie */
+function sig(){const n=(S.user?.user_metadata?.full_name||"").trim(),p=posteById(S.myPoste);const pn=p&&!isProfPoste(p)?p.name:"";return [n,pn].filter(Boolean).join(", ")||"l'administration"}
+async function loadPostes(){try{S.postes=await q(sb.from("postes").select("id,name,roles,sort").order("sort").order("name"))}catch(e){S.postes=S.postes||[]}return S.postes}
+const posteById=id=>(S.postes||[]).find(p=>p.id===id);
+const posteUsable=p=>p.roles.every(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r));
+const visiblePostes=()=>(S.postes||[]).filter(posteUsable);
+const isProfPoste=p=>!!p&&p.roles.length===1&&p.roles[0]==="professeur";
+const profPoste=()=>(S.postes||[]).find(isProfPoste);
+const scoped=p=>!!p&&(p.roles.includes("responsable")||p.roles.includes("chef_departement"));
+function posteLabelU(u,rs){const p=posteById(u?.poste_id),t=rs.some(r=>r.role==="professeur");
+  if(!p)return rs.length?"Poste personnalisé":"";return p.name+(t&&!p.roles.includes("professeur")?" · enseigne aussi":"")}
+/* formulaire « poste » (création de compte, changement de poste) */
+function posteForm(deps,u,rs){
+  rs=rs||[];const cur=u?.poste_id,teach=rs.some(r=>r.role==="professeur"),dep=rs.find(r=>["responsable","chef_departement"].includes(r.role))?.department_id||"";
+  const L=visiblePostes();
+  return `<label>Poste<select id="rPoste"><option value="">Choisir le poste…</option>${L.map(p=>`<option value="${p.id}" ${p.id===cur?"selected":""}>${esc(p.name)}</option>`).join("")}</select></label>
+    <label id="rDepL">Département<select id="rDep"></select></label>
+    <label id="rTeachL" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="rTeach" ${teach?"checked":""}> Enseigne aussi (a des cours, des disponibilités et des émargements)</label>
     <p class="sub" id="rSum" style="margin:0"></p>
-    <details id="rAdv" ${o.key==="custom"?"open":""}><summary class="lnk" style="cursor:pointer">Réglage avancé</summary>
-    <div style="display:grid;gap:6px;margin-top:8px"><span class="sub">Rôles</span>
-    ${SIMPLE_ROLES.map(r=>box(r,"",ROLE_LABEL[r])).join("")}
-    <span class="sub" style="margin-top:6px">Validation des heures : départements concernés</span>
-    ${box("responsable","","Tous les départements")}${deps.map(d=>box("responsable",d.id,esc(d.code+" · "+d.name))).join("")}</div></details>`;
-}
-const POSTE_SUM={prof:"Voit ses cours, déclare ses disponibilités et émarge.",dir:"Gère le référentiel, les affectations et les emplois du temps.",sec:"Gère les emplois du temps et valide les heures de tous les départements.",
-  aide:"Contrôle et valide les heures émargées de tous les départements.",fin:"Gère les tarifs, la paie et les paiements.",dg:"Consulte et contrôle l'ensemble (tableaux de bord, heures, paie).",adm:"Gère les comptes et consulte le journal.",custom:"Combinaison de rôles particulière : voir le réglage avancé.","":""};
-function wireRoleBoxes(){
+    <p class="sub" style="margin:0">Les postes et leurs noms se règlent dans Établissement › Postes.</p>
+    <template id="rDepData">${JSON.stringify({deps:deps.map(d=>[d.id,d.code+" · "+d.name]),dep})}</template>`}
+function wirePosteForm(){
   const f=document.getElementById("dlgForm"),sel=f.querySelector("#rPoste");if(!sel)return;
-  const teach=f.querySelector("#rTeach"),teachL=f.querySelector("#rTeachL"),sum=f.querySelector("#rSum");
-  const boxes=[...f.querySelectorAll("input[data-role]")];
-  const cur=()=>new Set(boxes.filter(c=>c.checked).map(c=>c.dataset.role+"|"+c.dataset.dep));
-  const show=()=>{teachL.hidden=sel.value==="prof"||sel.value==="";sum.textContent=POSTE_SUM[sel.value]+(teach.checked&&sel.value!=="prof"&&sel.value?" Enseigne aussi.":"")};
-  const apply=()=>{if(sel.value==="custom"){f.querySelector("#rAdv").open=true;show();return}
-    const p=POSTES.find(x=>x[0]===sel.value),want=new Set(p?p[2]:[]);
-    if(sel.value==="prof"||(sel.value&&teach.checked))want.add("professeur|");
-    boxes.forEach(c=>c.checked=want.has(c.dataset.role+"|"+c.dataset.dep));show()};
-  const back=()=>{const o=posteOf(cur());const co=sel.querySelector('option[value="custom"]');co.hidden=o.key!=="custom";sel.value=o.key;teach.checked=o.teaches;show()};
-  sel.onchange=apply;teach.onchange=apply;boxes.forEach(c=>c.onchange=back);
-  f._setPoste=k=>{sel.value=k;apply()};
-  show();
+  const D=JSON.parse(f.querySelector("#rDepData").innerHTML),dsel=f.querySelector("#rDep");
+  const show=()=>{const p=posteById(Number(sel.value));
+    f.querySelector("#rTeachL").hidden=!p||p.roles.includes("professeur");
+    const sc=scoped(p),chef=p&&p.roles.includes("chef_departement");f.querySelector("#rDepL").hidden=!sc;
+    if(sc){const v=dsel.value||String(D.dep||"");dsel.innerHTML=(chef?"":`<option value="">Tous les départements</option>`)+D.deps.map(([id,l])=>`<option value="${id}">${esc(l)}</option>`).join("");dsel.value=v&&[...dsel.options].some(o=>o.value===v)?v:dsel.options[0]?.value||""}
+    f.querySelector("#rSum").textContent=p?"Droits : "+p.roles.map(r=>RIGHTS[r]||r).join(" · ")+".":""};
+  sel.onchange=show;f._setPoste=id=>{sel.value=String(id||"");show()};show();
 }
-function readRoleBoxes(){
-  const s=new Set();
-  document.querySelectorAll("#dlgForm input[data-role]").forEach(c=>{if(c.checked)s.add(c.dataset.role+"|"+c.dataset.dep)});
-  return s;
-}
+function readPosteForm(){const f=document.getElementById("dlgForm"),p=posteById(Number(f.querySelector("#rPoste").value));
+  if(!p)throw new Error("Choisissez le poste de la personne.");
+  return{p_poste:p.id,p_dep:scoped(p)&&f.querySelector("#rDep").value?Number(f.querySelector("#rDep").value):null,p_teaches:!p.roles.includes("professeur")&&f.querySelector("#rTeach").checked}}
+async function assignPoste(userId,o){return rpcOrScript("admin_assign_poste",{p_user:userId,...o},"postes_et_nettoyage.sql")}
 function showCredentials(title,email,pwd){
   const f=document.getElementById("dlgForm");
   f.innerHTML=`<h3>${esc(title)}</h3>
@@ -2630,7 +2622,8 @@ function showCredentials(title,email,pwd){
 const BACKUP_KEY="ucab_last_backup";
 const lastBackup=()=>{try{return localStorage.getItem(BACKUP_KEY)}catch(e){return null}};
 async function viewEtab(v){
-  const [cfg,years,sems]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date"))]);
+  const [cfg,years,sems,,pcount]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date")),loadPostes(),q(sb.from("profiles").select("poste_id,active"))]);
+  const nOf=id=>pcount.filter(x=>x.poste_id===id&&x.active!==false).length;
   const cur=years.find(y=>y.is_current);
   const lb=lastBackup();
   const semOf=y=>sems.filter(x=>x.academic_year_id===y.id);
@@ -2648,6 +2641,17 @@ async function viewEtab(v){
         <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eD" ${cfg.show_demo?"checked":""}> Afficher les comptes de démonstration sur l'écran de connexion <span class="sub">(à décocher avant d'utiliser de vraies données)</span></label>
         <div class="err" id="eErr"></div>
         <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
+
+    <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Postes</h2><button class="btn sm primary" id="pNew">Nouveau poste</button></div>
+      <p class="sub" style="margin:6px 0 10px">Un poste est un nom (Trésorier, Scolarité, Adjoint…) posé sur des droits. Renommez-les comme dans votre établissement. Le nom apparaît dans la barre latérale, les comptes et la signature des messages.</p>
+      <div class="rl">${(S.postes||[]).map(po=>{const off=!posteUsable(po),n=nOf(po.id);return `<div class="rlrow" style="align-items:flex-start;${off?"opacity:.55":""}"><div style="flex:1"><b>${esc(po.name)}</b> <span class="sub">· ${n} personne(s)</span>${off?' <span class="pill p-mute">droit désactivé</span>':""}
+        <div class="chips" style="margin-top:4px">${po.roles.map(r=>`<span class="pill p-info">${esc(RIGHTS[r]||r)}</span>`).join("")}</div></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-pe="${po.id}">Modifier</button>${n?"":`<button class="btn sm danger" data-pd="${po.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
+
+    <section class="adsec panel" style="padding:16px 18px"><h2>Droits optionnels</h2>
+      <p class="sub" style="margin:0 0 10px">À activer seulement si votre établissement en a besoin. Désactivé, un droit n'apparaît nulle part.</p>
+      ${OPT_RIGHTS.map(r=>`<label style="flex-direction:row;align-items:flex-start;gap:10px;color:var(--ink);margin-bottom:10px"><input type="checkbox" data-or="${r}" ${rightsOn().includes(r)?"checked":""} style="margin-top:3px"><span><b>${esc(ROLE_LABEL[r])}</b><br><span class="sub">${esc(OPT_DESC[r])}</span></span></label>`).join("")}
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" id="orSave">Enregistrer les droits optionnels</button></div></section>
 
     <section class="adsec panel" style="padding:16px 18px"><h2>Année universitaire</h2>
       <div class="rl">${years.map(y=>`<div class="rlrow"><div style="flex:1"><b>${esc(y.label)}</b> ${y.is_current?'<span class="pill p-ok">En cours</span>':""}<div class="sub">du ${fdl(y.start_date)} au ${fdl(y.end_date)} · ${semOf(y).map(x=>esc(x.label)).join(", ")||"aucun semestre"}</div></div>${y.is_current?"":`<button class="btn sm" data-cur="${y.id}">Mettre en cours</button>`}</div>`).join("")||'<p class="sub">Aucune année.</p>'}</div>
@@ -2671,6 +2675,29 @@ async function viewEtab(v){
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
     try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,payroll_visa:eV.checked,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
+
+  /* postes */
+  const posteDlg=po=>{const avail=Object.keys(RIGHTS).filter(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r)||po?.roles.includes(r)),n=po?nOf(po.id):0;
+    openDialog(`<h3>${po?"Modifier le poste":"Nouveau poste"}</h3>
+      <label>Nom du poste<input id="pN" required maxlength="60" value="${esc(po?.name||"")}" placeholder="Ex. Trésorier, Scolarité, Adjoint du directeur"></label>
+      <div style="display:grid;gap:6px"><span class="sub">Droits donnés par ce poste</span>${avail.map(r=>`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-pr="${r}" ${po?.roles.includes(r)?"checked":""}> ${esc(RIGHTS[r])}</label>`).join("")}</div>
+      ${n?`<p class="sub" style="margin:0">${n} personne(s) occupent ce poste : si vous changez les droits, les leurs seront mis à jour.</p>`:""}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const roles=[...document.querySelectorAll("#dlgForm [data-pr]")].filter(c=>c.checked).map(c=>c.dataset.pr);
+      if(!pN.value.trim())throw new Error("Donnez un nom au poste.");if(!roles.length)throw new Error("Cochez au moins un droit.");
+      const ch=po&&[...po.roles].sort().join()!==[...roles].sort().join();
+      const k=await rpcOrScript("admin_save_poste",{p_id:po?.id||null,p_name:pN.value.trim(),p_roles:roles},"postes_et_nettoyage.sql");
+      await loadPostes();toast(po?(ch&&k?`Poste enregistré · droits mis à jour pour ${k} personne(s)`:"Poste enregistré"):"Poste créé");rerender()})};
+  pNew.onclick=()=>posteDlg(null);
+  v.querySelectorAll("[data-pe]").forEach(b=>b.onclick=()=>posteDlg(posteById(Number(b.dataset.pe))));
+  v.querySelectorAll("[data-pd]").forEach(b=>b.onclick=()=>{const po=posteById(Number(b.dataset.pd));
+    openDialog(`<h3>Supprimer le poste « ${esc(po.name)} » ?</h3><p style="margin:0">Personne n'occupe ce poste.</p><div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+    async()=>{await rpcOrScript("admin_delete_poste",{p_id:po.id},"postes_et_nettoyage.sql");await loadPostes();toast("Poste supprimé");rerender()})});
+  orSave.onclick=async()=>{const on=[...v.querySelectorAll("[data-or]")].filter(c=>c.checked).map(c=>c.dataset.or);
+    const off=OPT_RIGHTS.filter(r=>!on.includes(r)),used=(S.postes||[]).filter(po=>po.roles.some(r=>off.includes(r))&&nOf(po.id));
+    const go=async()=>{try{await rpcOrScript("admin_set_rights",{p_rights:on},"postes_et_nettoyage.sql");await loadSettings();toast("Droits optionnels enregistrés");rerender()}catch(e){toast(errMsg(e),true)}};
+    if(used.length)openDialog(`<h3>Désactiver ces droits ?</h3><p style="margin:0">Des personnes occupent un poste qui les utilise : ${esc(used.map(po=>po.name+" ("+nOf(po.id)+")").join(", "))}. Elles gardent leurs droits actuels ; changez leur poste dans Comptes.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Désactiver quand même</button></div>`,go);else go()};
 
   /* année en cours */
   v.querySelectorAll("[data-cur]").forEach(b=>b.onclick=()=>{const y=years.find(x=>x.id==b.dataset.cur);
@@ -2715,8 +2742,8 @@ async function viewEtab(v){
     catch(e){toast(errMsg(e),true)}finally{bkBtn.disabled=false}};
 }
 /* appel d'une fonction de la base ; message clair si le script d'installation n'a pas encore été exécuté */
-async function rpcOrScript(fn,args){try{return await q(sb.rpc(fn,args))}
-  catch(e){if(/Could not find the function|PGRST202|does not exist/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « admin_sauvegarde_annee.sql » doit être exécuté dans Supabase.");throw e}}
+async function rpcOrScript(fn,args,script){try{return await q(sb.rpc(fn,args))}
+  catch(e){if(/Could not find the function|PGRST202|does not exist/.test(e.message||""))throw new Error(`La base n'est pas à jour : le script « ${script||"admin_sauvegarde_annee.sql"} » doit être exécuté dans Supabase.`);throw e}}
 
 /* ---------- direction générale : synthèse et avancement des programmes ---------- */
 async function viewDgSynth(v){
@@ -2749,7 +2776,7 @@ async function viewDgSynth(v){
   /* alertes */
   const A=[];const dow=now.getDay()||7;
   const visaWait=S.cfg?.payroll_visa?periods.filter(x=>["approuvee","payee"].includes(x.status)&&!x.visa_at):[];
-  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente de votre visa : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
+  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente ${has("direction")?"de votre visa":"du visa de la direction générale"} : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
   if(!pubs.some(x=>x.week_start===cw)&&dow<=5)A.push(["bad","L'emploi du temps de cette semaine n'est pas publié.",null]);
   if(dow>=4&&!pubs.some(x=>x.week_start===nw))A.push(["warn","L'emploi du temps de la semaine prochaine n'est pas encore publié.",null]);
   if(late.length)A.push(["warn",`${late.length} matière(s) en retard sur le rythme du semestre.`,"#dgProg"]);
@@ -2763,7 +2790,7 @@ async function viewDgSynth(v){
       <div class="stat"><b style="color:${done.length-em.length?"var(--warn)":"inherit"}">${pct(em.length,done.length)} %</b><span>Séances de ${ml} émargées (${em.length}/${done.length}) · ${val.length} validées</span></div>
       <div class="stat"><b style="color:${canc?"var(--warn)":"inherit"}">${canc}</b><span>Séances annulées en ${ml}</span></div>
       <div class="stat"><b style="color:${late.length?"var(--warn)":"var(--ok)"}">${late.length}</b><span>Matières en retard</span></div></div>
-    <div class="row" style="margin:-6px 0 18px;gap:8px"><button class="btn sm primary" id="dgRep">${DLI}Rapport du mois (PDF)</button><button class="btn sm" data-dgo="suividg">Suivi des enseignements</button><button class="btn sm" data-dgo="budget">Voir le budget</button><button class="btn sm" data-dgo="dashboard">Tableau de bord des émargements</button></div>
+    <div class="row" style="margin:-6px 0 18px;gap:8px"><button class="btn sm primary" id="dgRep">${DLI}Rapport du mois (PDF)</button><button class="btn sm" data-dgo="suividg">Suivi des enseignements</button><button class="btn sm" data-dgo="budget">Voir le budget</button></div>
     <h2 id="dgProg">Avancement par filière et niveau</h2>
     <p class="sub" style="margin:-4px 0 10px">Semestre en cours. Heures faites = séances passées non annulées. Une matière commune (tronc commun) compte pour chaque filière concernée. Touchez une filière pour voir ses matières.</p>
     ${progs.length?`<div class="panel" style="padding:4px 16px">${progs.map((o,i)=>`<div class="prow dgp" data-dp="${i}" style="cursor:pointer"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">
@@ -2862,12 +2889,55 @@ async function monthlyReport(M){
   exportPdf("rapport-mensuel_"+f.slice(0,7),"Rapport mensuel · "+ml,"Direction générale · situation au "+fdl(ref),sheets,false);
 }
 
+/* ---------- chef de département : emploi du temps et avancement de son département (consultation) ---------- */
+async function viewDept(v){
+  const ids=[...new Set(S.roles.filter(r=>r.role==="chef_departement"&&r.department_id).map(r=>r.department_id))];
+  if(!ids.length){v.innerHTML=`<h1>Mon département</h1><p class="empty">Aucun département n'est rattaché à votre poste. Contactez l'administrateur.</p>`;return}
+  if(!ids.includes(S.dpDep))S.dpDep=ids[0];
+  if(!S.dpWeek)S.dpWeek=mondayOf(new Date());
+  const W=S.dpWeek,wk=iso(W),now=new Date(),today=iso(now);
+  const [deps,groups,slots,sessW,assigns]=await Promise.all([
+    q(sb.from("departments").select("id,code,name").in("id",ids)),
+    q(sb.from("student_groups").select("id,code,name,programs!inner(department_id)").eq("programs.department_id",S.dpDep).order("code")),
+    q(sb.from("timetable_slots").select("id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code))").eq("week_start",wk).eq("published",true)),
+    q(sb.from("schedule_sessions").select("slot_id,status,note").gte("session_date",wk).lte("session_date",iso(addDays(W,6)))),
+    q(sb.from("teaching_assignments").select("id,planned_hours,courses!inner(code,name,department_id),teachers(first_name,last_name),semesters(label,start_date,end_date),student_groups!teaching_assignments_group_id_fkey(code,programs(id,code,name,level)),assignment_groups(student_groups(code,programs(id,code,name,level)))").eq("courses.department_id",S.dpDep))]);
+  slots.forEach(x=>decorateTA(x.teaching_assignments));
+  if(!groups.some(g=>g.id===S.dpGroup))S.dpGroup=groups[0]?.id;
+  const mine=slots.filter(x=>x.teaching_assignments._g.includes(S.dpGroup));
+  const cancelled=new Set(sessW.filter(x=>x.status==="annulee").map(x=>x.slot_id));
+  const cur=assigns.filter(a=>a.semesters&&a.semesters.start_date<=today&&a.semesters.end_date>=today);
+  let ss=[];if(cur.length)ss=await q(sb.from("schedule_sessions").select("assignment_id,session_date,start_time,end_time,status").in("assignment_id",cur.map(a=>a.id)));
+  const m=x=>toMin(hm(x.end_time))-toMin(hm(x.start_time));
+  const dn={},pl={};ss.forEach(x=>{if(x.status==="annulee")return;if(sEnd(x)<=now)dn[x.assignment_id]=(dn[x.assignment_id]||0)+m(x);else pl[x.assignment_id]=(pl[x.assignment_id]||0)+m(x)});
+  const rows=cur.map(a=>{const P=a.planned_hours*60,d=Math.min(P,dn[a.id]||0),r=semesterRisk(a,d,today);return{a,P,d,pl:pl[a.id]||0,late:d<P&&r&&r.risk,miss:r?.missing}}).sort((x,y)=>(y.late-x.late)||x.a.courses.code.localeCompare(y.a.courses.code));
+  const totP=rows.reduce((t,x)=>t+x.P,0),totD=rows.reduce((t,x)=>t+x.d,0),pc=(a,b)=>b?Math.round(a*100/b):0;
+  const D=deps.find(d=>d.id===S.dpDep);
+  v.innerHTML=`<h1>Mon département${D?" · "+esc(D.code):""}</h1><p class="lead">${D?esc(D.name)+". ":""}Emplois du temps publiés et avancement des matières du département. Les émargements se valident dans « Contrôle ».</p>
+    ${deps.length>1?`<label style="max-width:320px;margin-bottom:12px">Département<select id="dpD">${deps.map(d=>`<option value="${d.id}" ${d.id===S.dpDep?"selected":""}>${esc(d.code+" · "+d.name)}</option>`).join("")}</select></label>`:""}
+    <div class="stats"><div class="stat big"><b>${pc(totD,totP)} %</b><span>Avancement du semestre (${hrs(totD)} sur ${hrs(totP)})</span></div><div class="stat"><b style="color:${rows.some(x=>x.late)?"var(--warn)":"var(--ok)"}">${rows.filter(x=>x.late).length}</b><span>Matières en retard</span></div><div class="stat"><b>${rows.length}</b><span>Matières ce semestre</span></div></div>
+    <h2>Emploi du temps</h2>${weekNavHtml(W)}
+    ${groups.length?`<label style="max-width:260px;margin-bottom:10px">Groupe<select id="dpG">${groups.map(g=>`<option value="${g.id}" ${g.id===S.dpGroup?"selected":""}>${esc(g.code)}</option>`).join("")}</select></label>`:""}
+    ${mine.length?timetableGrid({mine,conf:new Set(),cancelled,view:"group",avOf:()=>[],outside:()=>false,week:W,readonly:1}):`<div class="panel"><p class="empty">Aucun cours publié pour ce groupe cette semaine.</p></div>`}
+    <h2>Avancement des matières</h2>
+    ${rows.length?`<div class="panel" style="padding:4px 16px">${rows.map(x=>`<div class="prow"><div class="row" style="justify-content:space-between;gap:8px;align-items:baseline"><div><b>${esc(x.a.courses.code)} · ${esc(x.a.courses.name)}</b><div class="sub">${esc(grpLabel(x.a,x.a.student_groups?.code))} · ${esc((x.a.teachers?.first_name||"")+" "+(x.a.teachers?.last_name||""))}</div></div>
+      <div><b>${hrs(x.d)}</b> <span class="sub">/ ${hrs(x.P)}</span>${x.d>=x.P?' <span class="pill p-ok">Terminée</span>':x.late?' <span class="pill p-warn">En retard</span>':""}</div></div>
+      <div class="pbar"><i style="width:${pc(x.d,x.P)}%"></i><i class="pl" style="width:${pc(Math.min(x.pl,x.P-x.d),x.P)}%"></i></div>
+      <div class="sub">Faites ${hrs(x.d)} · programmées ${hrs(x.pl)}${x.late&&x.miss!=null?` · il manquerait environ ${hrs(Math.round(x.miss/30)*30)} en fin de semestre`:""}</div></div>`).join("")}</div>`:`<div class="panel"><p class="empty">Aucune matière du département dans un semestre en cours.</p></div>`}`;
+  wireWeekNav(v,()=>S.dpWeek,w=>{S.dpWeek=w});
+  const dd=document.getElementById("dpD");if(dd)dd.onchange=()=>{S.dpDep=Number(dd.value);S.dpGroup=null;rerender()};
+  const dg=document.getElementById("dpG");if(dg)dg.onchange=()=>{S.dpGroup=Number(dg.value);rerender()};
+  v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{const sl=slots.find(x=>x.id==b.dataset.sl);if(!sl)return;const t=sl.teaching_assignments;
+    openDialog(`<h3>${esc(t.courses.code)} · ${esc(t.courses.name)}</h3><dl class="kv"><dt>Horaire</dt><dd>${DAYS[sl.day_of_week]} ${hm(sl.start_time)}–${hm(sl.end_time)}</dd><dt>Professeur</dt><dd>${esc(t.teachers.first_name+" "+t.teachers.last_name)}</dd><dt>Groupe</dt><dd>${esc(t.student_groups.code)}</dd><dt>Salle</dt><dd>${esc(sl.rooms?.code||"")}</dd></dl>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{})});
+}
+
 /* ---------- tableau de bord de l'administrateur ---------- */
 function goAccounts(o){Object.assign(S,{accTab:o.tab||"all",accState:o.state||"",accRole:o.role||"",accQ:"",accWithStaff:!!o.withStaff,accOpen:o.open||null,accBulk:!!o.bulk});
   S.tab="referentiel";S.refSec="comptes";try{history.replaceState(null,"","#referentiel")}catch(e){}renderShell()}
 async function viewAdminDash(v){
   let [profiles,roles,teachers,info,logs]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active,must_change_password").order("full_name")),
+    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
     q(sb.from("user_roles").select("id,user_id,role,department_id")),
     q(sb.from("teachers").select("id,profile_id,first_name,last_name,active").order("last_name")),
     q(sb.rpc("admin_users_info")).catch(()=>[]),
@@ -2889,9 +2959,9 @@ async function viewAdminDash(v){
   const profIn=profAcc.filter(u=>inf(u.id).last_sign_in_at);
   const {say,nm}=auditText(profiles);
   const chip=u=>`<button type="button" class="pill p-info" data-open="${u.id}" style="border:0;cursor:pointer">${esc(u.full_name)}</button>`;
-  const team=POSTES.filter(p=>p[0]!=="prof").map(([k,l])=>{const ppl=act.filter(u=>posteOf(setOf(u)).key===k);
-    return `<div class="adcard ${ppl.length?"":"vide"}"><h4>${l}</h4>${ppl.length?ppl.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}${posteOf(setOf(u)).teaches?' <span class="sub">· enseigne</span>':""}</button><span class="sub">${info.length?fdt(inf(u.id).last_sign_in_at):""}</span></div>`).join(""):`<span class="sub" style="color:var(--warn)">Personne à ce poste</span>`}</div>`}).join("");
-  const custom=act.filter(u=>posteOf(setOf(u)).key==="custom");
+  const team=visiblePostes().filter(p=>!isProfPoste(p)).map(po=>{const l=esc(po.name);const ppl=act.filter(u=>u.poste_id===po.id);
+    return `<div class="adcard ${ppl.length?"":"vide"}"><h4>${l}</h4>${ppl.length?ppl.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}${rolesOf(u.id).some(r=>r.role==="professeur")?' <span class="sub">· enseigne</span>':""}</button><span class="sub">${info.length?fdt(inf(u.id).last_sign_in_at):""}</span></div>`).join(""):`<span class="sub" style="color:var(--warn)">Personne à ce poste</span>`}</div>`}).join("");
+  const custom=act.filter(u=>!posteById(u.poste_id)&&rolesOf(u.id).length);
   const pct=profAcc.length?Math.round(profIn.length*100/profAcc.length):0;
   const lb=lastBackup(),bkOld=!lb||(Date.now()-new Date(lb))/864e5>30;
   v.innerHTML=`<h1>Tableau de bord</h1><p class="lead">L'état des comptes en un coup d'œil. Touchez un chiffre ou un nom pour l'ouvrir dans Comptes.</p>
@@ -2911,7 +2981,7 @@ async function viewAdminDash(v){
       :`<ul class="chk"><li class="ok"><i>✓</i><span>Rien à régler : chaque compte a un poste, chaque professeur a sa fiche, et il y a au moins deux administrateurs.</span></li></ul>`}</section>
 
     <section class="adsec"><h2>Équipe administrative</h2><div class="adgrid">${team}
-      ${custom.length?`<div class="adcard"><h4>Postes personnalisés</h4>${custom.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}</button><span class="sub">${esc(posteLabel(rolesOf(u.id)))}</span></div>`).join("")}</div>`:""}</div></section>
+      ${custom.length?`<div class="adcard"><h4>Sans poste enregistré</h4>${custom.map(u=>`<div class="who"><button class="lnk" data-open="${u.id}">${esc(u.full_name)}</button><span class="sub">${esc(rolesOf(u.id).map(r=>RIGHTS[r.role]||r.role).join(", "))}</span></div>`).join("")}</div>`:""}</div></section>
 
     <section class="adsec panel" style="padding:14px 16px"><h2>Professeurs</h2>
       <div class="stats mini" style="margin-bottom:10px"><div class="stat"><b>${profAcc.length}</b><span>avec un compte</span></div><div class="stat"><b>${info.length?profIn.length:"—"}</b><span>déjà connectés</span></div>
@@ -2932,7 +3002,7 @@ async function viewAdminDash(v){
 
 async function viewAccounts(el){
   let [profiles,roles,teachers,deps,info]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active,must_change_password").order("full_name")),
+    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
     q(sb.from("user_roles").select("id,user_id,role,department_id")),
     q(sb.from("teachers").select("id,profile_id,first_name,last_name,email,phone,active").order("last_name")),
     q(sb.from("departments").select("id,code,name").order("code")),
@@ -2950,11 +3020,11 @@ async function viewAccounts(el){
   const neverIn=profiles.filter(u=>u.active!==false&&info.length&&!inf(u.id).last_sign_in_at);
   const pending=profiles.filter(u=>u.active!==false&&u.must_change_password);
   const actives=profiles.filter(u=>u.active!==false).length;
-  S.accQ=S.accQ||"";S.accRole=S.accRole||"";if(S.accRole&&!["custom","_none",...POSTES.map(p=>p[0])].includes(S.accRole))S.accRole="";S.accState=S.accState||"";
-  const ROLEF=[["","Tous les postes"],...POSTES.filter(p=>p[0]!=="prof"||S.accTab==="all").map(p=>[p[0],p[1]]),["custom","Poste personnalisé"],["_none","Sans poste"]];
-  const pkey=rs=>{const o=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||""))));return o.key?(o.key+(o.teaches&&o.key!=="prof"?" prof":"")):"_none"};
+  S.accQ=S.accQ||"";S.accRole=S.accRole||"";if(S.accRole&&!["custom","_none",...(S.postes||[]).map(p=>"p"+p.id)].includes(S.accRole))S.accRole="";S.accState=S.accState||"";
+  const ROLEF=[["","Tous les postes"],...visiblePostes().filter(p=>!isProfPoste(p)||S.accTab==="all").map(p=>["p"+p.id,p.name]),["custom","Sans poste enregistré"],["_none","Aucun droit"]];
+  const pkeyU=(u,rs)=>!rs.length?"_none":posteById(u.poste_id)?"p"+u.poste_id:"custom";
   /* deux groupes : personnel administratif (tout poste autre que Professeur, ou sans poste) et professeurs */
-  const isProfOnly=u=>{const rs=rolesOf(u.id);return rs.length>0&&rs.every(r=>r.role==="professeur")};
+  const isProfOnly=u=>{const p=posteById(u.poste_id);if(p)return isProfPoste(p);const rs=rolesOf(u.id);return rs.length>0&&rs.every(r=>r.role==="professeur")};
   const teaches=u=>rolesOf(u.id).some(r=>r.role==="professeur");
   const staff=profiles.filter(u=>!isProfOnly(u)),profs=profiles.filter(isProfOnly);
   S.accTab=S.accTab||"staff";S.accWithStaff=!!S.accWithStaff;
@@ -2964,7 +3034,7 @@ async function viewAccounts(el){
   const lienT=(u,t)=>t?esc(t.first_name+" "+t.last_name):teaches(u)?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>';
   const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
   const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>`;
-  const posteCell=rs=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabel(rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
+  const posteCell=(u,rs)=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>(RIGHTS[r.role]||r.role)+(["responsable","chef_departement"].includes(r.role)?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabelU(u,rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
   el.innerHTML=`<div class="row" style="justify-content:${has("planificateur")?"space-between":"flex-end"}">${has("planificateur")?'<h2 style="margin-top:0">Comptes</h2>':""}<div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
       <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}">Personnel administratif (${staff.length})</button>
@@ -2977,9 +3047,9 @@ async function viewAccounts(el){
       <label>État<select id="accState">${[["","Tous"],["on","Actifs"],["off","Désactivés"],["tmp","Mot de passe provisoire"],["never","Jamais connectés"]].map(([k,l])=>`<option value="${k}" ${k===S.accState?"selected":""}>${l}</option>`).join("")}</select></label></div>
     <div class="panel tbl"><table id="accTable"><thead><tr><th>Nom</th>${P?"<th>Fiche enseignant</th>":"<th>Poste</th><th>Enseigne</th>"}<th>Dernière connexion</th><th>État</th><th></th></tr></thead><tbody>
     ${list.map(u=>{const rs=rolesOf(u.id);const t=tOf(u.id);const li=inf(u.id).last_sign_in_at;const st=!isProfOnly(u);
-      return `<tr data-u="${u.id}" data-roles="${pkey(rs)}" data-staff="${st?1:0}" data-state="${stateOf(u,li)}">
+      return `<tr data-u="${u.id}" data-roles="${pkeyU(u,rs)}" data-staff="${st?1:0}" data-state="${stateOf(u,li)}">
       ${nomCell(u)}
-      ${P?`<td>${lienT(u,t)}${st?`<div class="sub">${esc(posteLabel(rs))}</div>`:""}</td>`:`${posteCell(rs)}<td>${teaches(u)?lienT(u,t):'<span class="sub">non</span>'}</td>`}
+      ${P?`<td>${lienT(u,t)}${st?`<div class="sub">${esc(posteLabelU(u,rs))}</div>`:""}</td>`:`${posteCell(u,rs)}<td>${teaches(u)?lienT(u,t):'<span class="sub">non</span>'}</td>`}
       <td class="mono">${info.length?(li?fdt(li):'<span class="sub">jamais</span>'):"—"}</td>
       <td>${etat(u)}</td>
       <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-det="${u.id}">Ouvrir</button></div></td></tr>`}).join("")}
@@ -2994,14 +3064,6 @@ async function viewAccounts(el){
   setTimeout(()=>{if(S.accOpen){const b=el.querySelector(`[data-det="${S.accOpen}"]`);S.accOpen=null;if(b)b.click()}
     if(S.accBulk){S.accBulk=false;const b=document.getElementById("bulkAcc");if(b&&!b.disabled)b.click()}},0);
 
-  const saveRoles=async(userId,desired)=>{
-    const mine=rolesOf(userId);
-    const key=r=>r.role+"|"+(r.department_id||"");
-    const have=new Set(mine.map(key));
-    if(userId===S.user.id&&mine.some(r=>r.role==="admin")&&!desired.has("admin|"))throw new Error("Vous ne pouvez pas retirer votre propre rôle d'administrateur.");
-    for(const r of mine)if(!desired.has(key(r)))await q(sb.from("user_roles").delete().eq("id",r.id));
-    for(const k of desired)if(!have.has(k)){const [role,dep]=k.split("|");await q(sb.from("user_roles").insert({user_id:userId,role,department_id:dep?Number(dep):null}))}
-  };
   const credMsg=(name,email,pwd)=>`Bonjour ${name}, voici vos accès à l'application des enseignements : ${appUrl()}\nAdresse : ${email}\nMot de passe provisoire : ${pwd}\nVous choisirez votre propre mot de passe à la première connexion.`;
 
   addAcc.onclick=()=>{
@@ -3009,21 +3071,21 @@ async function viewAccounts(el){
     openDialog(`<h3>${P?"Créer un compte professeur":"Créer un compte"}</h3>
       ${free.length?`<label>Enseignant sans compte (facultatif)<select id="aT"><option value="">—</option>${free.map(t=>`<option value="${t.id}">${esc(t.first_name+" "+t.last_name+" · "+t.email)}</option>`).join("")}</select></label>`:""}
       <div class="grid2"><label>Nom complet<input id="aN" required></label><label>Adresse e-mail<input id="aE" type="email" required></label></div>
-      ${roleBoxes(deps,new Set())}
+      ${posteForm(deps,null,[])}
       <p class="sub" style="margin:0">Un mot de passe provisoire sera généré et affiché une seule fois. La personne devra choisir le sien à la première connexion.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer le compte</button></div>`,
     async()=>{
-      const desired=readRoleBoxes();if(!desired.size)throw new Error("Choisissez le poste de la personne.");
+      const po=readPosteForm();
       const r=await callUsers({action:"create",email:aE.value,full_name:aN.value});
-      try{await saveRoles(r.user_id,desired)}catch(e){toast("Compte créé, mais les rôles n'ont pas pu être enregistrés : "+errMsg(e),true)}
+      try{await assignPoste(r.user_id,po)}catch(e){toast("Compte créé, mais le poste n'a pas pu être enregistré : "+errMsg(e),true)}
       try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
       showCredentials("Compte créé",r.email,r.temp_password);
       return "keep";
     });
-    wireRoleBoxes();if(P)document.getElementById("dlgForm")._setPoste("prof");
+    wirePosteForm();if(P)document.getElementById("dlgForm")._setPoste(profPoste()?.id);
     const sel=document.getElementById("aT");
     if(sel)sel.onchange=()=>{const t=free.find(x=>x.id==sel.value);if(!t)return;aN.value=t.first_name+" "+t.last_name;aE.value=t.email;
-      const f=document.getElementById("dlgForm");if(!rPoste.value)f._setPoste("prof");else if(rPoste.value!=="prof"){rTeach.checked=true;rTeach.onchange()}};
+      const f=document.getElementById("dlgForm");if(!rPoste.value)f._setPoste(profPoste()?.id);else if(Number(rPoste.value)!==profPoste()?.id)rTeach.checked=true};
   };
 
   /* création en série pour les enseignants sans compte */
@@ -3034,7 +3096,7 @@ async function viewAccounts(el){
     async()=>{const done=[],errs=[];
       for(const t of tNoAcc){try{if(!t.email)throw new Error("pas d'adresse e-mail");
         const r=await callUsers({action:"create",email:t.email,full_name:t.first_name+" "+t.last_name});
-        await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
+        const pp=profPoste();if(pp)await assignPoste(r.user_id,{p_poste:pp.id,p_dep:null,p_teaches:false});else await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
         try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
         try{await q(sb.rpc("admin_link_teacher",{p_user:r.user_id,p_teacher:t.id}))}catch(e){}
         done.push({t,email:r.email,pwd:r.temp_password})}catch(e){errs.push(t.first_name+" "+t.last_name+" : "+errMsg(e))}}
@@ -3058,8 +3120,8 @@ async function viewAccounts(el){
     openDialog(`<h3>${esc(u.full_name)}</h3>
       <dl class="kv"><dt>Adresse</dt><dd class="mono">${esc(u.email)}</dd><dt>Créé le</dt><dd>${i.created_at?fdt(i.created_at):"—"}</dd><dt>Dernière connexion</dt><dd>${info.length?fdt(i.last_sign_in_at):"—"}</dd>
         <dt>État</dt><dd>${u.active===false?"Désactivé":u.must_change_password?"Actif · mot de passe provisoire à changer":"Actif"}</dd>
-        <dt>Poste</dt><dd>${esc(posteLabel(rs)||"aucun")}</dd>
-        <dt>Droits</dt><dd class="sub">${rs.length?rs.map(r=>esc(ROLE_LABEL[r.role]+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):""))).join(", "):"aucun"}</dd></dl>
+        <dt>Poste</dt><dd>${esc(posteLabelU(u,rs)||"aucun")}</dd>
+        <dt>Droits</dt><dd class="sub">${rs.length?rs.map(r=>esc((RIGHTS[r.role]||r.role)+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):""))).join(", "):"aucun"}</dd></dl>
       <label>Fiche enseignant liée<select id="lnkT"><option value="">— aucune —</option>${linkable.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?"selected":""}>${esc(x.first_name+" "+x.last_name+(x.email?" · "+x.email:""))}</option>`).join("")}</select></label>
       <p class="sub" style="margin:0">Nécessaire pour un professeur : c'est ce qui relie le compte à ses cours, ses disponibilités et ses émargements.</p>
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap">
@@ -3069,10 +3131,10 @@ async function viewAccounts(el){
     async(act)=>{
       if(act==="link"){const v=lnkT.value?Number(lnkT.value):null;if((t?.id||null)===v){toast("Rien à changer");return}
         await q(sb.rpc("admin_link_teacher",{p_user:u.id,p_teacher:v}));toast(v?"Fiche enseignant liée":"Fiche enseignant déliée");rerender();return}
-      if(act==="roles"){const cur=new Set(rs.map(r=>r.role+"|"+(r.department_id||"")));
-        openDialog(`<h3>Poste de ${esc(u.full_name)}</h3>${roleBoxes(deps,cur)}
+      if(act==="roles"){
+        openDialog(`<h3>Poste de ${esc(u.full_name)}</h3>${posteForm(deps,u,rs)}
           <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-        async()=>{const d=readRoleBoxes();if(!d.size)throw new Error("Choisissez un poste.");await saveRoles(u.id,d);toast("Rôles enregistrés");rerender()});wireRoleBoxes();return "keep"}
+        async()=>{await assignPoste(u.id,readPosteForm());toast("Poste enregistré");rerender()});wirePosteForm();return "keep"}
       if(act==="pwd"){openDialog(`<h3>Réinitialiser le mot de passe</h3><p style="margin:0">Un nouveau mot de passe provisoire sera créé pour <b>${esc(u.full_name)}</b>. L'ancien ne fonctionnera plus, et la personne devra choisir le sien à la prochaine connexion.</p>
           <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Réinitialiser</button></div>`,
         async()=>{const r=await callUsers({action:"reset_password",user_id:u.id});try{await q(sb.rpc("admin_set_must_change",{p_user:u.id,p_value:true}))}catch(e){}
@@ -3085,9 +3147,9 @@ async function viewAccounts(el){
       if(act==="act"){const to=u.active===false;
         /* départ : avertir de ce qui reste en cours */
         const W2=[];
-        if(!to){const pk=posteOf(new Set(rs.map(r=>r.role+"|"+(r.department_id||"")))).key;
-          if(pk&&pk!=="prof"&&pk!=="custom"){const same=profiles.filter(x=>x.id!==u.id&&x.active!==false&&posteOf(new Set(rolesOf(x.id).map(r=>r.role+"|"+(r.department_id||"")))).key===pk);
-            if(!same.length)W2.push(`C'est la seule personne au poste « ${POSTES.find(p=>p[0]===pk)[1]} » : plus personne ne pourra faire ce travail. Donnez d'abord ce poste à quelqu'un d'autre.`)}
+        if(!to){const po=posteById(u.poste_id);
+          if(po&&!isProfPoste(po)){const same=profiles.filter(x=>x.id!==u.id&&x.active!==false&&x.poste_id===po.id);
+            if(!same.length)W2.push(`C'est la seule personne au poste « ${po.name} » : plus personne ne pourra faire ce travail. Donnez d'abord ce poste à quelqu'un d'autre.`)}
           if(t){try{const d=await q(sb.rpc("admin_departure_check",{p_user:u.id}));
               if(d.sessions)W2.push(`${d.sessions} séance(s) de cours sont encore programmées à partir du ${fdl(d.next)}. Prévenez le directeur des études pour qu'il les réattribue (Affectations > changer le professeur).`);
               else if(d.assignments)W2.push(`${d.assignments} affectation(s) de ce semestre sont encore à son nom. Prévenez le directeur des études.`)}
@@ -3134,6 +3196,7 @@ function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="p
 function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
 function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
 function canPay(){return has("finance")}
+function canRecordPay(){return has("finance")||has("caissier")}
 
 async function viewPayroll(v){
   const periods=await q(sb.from("pay_periods").select("*").order("start_date",{ascending:false}));
@@ -3231,14 +3294,14 @@ async function periodDetail(el,p){
   const visaReq=!!(S.cfg&&S.cfg.payroll_visa),payOk=!visaReq||!!p.visa_at;
   const slipRows=list=>list.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
       <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
-      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">Bulletin</button><button class="btn sm" data-sdet="${s.id}">Relevé</button>${canPay()&&s.status!=="paye"&&payOk?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
+      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">Bulletin</button><button class="btn sm" data-sdet="${s.id}">Relevé</button>${canRecordPay()&&s.status!=="paye"&&payOk?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
       ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}
       ${visaReq?`<div class="visa ${p.visa_at?"ok":""}">${p.visa_at?`<b>✓ Visée par la direction générale</b> le ${new Date(p.visa_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}${p.visa_note?` · « ${esc(p.visa_note)} »`:""}`
         :`<b>En attente du visa de la direction générale</b>${p.visa_note?`<div>Remarque de la direction : « ${esc(p.visa_note)} »</div>`:""}<div class="sub">${has("direction")?"Vérifiez les bulletins, puis visez la paie : le service financier pourra alors enregistrer les paiements.":"Les paiements pourront être enregistrés après le visa."}</div>
           ${has("direction")?`<div class="row" style="margin-top:8px"><button class="btn primary" id="visaOk">Viser la paie</button><button class="btn" id="visaNote">Faire une remarque</button></div>`:""}`}</div>`:""}
-      ${canPay()&&slips.length?`<div class="ph-act" style="margin-top:10px">${tot-tp>0&&payOk?`<button class="btn primary" id="payBulk">Payer en lot</button>`:""}${tot-tp>0?`<button class="btn" id="payOrder">${DLI}Ordre de paiement</button>`:""}<button class="btn" id="slipNot">Prévenir les professeurs</button></div>`:""}</div>
+      ${canRecordPay()&&slips.length?`<div class="ph-act" style="margin-top:10px">${tot-tp>0&&payOk?`<button class="btn primary" id="payBulk">Payer en lot</button>`:""}${tot-tp>0?`<button class="btn" id="payOrder">${DLI}Ordre de paiement</button>`:""}<button class="btn" id="slipNot">Prévenir les professeurs</button></div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
     <div class="sechead"><h2>Bulletins</h2><span class="sub" id="sCount">${slips.length}</span></div>${searchBox("sSearch","Rechercher un enseignant ou un n° de bulletin…")}<div class="panel slips" id="sList"></div>
@@ -3285,12 +3348,12 @@ async function periodDetail(el,p){
 const PAY_METHODS=["virement","Wave","Orange Money","chèque","espèces"];
 async function payTeachers(slips){const ids=[...new Set(slips.map(x=>x.teacher_id))];if(!ids.length)return[];
   return q(sb.from("teachers").select("id,first_name,last_name,phone,pay_method,pay_number").in("id",ids))}
-function payMsg(t,amt,d,m,p){return `Bonjour ${t.first_name} ${t.last_name}, un paiement de ${fcfa(amt)} vous a été fait le ${fdl(d)} par ${m}, au titre de ${p.name}. Le détail est dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, le Service financier.`}
+function payMsg(t,amt,d,m,p){return `Bonjour ${t.first_name} ${t.last_name}, un paiement de ${fcfa(amt)} vous a été fait le ${fdl(d)} par ${m}, au titre de ${p.name}. Le détail est dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}
 async function slipNotify(p){
   const slips=await q(sb.from("payslips").select("id,teacher_id,net_fcfa,total_minutes,number").eq("pay_period_id",p.id));if(!slips.length)return;
   const ts=await payTeachers(slips);
   notifyDialog({title:"Bulletins disponibles",intro:"Chaque professeur peut télécharger son bulletin dans « Heures et paiements ». Vous pouvez le lui annoncer.",
-    items:slips.map(sl=>{const t=ts.find(x=>x.id===sl.teacher_id)||{first_name:"",last_name:"",phone:null};return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre bulletin de rémunération de ${p.name} est disponible : ${hrs(sl.total_minutes)}, net ${fcfa(sl.net_fcfa)} (bulletin ${sl.number}). Téléchargez-le dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, le Service financier.`}})})}
+    items:slips.map(sl=>{const t=ts.find(x=>x.id===sl.teacher_id)||{first_name:"",last_name:"",phone:null};return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre bulletin de rémunération de ${p.name} est disponible : ${hrs(sl.total_minutes)}, net ${fcfa(sl.net_fcfa)} (bulletin ${sl.number}). Téléchargez-le dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}})})}
 function bulkPayDialog(p,slips,paid,ts){
   const due=slips.map(s=>({s,t:ts.find(x=>x.id===s.teacher_id)||{},du:s.net_fcfa-paid(s.id)})).filter(x=>x.du>0).sort((a,b)=>(a.t.last_name||"").localeCompare(b.t.last_name||""));
   openDialog(`<h3>Payer en lot · ${esc(p.name)}</h3>

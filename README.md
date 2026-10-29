@@ -1,64 +1,57 @@
 # UCAB Touba – Enseignements
 
-Application web de gestion universitaire : emplois du temps hebdomadaires, émargement électronique des professeurs, contrôle des heures, paie à l'heure et bulletins PDF.
+Application web de gestion universitaire : emplois du temps hebdomadaires, émargement des professeurs, contrôle des heures, paie à l'heure, bulletins et suivi par la direction.
 
 - Interface : `index.html`, un fichier unique, sans étape de compilation.
-- Données et sécurité : Supabase, projet « Gestion Enseignements Paie ». Les permissions sont vérifiées côté serveur.
-- Comptes : la fonction `manage-users` (dossier `supabase/functions`) crée les comptes et réinitialise les mots de passe. Elle est déjà déployée sur Supabase et réservée aux administrateurs.
+- Données et sécurité : Supabase. Toutes les permissions sont vérifiées côté serveur (règles d'accès et fonctions de la base).
+- Comptes : la fonction `manage-users` (dossier `supabase/functions`) crée les comptes et réinitialise les mots de passe. Elle est réservée à l'administrateur.
 
 ## Hébergement sur Cloudflare Pages
 
 1. Cloudflare > Workers & Pages > Create > Pages > Connect to Git.
 2. Choisir le dépôt `moustaphts-lab/UCAB`, branche `main`.
-3. Framework preset : **None**. Build command : *(laisser vide)*. Build output directory : `/`.
-4. Save and Deploy. Chaque modification poussée sur `main` est publiée automatiquement.
+3. Framework preset : **None**. Build command : *(vide)*. Build output directory : `/`.
+4. Chaque modification poussée sur `main` est publiée automatiquement.
 
-## Qui fait quoi
+## Postes et droits
 
-| Personne | Ce qu'elle fait dans l'application |
+Un **poste** est un nom choisi par l'établissement (Directeur des études, Trésorier, Scolarité…) posé sur une combinaison de **droits**. L'administrateur crée, renomme et modifie les postes dans **Établissement › Postes**. Une personne peut aussi « enseigner » en plus de son poste.
+
+| Droit | Ce qu'il permet |
 |---|---|
-| Professeur | Émarge ses séances, indique ses disponibilités de la semaine, consulte ses heures et ses bulletins. |
-| Directeur des études (enseigne aussi) | Saisit le référentiel, construit les emplois du temps, suit les heures. |
-| Secrétaire | Assiste le directeur (référentiel, emplois du temps) et l'aide du responsable financier (validation des heures). |
-| Aide du responsable financier | Valide les heures des professeurs de tous les départements. Peut émarger à la place des professeurs qui ne le font pas (saisie par délégation, avec la fiche de cours comme source). |
-| Responsable financier | Tarifs, calcul et approbation de la paie, bulletins, paiements. |
-| Administrateur (nommé par l'université) | Crée les comptes, attribue les rôles, réinitialise les mots de passe. N'a pas accès à la paie. |
+| Enseigner | Aujourd'hui, Mon emploi du temps (grille, liste et émargement), Mes disponibilités, Heures et paiements, demandes d'absence |
+| Référentiel et emplois du temps | Référentiel, jours sans cours, affectations, génération et publication des semaines, annonces, demandes d'absence |
+| Validation des heures | Contrôle des émargements (lot des conformes, signalements, relances, prêt pour la paie), émargement par délégation ; limitable à un département |
+| Paie, tarifs et paiements | Périodes de paie, calcul, vérifications, approbation, paiements en lot, ordre de paiement, budget |
+| Direction générale | Synthèse, avancement par filière, suivi des enseignements, rapport mensuel, budget, visa de la paie |
+| Administration des comptes | Comptes, postes, établissement (identité, logo, année, sauvegarde), journal ; sans accès aux montants de paie |
+| *Optionnels* (à activer dans Établissement) | **Chef de département** (consultation et validation de son département), **Caissier** (paiements seulement), **Consultation** (tout voir sans rien modifier) |
 
-Un rôle est un droit d'accès : une même personne peut en cumuler plusieurs. Personne ne peut valider ses propres heures, ni un émargement qu'il a saisi lui-même : une saisie par délégation est validée par un autre responsable (par exemple la secrétaire).
+Règles constantes : personne ne valide ses propres heures ni un émargement qu'il a saisi ; une paie approuvée est figée ; si la règle est activée, aucun paiement n'est enregistré avant le visa de la direction générale.
 
-## Disponibilités des professeurs
+## Fonctionnement d'une semaine
 
-Dans « Mes disponibilités », chaque professeur voit une grille jours × heures (7 h à 20 h, du lundi au samedi). Un toucher sur un créneau le marque disponible ou indisponible ; toucher un jour ou une heure change toute la colonne ou la ligne ; un bouton marque « indisponible toute la semaine » et un autre remet tout disponible. L'enregistrement est automatique et atomique (fonction `save_availability`). Colonne `teachers.availability_declared` : tant que le professeur n'a rien indiqué, il est considéré disponible partout ; dès qu'il a rempli sa grille, ses plages font foi (aucune plage = indisponible toute la semaine). Script à exécuter une fois : `supabase/disponibilites_declarees.sql`. Le directeur et la secrétaire voient les disponibilités dans « Emplois du temps » ; un créneau placé hors plages est signalé « Hors disponibilités », et le générateur automatique les respecte.
+1. Les professeurs déclarent leurs disponibilités de la semaine suivante.
+2. Le directeur des études génère ou reprend la semaine précédente, ajuste par glisser-déposer, vérifie, puis publie. Les jours sans cours du calendrier sont exclus.
+3. Après chaque cours, le professeur émarge (« J'ai fait ce cours »).
+4. L'aide du responsable financier valide les émargements conformes en lot et examine les autres.
+5. En fin de mois, le responsable financier calcule, vérifie, approuve ; la direction vise ; les paiements sont enregistrés et les professeurs prévenus.
 
-## Tableau de bord et exports
+## Scripts de base de données
 
-- Onglet « Tableau de bord » (directeur, secrétaire, aide, responsable financier) : séances prévues, taux d'émargement, heures validées, émargements à valider, séances sans émargement, heures par département et par enseignant, et pour la finance le reste dû. La période se choisit en haut.
-- Exports Excel (.xlsx) et PDF : tableau de bord, heures validées, liste des émargements (selon le filtre affiché), paie d'une période (provisoire ou approuvée avec les règlements). Les heures sont en décimal dans Excel (1,5 = 1 h 30) pour pouvoir calculer.
-
-## Règles de paie actuelles
-
-- Tarif horaire selon le statut de l'enseignant (vacataire, maître-assistant, maître de conférences, professeur titulaire), avec exception individuelle possible.
-- Tarifs historisés : un nouveau tarif prend effet à sa date, les séances antérieures gardent l'ancien.
-- Périodes de paie libres, créées par le service financier.
-- Seules les durées retenues des émargements validés sont payées. Une séance ne peut être payée qu'une fois.
-- Net = brut (aucune retenue ni cotisation pour l'instant).
-- Approbation par le responsable financier : les bulletins sont alors figés.
-
-## Générateur d'emploi du temps (version simple)
-
-Dans « Emplois du temps », le bouton « Générer automatiquement » propose des créneaux hebdomadaires pour les affectations qui n'ont pas encore assez de créneaux. Réglages : semestre, jours de cours, début et fin de journée, durée d'un créneau, pause, maximum d'heures par jour (groupe et professeur), respect des disponibilités. Le calcul se fait dans le navigateur : placement glouton qui respecte les conflits de professeur, de groupe et de salle, la capacité des salles et les disponibilités. Une proposition est affichée avec les cours non placés et la raison la plus fréquente ; rien n'est enregistré avant validation, puis les créneaux sont créés en brouillon (la base refuse encore tout conflit). Volume visé par semaine = heures prévues ÷ nombre de semaines du semestre, arrondi au créneau.
+- `supabase/postes_et_nettoyage.sql` : postes configurables et retrait des anciennes fonctions. À exécuter une fois.
+- `supabase/archives/` : scripts déjà exécutés ou de données de test, gardés pour mémoire.
 
 ## Comptes de démonstration
 
-Mot de passe commun : `Demo-2026!`
+Mot de passe commun : `Demo-2026!`. Ils s'affichent sur l'écran de connexion tant que la case « Afficher les comptes de démonstration » est cochée dans Établissement. **À décocher, et ces comptes à désactiver, avant toute utilisation réelle.**
 
-| Compte | Rôle |
+| Compte | Poste |
 |---|---|
-| awa.ndiaye@univdemo.test | Professeure |
-| directeur@univdemo.test | Directeur des études (enseigne aussi) |
+| ousmane.faye@univdemo.test | Professeur (cours programmés) |
+| directeur@univdemo.test | Directeur des études |
 | secretaire@univdemo.test | Secrétaire |
 | aide.finance@univdemo.test | Aide du responsable financier |
 | financier@univdemo.test | Responsable financier |
+| direction@univdemo.test | Direction générale |
 | admin@univdemo.test | Administrateur |
-
-Les autres professeurs de démonstration : ibrahima.diallo, fatou.sow, cheikh.mbaye, mariama.ba, ousmane.faye (même domaine). Ces comptes sont à supprimer avant toute utilisation réelle.
