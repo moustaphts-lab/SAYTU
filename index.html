@@ -2320,8 +2320,9 @@ function refDefs(L){
       cols:[["Nom",r=>esc(r.last_name+" "+r.first_name)],["Département",r=>esc(r.departments?.code)],["Statut",r=>esc(r.teacher_statuses?.label)],["E-mail",r=>`<span class="mono">${esc(r.email)}</span>`],
         ["Compte",r=>r.profile_id?'<span class="pill p-ok">Lié</span>':'<span class="pill p-mute">Sans compte</span>'],["Actif",r=>r.active?"Oui":'<span class="pill p-mute">Non</span>']],
       fields:[{k:"first_name",l:"Prénom",req:1},{k:"last_name",l:"Nom",req:1},{k:"email",l:"E-mail (sert à lier son compte)",t:"email",req:1},{k:"phone",l:"Téléphone"},
-        {k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},{k:"status_id",l:"Statut (détermine le tarif)",t:"select",num:1,opt:L.statuses.map(s=>[s.id,s.label]),req:1},{k:"active",l:"Enseignant actif",t:"bool"}],
-      defaults:{active:true},normalize:o=>{o.email=o.email.toLowerCase();return o},name:r=>r.first_name+" "+r.last_name},
+        {k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1},{k:"status_id",l:"Statut (détermine le tarif)",t:"select",num:1,opt:L.statuses.map(s=>[s.id,s.label]),req:1},
+        {k:"pay_method",l:"Mode de paiement habituel",t:"select",opt:[["","—"],...PAY_METHODS.map(m=>[m,m])]},{k:"pay_number",l:"N° Wave / Orange Money / compte"},{k:"active",l:"Enseignant actif",t:"bool"}],
+      defaults:{active:true},normalize:o=>{o.email=o.email.toLowerCase();if(!o.pay_method)o.pay_method=null;if(!o.pay_number)o.pay_number=null;return o},name:r=>r.first_name+" "+r.last_name},
     statuts:{title:"Statuts des enseignants",one:"statut",table:"teacher_statuses",order:"id",head:[1,0],
       cols:[["Code",code],["Libellé",r=>esc(r.label)]],
       fields:[{k:"code",l:"Code",req:1},{k:"label",l:"Libellé",req:1}]},
@@ -2985,14 +2986,17 @@ async function viewPayroll(v){
       <span class="pc-bot"><span class="sub">${x.attendance_deadline?"Émargement avant le "+fdl(x.attendance_deadline):"Sans limite d'émargement"}</span><span class="pc-amt">${amt==null?"—":fcfa(amt)}</span></span></button>`}).join("")}</div>`:`<div class="panel"><p class="empty">Aucune période. Créez la première période de rémunération.</p></div>`}
     <div id="pDetail"></div>`;
   v.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{S.periodId=Number(b.dataset.p);rerender();setTimeout(()=>document.getElementById("pDetail")?.scrollIntoView({behavior:"smooth",block:"start"}),60)});
-  if(canPay()&&document.getElementById("newP"))newP.onclick=periodDialog;
+  if(canPay()&&document.getElementById("newP"))newP.onclick=()=>periodDialog(periods[0]);
   if(p)await periodDetail(document.getElementById("pDetail"),p);
 }
 
-function periodDialog(){
+function periodDialog(last){
+  /* proposition : le mois qui suit la dernière période (ou le mois en cours) */
+  const b=last?addDays(new Date(last.end_date+"T12:00:00"),1):new Date();const m0=new Date(b.getFullYear(),b.getMonth(),1),m1=new Date(b.getFullYear(),b.getMonth()+1,0);
+  const nm=m0.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   openDialog(`<h3>Nouvelle période de rémunération</h3>
-    <label>Nom<input id="nN" required placeholder="Ex. : Novembre 2026"></label>
-    <div class="row"><label>Du<input id="nS" type="date" required></label><label>Au<input id="nE" type="date" required></label></div>
+    <label>Nom<input id="nN" required placeholder="Ex. : Novembre 2026" value="${esc(nm.charAt(0).toUpperCase()+nm.slice(1))}"></label>
+    <div class="row"><label>Du<input id="nS" type="date" required value="${iso(m0)}"></label><label>Au<input id="nE" type="date" required value="${iso(m1)}"></label></div>
     <div class="row"><label>Limite d'émargement<input id="nD" type="date"></label><label>Échéance de régularisation<input id="nR" type="date"></label></div>
     <p class="sub" style="margin:0">La période peut durer un mois, une quinzaine, un semestre ou toute autre durée.</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer la période</button></div>`,
@@ -3011,12 +3015,18 @@ async function periodDetail(el,p){
       q(sb.from("attendance_records").select("id,status,schedule_sessions!inner(session_date)").in("status",["soumis","correction_demandee"]).gte("schedule_sessions.session_date",p.start_date).lte("schedule_sessions.session_date",p.end_date))]);
     const by=groupBy(items);
     const tot=items.reduce((s,i)=>s+i.amount_fcfa,0);
+    /* état du contrôle des émargements sur la période */
+    let ctl=null;try{const now=new Date(),ss=(await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,attendance_records(status)").gte("session_date",p.start_date).lte("session_date",p.end_date))).filter(x=>x.status!=="annulee");
+      const past=ss.filter(x=>sEnd(x)<=now);ctl={fut:ss.length-past.length,sub:past.filter(x=>x.attendance_records?.status==="soumis").length,cor:past.filter(x=>x.attendance_records?.status==="correction_demandee").length,non:past.filter(x=>!x.attendance_records).length}}catch(e){}
+    const ready=ctl&&!ctl.fut&&!ctl.sub&&!ctl.cor&&!ctl.non;
     el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)}</div></div>${ppill(PER,p.status)}</div>
       ${canPay()?`<div class="ph-act"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
         ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
         ${p.status==="ouverte"?`<button class="btn danger" id="delP">Supprimer</button>`:""}</div>`:""}
       ${items.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
-      ${pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
+      ${ctl?`<div class="panel hcard" style="margin-bottom:12px;border-color:${ready?"var(--ok)":"var(--warn)"}"><b style="color:${ready?"var(--ok)":"var(--warn)"}">${ready?"✓ Contrôle terminé : la période peut être calculée.":"Le contrôle des émargements n'est pas terminé"}</b>
+        ${ready?"":`<ul class="chk" style="margin-top:8px">${ctl.fut?`<li class="info"><i>i</i><span>${ctl.fut} séance(s) de la période sont encore à venir.</span></li>`:""}${ctl.sub?`<li class="warn"><i>!</i><span>${ctl.sub} émargement(s) en attente de contrôle.</span></li>`:""}${ctl.cor?`<li class="warn"><i>!</i><span>${ctl.cor} correction(s) demandée(s), sans réponse du professeur.</span></li>`:""}${ctl.non?`<li class="bad"><i>✕</i><span>${ctl.non} séance(s) passée(s) non émargée(s).</span></li>`:""}</ul>
+        <p class="sub" style="margin:6px 0 0">Vous pouvez calculer quand même : ce qui n'est pas validé ne sera pas payé dans cette période et passera dans une suivante. L'aide du responsable financier voit le détail dans Contrôle › Prêt pour la paie.</p>`}</div>`:pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
       ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
       ${items.length?`<div class="stats"><div class="stat big"><b>${fcfa(tot)}</b><span>Total à payer (brut = net)</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
       <div class="sechead"><h2>Enseignants</h2><span class="sub" id="tCount">${by.length}</span></div>${searchBox("tSearch","Rechercher un enseignant…")}<div id="tList">${teacherTable(by)}</div>`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
@@ -3027,7 +3037,7 @@ async function periodDetail(el,p){
         <p style="margin:0">${by.length} bulletin(s) pour un total de <b>${fcfa(tot)}</b> vont être générés. Après approbation, les montants sont figés et ces séances ne pourront plus être payées dans une autre période.</p>
         ${pending.length?`<p class="sub" style="margin:0">${pending.length} émargement(s) non validé(s) restent en dehors de cette paie.</p>`:""}
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Approuver</button></div>`,
-        async()=>{const n=await q(sb.rpc("approve_payroll",{p_period:p.id}));toast(`${n} bulletin(s) générés`);rerender()}));
+        async()=>{const n=await q(sb.rpc("approve_payroll",{p_period:p.id}));toast(`${n} bulletin(s) générés`);rerender();setTimeout(()=>slipNotify(p),600)}));
       document.getElementById("delP")&&(delP.onclick=()=>openDialog(`<h3>Supprimer « ${esc(p.name)} » ?</h3><p style="margin:0">La période n'a pas encore été approuvée. Aucune donnée d'émargement ne sera perdue.</p>
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
         async()=>{await q(sb.from("pay_periods").delete().eq("id",p.id));S.periodId=null;toast("Période supprimée");rerender()}));
@@ -3055,7 +3065,8 @@ async function periodDetail(el,p){
       <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
-      ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
+      ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}
+      ${canPay()&&slips.length?`<div class="ph-act" style="margin-top:10px">${tot-tp>0?`<button class="btn primary" id="payBulk">Payer en lot</button><button class="btn" id="payOrder">${DLI}Ordre de paiement</button>`:""}<button class="btn" id="slipNot">Prévenir les professeurs</button></div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
     <div class="sechead"><h2>Bulletins</h2><span class="sub" id="sCount">${slips.length}</span></div>${searchBox("sSearch","Rechercher un enseignant ou un n° de bulletin…")}<div class="panel slips" id="sList"></div>
@@ -3075,12 +3086,69 @@ async function periodDetail(el,p){
       <div class="row"><label>Mode<select id="pM"><option>virement</option><option>Wave</option><option>Orange Money</option><option>chèque</option><option>espèces</option></select></label><label>Référence<input id="pR" placeholder="N° de virement, de transaction…"></label></div>
       <p class="sub" style="margin:0">Le paiement est enregistré par le service financier. Il n'exécute aucun virement.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:Number(pA.value),p_paid_on:pD.value,p_method:pM.value,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender()})})};
+    async()=>{const amt=Number(pA.value),d=pD.value,m=pM.value;await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:amt,p_paid_on:d,p_method:m,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender();
+      const ts=await payTeachers([s]);setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le paiement est visible dans son espace « Heures et paiements ». Vous pouvez aussi le lui confirmer.",items:[{t:ts[0],msg:payMsg(ts[0],amt,d,m,p)}]}),500)});
+    const t0=tOfSlip(s);if(t0&&t0.pay_method){const o=[...pM.options].find(x=>x.value===t0.pay_method);if(o)pM.value=t0.pay_method}})};
+  const tAll=await payTeachers(slips),tOfSlip=sl=>tAll.find(t=>t.id===sl.teacher_id);
+  const pb=document.getElementById("payBulk");if(pb)pb.onclick=()=>bulkPayDialog(p,slips,paid,tAll);
+  const po=document.getElementById("payOrder");if(po)po.onclick=()=>payOrderDialog(p,slips,paid,tAll);
+  const sn=document.getElementById("slipNot");if(sn)sn.onclick=()=>slipNotify(p);
   const sl=document.getElementById("sList");
   const showSlips=k=>{const f=slips.filter(x=>norm(x.snapshot.enseignant.nom+" "+x.number).includes(k));sl.innerHTML=f.length?slipRows(f):`<p class="empty">Aucun bulletin ne correspond à cette recherche.</p>`;document.getElementById("sCount").textContent=f.length===slips.length?slips.length:f.length+" sur "+slips.length;wireSlips()};
   showSlips("");const ss=document.getElementById("sSearch");if(ss)ss.oninput=()=>showSlips(norm(ss.value.trim()));
 }
 
+/* ---------- paie : paiements en lot, ordre de paiement, messages aux professeurs ---------- */
+const PAY_METHODS=["virement","Wave","Orange Money","chèque","espèces"];
+async function payTeachers(slips){const ids=[...new Set(slips.map(x=>x.teacher_id))];if(!ids.length)return[];
+  return q(sb.from("teachers").select("id,first_name,last_name,phone,pay_method,pay_number").in("id",ids))}
+function payMsg(t,amt,d,m,p){return `Bonjour ${t.first_name} ${t.last_name}, un paiement de ${fcfa(amt)} vous a été fait le ${fdl(d)} par ${m}, au titre de ${p.name}. Le détail est dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, le Service financier.`}
+async function slipNotify(p){
+  const slips=await q(sb.from("payslips").select("id,teacher_id,net_fcfa,total_minutes,number").eq("pay_period_id",p.id));if(!slips.length)return;
+  const ts=await payTeachers(slips);
+  notifyDialog({title:"Bulletins disponibles",intro:"Chaque professeur peut télécharger son bulletin dans « Heures et paiements ». Vous pouvez le lui annoncer.",
+    items:slips.map(sl=>{const t=ts.find(x=>x.id===sl.teacher_id)||{first_name:"",last_name:"",phone:null};return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre bulletin de rémunération de ${p.name} est disponible : ${hrs(sl.total_minutes)}, net ${fcfa(sl.net_fcfa)} (bulletin ${sl.number}). Téléchargez-le dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, le Service financier.`}})})}
+function bulkPayDialog(p,slips,paid,ts){
+  const due=slips.map(s=>({s,t:ts.find(x=>x.id===s.teacher_id)||{},du:s.net_fcfa-paid(s.id)})).filter(x=>x.du>0).sort((a,b)=>(a.t.last_name||"").localeCompare(b.t.last_name||""));
+  openDialog(`<h3>Payer en lot · ${esc(p.name)}</h3>
+    <p class="sub" style="margin:0">Cochez les bulletins réglés. Le montant proposé est le reste dû ; le mode vient de la fiche de l'enseignant s'il est connu. Rien n'est versé par l'application : elle enregistre les paiements que vous avez faits.</p>
+    <div class="grid2"><label>Date de paiement<input id="bpD" type="date" required value="${iso(new Date())}"></label><label>Référence commune (facultatif)<input id="bpR" placeholder="N° de lot, de virement…"></label></div>
+    <div class="panel tbl"><table><thead><tr><th><input type="checkbox" id="bpAll" checked aria-label="Tout cocher"></th><th>Enseignant</th><th>Mode</th><th>Montant (FCFA)</th></tr></thead><tbody>
+      ${due.map((x,i)=>`<tr><td><input type="checkbox" data-bi="${i}" checked></td><td>${esc((x.t.first_name||"")+" "+(x.t.last_name||""))}<div class="sub mono">${esc(x.s.number)}${x.t.pay_number?" · "+esc(x.t.pay_number):""}</div></td>
+        <td><select data-bm="${i}">${PAY_METHODS.map(m=>`<option ${m===(x.t.pay_method||"virement")?"selected":""}>${m}</option>`).join("")}</select></td>
+        <td><input type="number" data-ba="${i}" min="1" max="${x.du}" value="${x.du}" style="width:120px"></td></tr>`).join("")}</tbody></table></div>
+    <p class="sub" style="margin:0" id="bpSum"></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer les paiements</button></div>`,
+  async()=>{const sel=due.map((x,i)=>({...x,on:document.querySelector(`[data-bi="${i}"]`).checked,m:document.querySelector(`[data-bm="${i}"]`).value,a:Number(document.querySelector(`[data-ba="${i}"]`).value)})).filter(x=>x.on);
+    if(!sel.length)throw new Error("Cochez au moins un bulletin.");
+    if(sel.some(x=>!(x.a>0)||x.a>x.du))throw new Error("Un montant est vide ou dépasse le reste dû.");
+    const d=bpD.value,ref=bpR.value.trim()||null,ok=[],errs=[];
+    for(const x of sel){try{await q(sb.rpc("record_payment",{p_payslip:x.s.id,p_amount:x.a,p_paid_on:d,p_method:x.m,p_reference:ref}));ok.push(x)}catch(e){errs.push((x.t.last_name||"")+" : "+errMsg(e))}}
+    toast(`${ok.length} paiement(s) enregistré(s)`+(errs.length?` · ${errs.length} refusé(s) : ${errs[0]}`:""),errs.length>0);rerender();
+    if(ok.length)setTimeout(()=>notifyDialog({title:"Prévenir les professeurs payés",intro:"Chaque professeur voit le paiement dans son espace. Vous pouvez aussi le lui confirmer.",items:ok.map(x=>({t:x.t,msg:payMsg(x.t,x.a,d,x.m,p)}))}),500)});
+  const sum=()=>{let n=0,t=0;due.forEach((x,i)=>{if(document.querySelector(`[data-bi="${i}"]`).checked){n++;t+=Number(document.querySelector(`[data-ba="${i}"]`).value)||0}});bpSum.textContent=`${n} paiement(s) · total ${fcfa(t)}`};
+  document.querySelectorAll("#dlgForm [data-bi],#dlgForm [data-ba]").forEach(e=>e.oninput=e.onchange=sum);
+  bpAll.onchange=()=>{document.querySelectorAll("#dlgForm [data-bi]").forEach(c=>c.checked=bpAll.checked);sum()};sum();
+}
+function payOrderDialog(p,slips,paid,ts){
+  const due=slips.map(s=>({s,t:ts.find(x=>x.id===s.teacher_id)||{},du:s.net_fcfa-paid(s.id)})).filter(x=>x.du>0).sort((a,b)=>(a.t.pay_method||"").localeCompare(b.t.pay_method||"")||(a.t.last_name||"").localeCompare(b.t.last_name||""));
+  openDialog(`<h3>Ordre de paiement · ${esc(p.name)}</h3>
+    <p class="sub" style="margin:0">La liste des montants restant dus, avec le mode et le numéro de chaque enseignant, à remettre à la banque ou à utiliser pour les envois Wave / Orange Money. Complétez ici les modes et numéros manquants : ils sont enregistrés sur la fiche de l'enseignant.</p>
+    <div class="panel tbl"><table><thead><tr><th>Enseignant</th><th>Mode</th><th>Numéro / compte</th><th>Montant</th></tr></thead><tbody>
+      ${due.map((x,i)=>`<tr><td>${esc((x.t.first_name||"")+" "+(x.t.last_name||""))}<div class="sub">${esc(x.t.phone||"")}</div></td>
+        <td><select data-om="${i}"><option value="">—</option>${PAY_METHODS.map(m=>`<option ${m===x.t.pay_method?"selected":""}>${m}</option>`).join("")}</select></td>
+        <td><input data-on="${i}" value="${esc(x.t.pay_number||"")}" placeholder="${esc(x.t.phone||"")}" style="min-width:150px"></td><td class="num"><b>${fcfa(x.du)}</b></td></tr>`).join("")}</tbody></table></div>
+    <p class="sub" style="margin:0">Total : <b>${fcfa(due.reduce((t,x)=>t+x.du,0))}</b> · ${due.length} enseignant(s)</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button><button class="btn" value="xlsx">${DLI}Excel</button><button class="btn primary" value="pdf">${DLI}PDF</button></div>`,
+  async(act)=>{const rows=due.map((x,i)=>({...x,m:document.querySelector(`[data-om="${i}"]`).value,n:document.querySelector(`[data-on="${i}"]`).value.trim()}));
+    for(const r of rows)if((r.m||"")!==(r.t.pay_method||"")||(r.n||"")!==(r.t.pay_number||"")){try{await q(sb.rpc("set_teacher_payment",{p_teacher:r.t.id,p_method:r.m||null,p_number:r.n||null}));r.t.pay_method=r.m||null;r.t.pay_number=r.n||null}catch(e){toast(errMsg(e),true)}}
+    const head=["Enseignant","Mode","Numéro / compte","Téléphone","Montant (FCFA)"];
+    const body=rows.map(r=>[(r.t.last_name||"")+" "+(r.t.first_name||""),r.m||"à préciser",r.n||"",r.t.phone||"",r.du]).concat([["Total","","","",rows.reduce((t,r)=>t+r.du,0)]]);
+    const sub="Du "+fdl(p.start_date)+" au "+fdl(p.end_date)+" · montants restant dus au "+fdl(iso(new Date()));
+    if(act==="xlsx")exportExcel("ordre-paiement_"+slug(p.name),[{name:"Ordre de paiement",title:"Ordre de paiement : "+p.name,subtitle:sub,head,rows:body}]);
+    else exportPdf("ordre-paiement_"+slug(p.name),"Ordre de paiement : "+p.name,sub,[{title:"",head,rows:body.map(r=>r.map((c,j)=>j===4?fcfa(c):c))}]);
+    return "keep"});
+}
 const norm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const searchBox=(id,ph)=>`<label class="searchbox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="${id}" type="search" placeholder="${ph}" autocomplete="off"></label>`;
 function groupBy(items){
