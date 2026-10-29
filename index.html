@@ -463,7 +463,16 @@ function makePayslipPdf(jsPDF, slip, payments, detailed){
 <script>
 const SUPABASE_URL = "https://fkfuviwquoacpehmctsn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_R98wA_kmIeqPt2YTmCRLQQ_69QKmx4s";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* Un compte de niveau université (rectorat, contrôle, financier central) consulte une faculté à la fois :
+   la faculté choisie part dans l'en-tête x-ucab-fac, et la base ne lui montre que celle-ci.
+   Exceptions : la liste des facultés (pour le sélecteur), la comparaison et la lecture de ses propres droits. */
+const FAC_FREE=/\/rest\/v1\/(faculties|rpc\/(compare_faculties|my_scope|my_roles))(\?|$)/;
+function facFetch(input,init){
+  try{const url=typeof input==="string"?input:input.url;
+    if(typeof S!=="undefined"&&S.fac&&/\/rest\/v1\//.test(url)&&!FAC_FREE.test(url)&&typeof isCentralReader==="function"&&isCentralReader()&&!isCentral()){
+      init={...(init||{})};const h=new Headers(init.headers||(typeof input!=="string"?input.headers:undefined));h.set("x-ucab-fac",String(S.fac));init.headers=h}}catch(e){}
+  return fetch(input,init)}
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {global:{fetch:facFetch}});
 
 const DEMO = [
   ["ousmane.faye@univdemo.test","Professeur (cours programmés)"],
