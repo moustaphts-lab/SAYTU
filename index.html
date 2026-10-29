@@ -473,7 +473,7 @@ const DEMO = [
   ["direction@univdemo.test","Direction générale"],
   ["admin@univdemo.test","Administrateur (comptes)"]];
 const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const ROLE_LABEL = {chef_departement:"Chef de département",caissier:"Caissier",lecteur:"Consultation",admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Direction générale (consultation et contrôle)"};
+const ROLE_LABEL = {chef_departement:"Chef de département",caissier:"Caissier",lecteur:"Consultation",admin:"Administrateur (comptes)",planificateur:"Référentiel et emplois du temps",professeur:"Professeur",responsable:"Validation des heures",finance:"Finance et paie",direction:"Direction (doyen ou rectorat)"};
 const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
@@ -2318,7 +2318,7 @@ async function viewDashboard(v){
   let pay=null;
   if(has("finance")||has("direction")){
     try{
-      const [slips,pays,open]=await Promise.all([qAll(()=>sb.from("payslips").select("id,net_fcfa")),qAll(()=>sb.from("payments").select("amount_fcfa")),
+      const [slips,pays,open]=await Promise.all([qAll(()=>sb.from("payslips").select("id,net_fcfa,pay_periods!inner(faculty_id)").eq("pay_periods.faculty_id",S.fac)),qAll(()=>sb.from("payments").select("amount_fcfa,payslips!inner(pay_periods!inner(faculty_id))").eq("payslips.pay_periods.faculty_id",S.fac)),
         qAll(()=>sb.from("attendance_records").select("retained_minutes").eq("status","valide").is("pay_period_id",null))]);
       const net=slips.reduce((s,x)=>s+x.net_fcfa,0),paid=pays.reduce((s,x)=>s+x.amount_fcfa,0);
       pay={net,paid,due:net-paid,openMin:open.reduce((s,x)=>s+(x.retained_minutes||0),0)};
@@ -2640,7 +2640,7 @@ async function callUsers(body){
 }
 /* ---------- postes : un nom (modifiable par l'administrateur) posé sur une combinaison de droits ---------- */
 const RIGHTS={professeur:"Enseigner (cours, disponibilités, émargement)",planificateur:"Référentiel, affectations et emplois du temps",responsable:"Validation des heures émargées",
-  finance:"Paie, tarifs et paiements",direction:"Direction générale (consultation, visa de la paie)",admin:"Administration des comptes",
+  finance:"Paie, tarifs et paiements",direction:"Direction : doyen (visa de la paie) ou rectorat (consultation)",admin:"Administration des comptes",
   chef_departement:"Chef de département (son département : consultation et validation)",caissier:"Paiements seulement (sans calcul ni approbation de la paie)",lecteur:"Consultation sans modification"};
 const OPT_RIGHTS=["chef_departement","caissier","lecteur"];
 const OPT_DESC={chef_departement:"Voit l'emploi du temps et l'avancement des matières de son département, et valide les émargements de ce département.",
@@ -2704,10 +2704,11 @@ function facultyDialog(f){let flogo=f?.logo||null;
       <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
       <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
       <label>Emploi du temps<select id="fM"><option value="hebdomadaire">Hebdomadaire : refait chaque semaine, disponibilités chaque semaine</option><option value="fixe" ${f?.timetable_mode==="fixe"?"selected":""}>Fixe : le même chaque semaine du semestre, disponibilités une fois par semestre</option></select></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="fV" ${!f||f.payroll_visa?"checked":""}> Visa du doyen obligatoire avant d'enregistrer les paiements</label>
       <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
       ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo,timetable_mode:fM.value};
+    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo,timetable_mode:fM.value,payroll_visa:fV.checked};
       if(f){const r2=await q(sb.from("faculties").update(row).eq("id",f.id).select());if(!r2.length)throw new Error("Modification refusée.")}else await q(sb.from("faculties").insert(row));
       await loadFacs();toast(f?"Faculté enregistrée":"Faculté créée");rerender()});
     const show=()=>{fLB.innerHTML=flogo?`<img src="${esc(flogo)}" alt="">`:'<span class="sub">Pas de logo</span>';fLx.hidden=!flogo};show();
@@ -2717,8 +2718,8 @@ function facultyDialog(f){let flogo=f?.logo||null;
 /* administrateur de faculté : les réglages de sa faculté */
 async function viewEtabFac(v){
   await loadFacs();const L=adminFacs();
-  v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo, l'en-tête des documents et le mode d'emploi du temps de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
-    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""} · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
+  v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo, l'en-tête des documents, le mode d'emploi du temps et la règle du visa de la paie de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
+    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""} · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"} · visa du doyen ${f.payroll_visa?"obligatoire":"non requis"}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
   v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facultyDialog(facById(Number(b.dataset.fe))));
 }
 
@@ -2741,7 +2742,7 @@ async function viewEtab(v){
           <label class="btn sm" style="flex-direction:row;cursor:pointer">Choisir un logo<input id="eL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="eLx" ${logo?"":"hidden"}>Retirer le logo</button>
           <span class="sub">PNG ou JPEG, carré de préférence. Il est réduit automatiquement.</span></div>
         <div class="panel" style="padding:12px 14px;background:var(--bg)"><div class="sub" style="margin-bottom:8px">Aperçu</div><div id="ePrev"></div></div>
-        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eV" ${cfg.payroll_visa?"checked":""}> Visa de la direction générale obligatoire avant d'enregistrer les paiements</label>
+        
         <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eD" ${cfg.show_demo?"checked":""}> Afficher les comptes de démonstration sur l'écran de connexion <span class="sub">(à décocher avant d'utiliser de vraies données)</span></label>
         <div class="err" id="eErr"></div>
         <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
@@ -2782,7 +2783,7 @@ async function viewEtab(v){
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);logo=c.toDataURL("image/png");URL.revokeObjectURL(url);prev()};img.onerror=()=>toast("Image illisible.",true);img.src=url};
   eLx.onclick=()=>{logo=null;eL.value="";prev()};
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
-    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,payroll_visa:eV.checked,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
+    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
   /* facultés */
@@ -2872,7 +2873,7 @@ async function viewDgSynth(v){
     q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),teachers(first_name,last_name),semesters(label,start_date,end_date),student_groups!teaching_assignments_group_id_fkey(code,programs(id,code,name,level,departments(code,name))),assignment_groups(student_groups(code,programs(id,code,name,level,departments(code,name))))")),
     q(sb.from("schedule_sessions").select("assignment_id,session_date,start_time,end_time,status")),
     q(sb.from("published_weeks").select("week_start").in("week_start",[cw,nw]).eq("faculty_id",S.fac)),
-    q(sb.from("pay_periods").select("id,name,status,end_date,visa_at").order("start_date",{ascending:false})),
+    q(sb.from("pay_periods").select("id,name,status,end_date,visa_at").eq("faculty_id",S.fac).order("start_date",{ascending:false})),
     q(sb.from("academic_years").select("start_date,end_date").eq("is_current",true).maybeSingle()),
     q(sb.from("absence_requests").select("id").eq("status","en_attente")).catch(()=>[])]);
   /* séances du mois */
@@ -2893,8 +2894,8 @@ async function viewDgSynth(v){
   const pct=(a,b)=>b?Math.round(a*100/b):0;
   /* alertes */
   const A=[];const dow=now.getDay()||7;
-  const visaWait=S.cfg?.payroll_visa?periods.filter(x=>["approuvee","payee"].includes(x.status)&&!x.visa_at):[];
-  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente ${has("direction")?"de votre visa":"du visa de la direction générale"} : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
+  const visaWait=visaOn()?periods.filter(x=>["approuvee","payee"].includes(x.status)&&!x.visa_at):[];
+  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente ${isDoyen()?"de votre visa":"du visa du doyen"} : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
   if(!pubs.some(x=>x.week_start===cw)&&dow<=5)A.push(["bad","L'emploi du temps de cette semaine n'est pas publié.",null]);
   if(dow>=4&&!pubs.some(x=>x.week_start===nw))A.push(["warn","L'emploi du temps de la semaine prochaine n'est pas encore publié.",null]);
   if(late.length)A.push(["warn",`${late.length} matière(s) en retard sur le rythme du semestre.`,"#dgProg"]);
@@ -2978,9 +2979,9 @@ async function monthlyReport(M){
   const [R,assigns,allSess,slips,pays,periods]=await Promise.all([suiviData(f,t),
     q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),teachers(first_name,last_name),semesters(label,start_date,end_date),student_groups!teaching_assignments_group_id_fkey(code,programs(id,code,name,level,departments(code))),assignment_groups(student_groups(code,programs(id,code,name,level,departments(code))))")),
     q(sb.from("schedule_sessions").select("assignment_id,session_date,start_time,end_time,status").lte("session_date",ref)),
-    q(sb.from("payslips").select("net_fcfa,pay_period_id,pay_periods!inner(name,start_date,end_date,status,visa_at)").lte("pay_periods.start_date",t).gte("pay_periods.end_date",f)),
-    q(sb.from("payments").select("amount_fcfa,paid_on").gte("paid_on",f).lte("paid_on",t)),
-    q(sb.from("pay_periods").select("name,status,start_date,end_date,visa_at").lte("start_date",t).gte("end_date",f))]);
+    q(sb.from("payslips").select("net_fcfa,pay_period_id,pay_periods!inner(name,start_date,end_date,status,visa_at,faculty_id)").eq("pay_periods.faculty_id",S.fac).lte("pay_periods.start_date",t).gte("pay_periods.end_date",f)),
+    q(sb.from("payments").select("amount_fcfa,paid_on,payslips!inner(pay_periods!inner(faculty_id))").eq("payslips.pay_periods.faculty_id",S.fac).gte("paid_on",f).lte("paid_on",t)),
+    q(sb.from("pay_periods").select("name,status,start_date,end_date,visa_at").eq("faculty_id",S.fac).lte("start_date",t).gte("end_date",f))]);
   const m=x=>toMin(hm(x.end_time))-toMin(hm(x.start_time));
   const cur=assigns.filter(a=>a.semesters&&a.semesters.start_date<=ref&&a.semesters.end_date>=f);
   const dn={};allSess.forEach(x=>{if(x.status!=="annulee"&&sEnd(x)<=refD)dn[x.assignment_id]=(dn[x.assignment_id]||0)+m(x)});
@@ -2997,14 +2998,14 @@ async function monthlyReport(M){
       ["Émargements tardifs (plus de 7 jours)",tot.tard||0],["Émargements rejetés",tot.rej||0],
       ["Avancement des programmes au "+fdl(ref),`${hrs(totD)} sur ${hrs(totP)} (${pc(totD,totP)})`],["Matières en retard",late.length],
       ["Bulletins de la période de paie",slips.length?fcfa(slips.reduce((s,x)=>s+x.net_fcfa,0)):"aucun"],["Paiements enregistrés dans le mois",fcfa(pays.reduce((s,x)=>s+x.amount_fcfa,0))],
-      ["État de la paie",periods.map(p=>p.name+" : "+({ouverte:"ouverte",en_verification:"en vérification",approuvee:"approuvée",payee:"payée"}[p.status]||p.status)+(S.cfg?.payroll_visa&&["approuvee","payee"].includes(p.status)?(p.visa_at?", visée":", à viser"):"")).join(" ; ")||"aucune période"]]},
+      ["État de la paie",periods.map(p=>p.name+" : "+({ouverte:"ouverte",en_verification:"en vérification",approuvee:"approuvée",payee:"payée"}[p.status]||p.status)+(visaOn()&&["approuvee","payee"].includes(p.status)?(p.visa_at?", visée":", à viser"):"")).join(" ; ")||"aucune période"]]},
     {title:"Avancement par filière",head:["Filière","Niveau","Département","Heures faites","Heures prévues","Avancement","Matières en retard"],
       rows:Object.values(byP).sort((a,b)=>(a.p.departments?.code||"").localeCompare(b.p.departments?.code||"")||a.p.code.localeCompare(b.p.code)).map(o=>[o.p.code+" · "+o.p.name,o.p.level||"",o.p.departments?.code||"",hrs(o.d),hrs(o.P),pc(o.d,o.P),o.late])},
     {title:"Matières en retard",head:["Matière","Enseignant","Faites / prévues","Manque estimé en fin de semestre"],keepEmpty:1,
       rows:late.map(x=>[x.a.courses.code+" · "+x.a.courses.name,(x.a.teachers?.first_name||"")+" "+(x.a.teachers?.last_name||""),hrs(x.d)+" / "+hrs(x.P),x.miss!=null?"≈ "+hrs(Math.round(x.miss/30)*30):"—"])},
     {title:"Suivi des enseignements par département",head:["Département","Terminées","Annulées","Absences","Tardifs","Réduits","Rejetés","Délégation","Non émargés"],rows:R.D.map(o=>[o.k,o.fin,o.ann,o.abs,o.tard,o.red,o.rej,o.del,o.non])},
     {title:"Motifs d'annulation",head:["Motif","Séances"],rows:R.motifs.map(([k,n])=>[k,n])}];
-  exportPdf("rapport-mensuel_"+f.slice(0,7),"Rapport mensuel · "+ml,"Direction générale · situation au "+fdl(ref),sheets,false);
+  exportPdf("rapport-mensuel_"+f.slice(0,7),"Rapport mensuel · "+ml,(facById(S.fac)?.name||"Direction")+" · situation au "+fdl(ref),sheets,false);
 }
 
 /* ---------- chef de département : emploi du temps et avancement de son département (consultation) ---------- */
@@ -3317,12 +3318,15 @@ function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="p
 function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
 function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
 function canPay(){return has("finance")}
+/* paie par faculté : visa du doyen réglé par chaque faculté ; seul le doyen de la faculté vise */
+const visaOn=()=>{const f=facById(S.fac);return f?!!f.payroll_visa:!!(S.cfg&&S.cfg.payroll_visa)};
+const isDoyen=()=>(S.roles||[]).some(r=>r.role==="direction"&&r.faculty_id&&r.faculty_id===S.fac);
 function canRecordPay(){return has("finance")||has("caissier")}
 
 async function viewPayroll(v){
-  const periods=await q(sb.from("pay_periods").select("*").order("start_date",{ascending:false}));
-  const totals=await q(sb.from("payslips").select("pay_period_id,net_fcfa"));
-  const items=await q(sb.from("payroll_items").select("pay_period_id,amount_fcfa"));
+  const periods=await q(sb.from("pay_periods").select("*").eq("faculty_id",S.fac).order("start_date",{ascending:false}));
+  const totals=await q(sb.from("payslips").select("pay_period_id,net_fcfa,pay_periods!inner(faculty_id)").eq("pay_periods.faculty_id",S.fac));
+  const items=await q(sb.from("payroll_items").select("pay_period_id,amount_fcfa,pay_periods!inner(faculty_id)").eq("pay_periods.faculty_id",S.fac));
   const sum=(arr,id)=>arr.filter(x=>x.pay_period_id===id).reduce((s,x)=>s+(x.net_fcfa??x.amount_fcfa),0);
   if(!periods.some(p=>p.id===S.periodId))S.periodId=(periods.find(p=>p.status==="ouverte"||p.status==="en_verification")||periods[0])?.id;
   const p=periods.find(x=>x.id===S.periodId);
@@ -3330,7 +3334,7 @@ async function viewPayroll(v){
     <p class="lead">Rémunération à l'heure, calculée uniquement sur les heures validées. Une fois la période approuvée, les bulletins sont figés.</p>
     <div class="sechead"><h2>Périodes de rémunération</h2>${canPay()?`<button class="btn sm primary" id="newP">+ Nouvelle période</button>`:""}</div>
     ${periods.length?`<div class="plist">${periods.map(x=>{const amt=x.status==="ouverte"?null:["approuvee","payee"].includes(x.status)?sum(totals,x.id):sum(items,x.id);
-      return `<button type="button" class="pcard" data-p="${x.id}" aria-pressed="${x.id===S.periodId}"><span class="pc-top"><b>${esc(x.name)}</b><span>${S.cfg?.payroll_visa&&["approuvee","payee"].includes(x.status)?(x.visa_at?'<span class="pill p-ok">Visée</span> ':'<span class="pill p-warn">À viser</span> '):""}${ppill(PER,x.status)}</span></span>
+      return `<button type="button" class="pcard" data-p="${x.id}" aria-pressed="${x.id===S.periodId}"><span class="pc-top"><b>${esc(x.name)}</b><span>${visaOn()&&["approuvee","payee"].includes(x.status)?(x.visa_at?'<span class="pill p-ok">Visée</span> ':'<span class="pill p-warn">À viser</span> '):""}${ppill(PER,x.status)}</span></span>
       <span class="pc-dates">Du ${fdl(x.start_date)} au ${fdl(x.end_date)}</span>
       <span class="pc-bot"><span class="sub">${x.attendance_deadline?"Émargement avant le "+fdl(x.attendance_deadline):"Sans limite d'émargement"}</span><span class="pc-amt">${amt==null?"—":fcfa(amt)}</span></span></button>`}).join("")}</div>`:`<div class="panel"><p class="empty">Aucune période. Créez la première période de rémunération.</p></div>`}
     <div id="pDetail"></div>`;
@@ -3351,7 +3355,7 @@ function periodDialog(last){
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer la période</button></div>`,
   async()=>{
     if(nE.value<nS.value)throw new Error("La date de fin doit être postérieure à la date de début.");
-    const r=await q(sb.from("pay_periods").insert({name:nN.value.trim(),start_date:nS.value,end_date:nE.value,attendance_deadline:nD.value||null,regularization_deadline:nR.value||null,manager_id:S.user.id}).select().single());
+    const r=await q(sb.from("pay_periods").insert({faculty_id:S.fac,name:nN.value.trim(),start_date:nS.value,end_date:nE.value,attendance_deadline:nD.value||null,regularization_deadline:nR.value||null,manager_id:S.user.id}).select().single());
     S.periodId=r.id;toast("Période créée");rerender();
   });
 }
@@ -3412,16 +3416,16 @@ async function periodDetail(el,p){
     q(sb.from("payments").select("*,payslips!inner(pay_period_id)").eq("payslips.pay_period_id",p.id).order("paid_on"))]);
   const paid=id=>pays.filter(x=>x.payslip_id===id).reduce((s,x)=>s+x.amount_fcfa,0);
   const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
-  const visaReq=!!(S.cfg&&S.cfg.payroll_visa),payOk=!visaReq||!!p.visa_at;
+  const visaReq=visaOn(),payOk=!visaReq||!!p.visa_at;
   const slipRows=list=>list.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
       <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
       <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">Bulletin</button><button class="btn sm" data-sdet="${s.id}">Relevé</button>${canRecordPay()&&s.status!=="paye"&&payOk?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
       ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}
-      ${visaReq?`<div class="visa ${p.visa_at?"ok":""}">${p.visa_at?`<b>✓ Visée par la direction générale</b> le ${new Date(p.visa_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}${p.visa_note?` · « ${esc(p.visa_note)} »`:""}`
-        :`<b>En attente du visa de la direction générale</b>${p.visa_note?`<div>Remarque de la direction : « ${esc(p.visa_note)} »</div>`:""}<div class="sub">${has("direction")?"Vérifiez les bulletins, puis visez la paie : le service financier pourra alors enregistrer les paiements.":"Les paiements pourront être enregistrés après le visa."}</div>
-          ${has("direction")?`<div class="row" style="margin-top:8px"><button class="btn primary" id="visaOk">Viser la paie</button><button class="btn" id="visaNote">Faire une remarque</button></div>`:""}`}</div>`:""}
+      ${visaReq?`<div class="visa ${p.visa_at?"ok":""}">${p.visa_at?`<b>✓ Visée par le doyen</b> le ${new Date(p.visa_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}${p.visa_note?` · « ${esc(p.visa_note)} »`:""}`
+        :`<b>En attente du visa du doyen</b>${p.visa_note?`<div>Remarque du doyen : « ${esc(p.visa_note)} »</div>`:""}<div class="sub">${isDoyen()?"Vérifiez les bulletins, puis visez la paie : le service financier pourra alors enregistrer les paiements.":"Les paiements pourront être enregistrés après le visa."}</div>
+          ${isDoyen()?`<div class="row" style="margin-top:8px"><button class="btn primary" id="visaOk">Viser la paie</button><button class="btn" id="visaNote">Faire une remarque</button></div>`:""}`}</div>`:""}
       ${canRecordPay()&&slips.length?`<div class="ph-act" style="margin-top:10px">${tot-tp>0&&payOk?`<button class="btn primary" id="payBulk">Payer en lot</button>`:""}${tot-tp>0?`<button class="btn" id="payOrder">${DLI}Ordre de paiement</button>`:""}<button class="btn" id="slipNot">Prévenir les professeurs</button></div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
       <div class="stat"><b style="color:${tot-tp?"var(--warn)":"var(--ok)"}">${fcfa(tot-tp)}</b><span>Reste dû</span></div></div>
@@ -3524,7 +3528,7 @@ async function payChecks(p,items,by,tot){
     const val=await q(sb.from("attendance_records").select("id,teacher_id,teachers(first_name,last_name),schedule_sessions!inner(session_date)").eq("status","valide").is("pay_period_id",null).lte("schedule_sessions.session_date",p.end_date));
     const miss=val.filter(a=>!ids.has(a.id)),mt=[...new Map(miss.map(a=>[a.teacher_id,a.teachers])).values()];
     L.push(miss.length?{k:"bad",t:`${miss.length} séance(s) validée(s) sans tarif, donc non payées : ${esc(mt.map(t=>t.first_name+" "+t.last_name).join(", "))}. Ajoutez un tarif (Tarifs) puis recalculez.`}:{k:"ok",t:"Chaque séance validée a un tarif."});
-    const prevP=(await q(sb.from("pay_periods").select("id,name,start_date,status").lt("start_date",p.start_date).in("status",["approuvee","payee"]).order("start_date",{ascending:false}).limit(1)))[0];
+    const prevP=(await q(sb.from("pay_periods").select("id,name,start_date,status").eq("faculty_id",p.faculty_id).lt("start_date",p.start_date).in("status",["approuvee","payee"]).order("start_date",{ascending:false}).limit(1)))[0];
     if(prevP){const ps=await q(sb.from("payslips").select("teacher_id,net_fcfa,total_minutes").eq("pay_period_id",prevP.id));
       const pt=ps.reduce((a,x)=>a+x.net_fcfa,0),d=pt?Math.round((tot-pt)*100/pt):null;
       L.push({k:d!=null&&Math.abs(d)>50?"warn":"info",t:`Total : ${fcfa(tot)}, contre ${fcfa(pt)} pour « ${esc(prevP.name)} »${d!=null?` (${d>0?"+":""}${d} %)`:""}.`});
@@ -3545,13 +3549,13 @@ async function viewBudget(v){
   if(!years.some(y=>y.id===S.bgYear))S.bgYear=(years.find(y=>y.is_current)||years[0]).id;
   const Y=years.find(y=>y.id===S.bgYear),today=iso(new Date());
   const [items,slips,pays,assigns,att,teachers,rates,statuses]=await Promise.all([
-    q(sb.from("payroll_items").select("pay_period_id,teacher_id,session_date,minutes,amount_fcfa,pay_periods(status),teachers(department_id,departments(code),status_id,teacher_statuses(label))").gte("session_date",Y.start_date).lte("session_date",Y.end_date)),
-    q(sb.from("payslips").select("id,net_fcfa,pay_period_id,pay_periods!inner(start_date)").gte("pay_periods.start_date",Y.start_date).lte("pay_periods.start_date",Y.end_date)),
+    q(sb.from("payroll_items").select("pay_period_id,teacher_id,session_date,minutes,amount_fcfa,pay_periods!inner(status,faculty_id),teachers(department_id,departments(code),status_id,teacher_statuses(label))").eq("pay_periods.faculty_id",S.fac).gte("session_date",Y.start_date).lte("session_date",Y.end_date)),
+    q(sb.from("payslips").select("id,net_fcfa,pay_period_id,pay_periods!inner(start_date,faculty_id)").eq("pay_periods.faculty_id",S.fac).gte("pay_periods.start_date",Y.start_date).lte("pay_periods.start_date",Y.end_date)),
     q(sb.from("payments").select("payslip_id,amount_fcfa")),
-    q(sb.from("teaching_assignments").select("id,teacher_id,planned_hours,semesters!inner(academic_year_id,end_date)").eq("semesters.academic_year_id",Y.id)),
+    q(sb.from("teaching_assignments").select("id,teacher_id,planned_hours,semesters!inner(academic_year_id,end_date,faculty_id)").eq("semesters.academic_year_id",Y.id).eq("semesters.faculty_id",S.fac)),
     q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,schedule_sessions!inner(assignment_id,session_date)").in("status",["valide","soumis","correction_demandee"]).gte("schedule_sessions.session_date",Y.start_date).lte("schedule_sessions.session_date",Y.end_date)),
-    q(sb.from("teachers").select("id,first_name,last_name,status_id,department_id,departments(code),teacher_statuses(label)")),
-    q(sb.from("hourly_rates").select("status_id,teacher_id,rate_fcfa,effective_from").lte("effective_from",today).order("effective_from",{ascending:false})),
+    q(sb.from("teachers").select("id,first_name,last_name,status_id,department_id,departments!inner(code,faculty_id),teacher_statuses(label)").eq("departments.faculty_id",S.fac)),
+    q(sb.from("hourly_rates").select("status_id,teacher_id,rate_fcfa,effective_from").eq("faculty_id",S.fac).lte("effective_from",today).order("effective_from",{ascending:false})),
     q(sb.from("teacher_statuses").select("id,label"))]);
   /* coûts réels : lignes de paie (bulletins approuvés ou en cours de calcul) */
   const fixed=items.filter(i=>["approuvee","payee"].includes(i.pay_periods?.status)),draft=items.filter(i=>!["approuvee","payee"].includes(i.pay_periods?.status));
@@ -3626,8 +3630,8 @@ function downloadSlip(slip,payments,detailed){
 async function viewRates(v){
   const [statuses,rates,teachers,used]=await Promise.all([
     q(sb.from("teacher_statuses").select("id,code,label").order("id")),
-    q(sb.from("hourly_rates").select("*").order("effective_from",{ascending:false})),
-    q(sb.from("teachers").select("id,first_name,last_name,status_id").order("last_name")),
+    q(sb.from("hourly_rates").select("*").eq("faculty_id",S.fac).order("effective_from",{ascending:false})),
+    q(sb.from("teachers").select("id,first_name,last_name,status_id,departments!inner(faculty_id)").eq("departments.faculty_id",S.fac).order("last_name")),
     q(sb.from("payroll_items").select("rate_id"))]);
   const usedIds=new Set(used.map(u=>u.rate_id));
   const today=iso(new Date());
@@ -3635,7 +3639,7 @@ async function viewRates(v){
   const target=r=>r.status_id?statuses.find(s=>s.id===r.status_id)?.label:(()=>{const t=teachers.find(t=>t.id===r.teacher_id);return t?t.first_name+" "+t.last_name:"?"})();
   const indiv=teachers.filter(t=>rates.some(r=>r.teacher_id===t.id));
   v.innerHTML=`<h1>Tarifs horaires</h1>
-    <p class="lead">Le tarif dépend du statut de l'enseignant. Une exception individuelle remplace le tarif du statut. Pour changer un tarif, ajoutez-en un nouveau avec sa date d'effet : l'ancien reste appliqué aux séances antérieures.</p>
+    <p class="lead">${multiFac()?"Tarifs de la "+esc(facById(S.fac)?.name||"faculté")+". ":""}Le tarif dépend du statut de l'enseignant. Une exception individuelle remplace le tarif du statut. Pour changer un tarif, ajoutez-en un nouveau avec sa date d'effet : l'ancien reste appliqué aux séances antérieures.</p>
     <div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Tarifs en vigueur au ${fdl(today)}</h2>${canPay()?`<button class="btn sm primary" id="addRate">Nouveau tarif</button>`:""}</div>
     <div class="panel tbl"><table><thead><tr><th>Statut</th><th>Tarif horaire</th><th>Depuis le</th><th>Enseignants</th></tr></thead><tbody>
     ${statuses.map(s=>{const c=current(rates.filter(r=>r.status_id===s.id));const next=rates.filter(r=>r.status_id===s.id&&r.effective_from>today).at(-1);
@@ -3655,7 +3659,7 @@ async function viewRates(v){
     <p class="sub" style="margin:0">Les séances déjà payées ne sont jamais recalculées.</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{const tg=rTg.value,id=Number(tg.slice(1));
-      await q(sb.from("hourly_rates").insert({status_id:tg[0]==="s"?id:null,teacher_id:tg[0]==="t"?id:null,rate_fcfa:Number(rAmt.value),effective_from:rFrom.value,note:rNote.value.trim()||null}));
+      await q(sb.from("hourly_rates").insert({faculty_id:S.fac,status_id:tg[0]==="s"?id:null,teacher_id:tg[0]==="t"?id:null,rate_fcfa:Number(rAmt.value),effective_from:rFrom.value,note:rNote.value.trim()||null}));
       toast("Tarif enregistré");rerender()});
   v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{try{const r=await q(sb.from("hourly_rates").delete().eq("id",b.dataset.del).select());
     if(!r.length)throw new Error("Ce tarif a déjà servi au calcul d'une paie : il ne peut pas être supprimé.");toast("Tarif supprimé");rerender()}catch(e){toast(errMsg(e),true)}});

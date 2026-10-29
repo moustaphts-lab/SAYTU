@@ -21,6 +21,8 @@ L'application gère une université de plusieurs facultés. Chaque faculté a se
 - **Administrateur de faculté** : comptes et postes de sa faculté, nom et logo de sa faculté.
 - **Directeur des études de la faculté** : référentiel, affectations et emplois du temps de sa faculté.
 - **Doyen** : synthèse, suivi et visa de la paie de sa faculté. **Rectorat** : consultation de toute l'université.
+- **Emploi du temps** : chaque faculté choisit le mode **hebdomadaire** (refait chaque semaine) ou **fixe** (une semaine publiée pour tout le semestre, disponibilités données une fois par semestre).
+- **Paie** : chaque faculté a ses tarifs, ses périodes, ses bulletins (numérotés `CODE-ANNÉE-001`, ex. `FSRC-2026-001`) et son budget. L'administrateur de la faculté décide si le visa du doyen est obligatoire avant les paiements. Les statuts d'enseignants sont communs à l'université.
 
 ## Postes et droits
 
@@ -36,7 +38,7 @@ Un **poste** est un nom choisi par l'établissement (Directeur des études, Tré
 | Administration des comptes | Comptes, postes, établissement (identité, logo, année, sauvegarde), journal ; sans accès aux montants de paie |
 | *Optionnels* (à activer dans Établissement) | **Chef de département** (consultation et validation de son département), **Caissier** (paiements seulement), **Consultation** (tout voir sans rien modifier) |
 
-Règles constantes : personne ne valide ses propres heures ni un émargement qu'il a saisi ; une paie approuvée est figée ; si la règle est activée, aucun paiement n'est enregistré avant le visa de la direction générale.
+Règles constantes : personne ne valide ses propres heures ni un émargement qu'il a saisi ; une paie approuvée est figée ; si la faculté l'a activée, aucun paiement n'est enregistré avant le visa du doyen.
 
 ## Fonctionnement d'une semaine
 
