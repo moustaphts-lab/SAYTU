@@ -399,7 +399,7 @@ function makePayslipPdf(jsPDF, slip, payments, detailed){
   const LX=pdfLogo(doc,L,9,16)?L+19:L;
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text(APPN(),LX,18);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
-  doc.text((S.cfg&&S.cfg.pdf_header?S.cfg.pdf_header+" · ":"")+"Service financier",LX,23.5);
+  doc.text((pdfHead()?pdfHead()+" · ":"")+"Service financier",LX,23.5);
   doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...ink);
   doc.text(detailed?"Relevé détaillé des heures":"Bulletin de rémunération",R,16,{align:"right"});
   doc.setFont("courier","normal"); doc.setFontSize(10); doc.text(slip.number,R,22,{align:"right"});
@@ -486,7 +486,10 @@ async function loadSettings(){try{const r=await q(sb.from("app_settings").select
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
 /* logo et lignes d'en-tête / de pied de page dans les PDF */
-function pdfLogo(doc,x,y,size){const l=S.cfg&&S.cfg.logo;if(!l)return false;try{doc.addImage(l,/^data:image\/jpe?g/.test(l)?"JPEG":"PNG",x,y,size,size);return true}catch(e){return false}}
+/* faculté des documents : celle en cours ; son logo remplace celui de l'université s'il existe */
+const pdfFac=()=>facById(S.fac)||null;
+function pdfHead(){const f=pdfFac();return [f&&f.name,(f&&f.pdf_header)||(S.cfg&&S.cfg.pdf_header)].filter(Boolean).join(" · ")}
+function pdfLogo(doc,x,y,size){const l=(pdfFac()&&pdfFac().logo)||(S.cfg&&S.cfg.logo);if(!l)return false;try{doc.addImage(l,/^data:image\/jpe?g/.test(l)?"JPEG":"PNG",x,y,size,size);return true}catch(e){return false}}
 function pdfFooterText(){return (S.cfg&&S.cfg.pdf_footer)||""}
 const $app = document.getElementById("app");
 
@@ -586,6 +589,13 @@ const isCentral=()=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id==null);
 const adminFacs=()=>isCentral()?(S.facs||[]):(S.facs||[]).filter(f=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id===f.id));
 const facCode=id=>facById(id)?.code||"";
 const multiFac=()=>(S.facs||[]).length>1;
+const facMode=id=>facById(id)?.timetable_mode||"hebdomadaire";
+/* faculté du professeur connecté (pour ses disponibilités et ses semaines publiées) */
+const profFac=()=>(S.roles||[]).find(r=>r.role==="professeur"&&r.faculty_id)?.faculty_id||S.fac;
+/* mode fixe : les disponibilités se donnent une fois, pour la première semaine du semestre */
+async function semesterWeek(fac,from){const d=iso(from||new Date());
+  try{const ss=(await q(sb.from("semesters").select("label,start_date,end_date,faculty_id").gte("end_date",d).order("start_date"))).filter(x=>x.faculty_id===fac);
+    const sm=ss[0];return sm?{sem:sm,week:mondayOf(new Date(sm.start_date+"T12:00:00"))}:null}catch(e){return null}}
 /* choix de la faculté de travail (référentiel, horaires, calendrier) */
 async function setFac(id){S.fac=id;try{localStorage.setItem("ucab_fac",String(id))}catch(e){}await loadSchedule();}
 const facSelect=(id,label)=>multiFac()?`<label style="max-width:360px">${label||"Faculté"}<select id="${id}">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:"";
@@ -882,12 +892,14 @@ function absenceDialog(s){
     await q(sb.rpc("request_absence",{p_session:s.id,p_reason:r,p_proposal:abX.value.trim()||null}));toast("Demande envoyée à la direction des études");rerender()})}
 async function viewHome(v){
   const now=new Date(),today=iso(now),T=S.teacher;
-  const nextW=addDays(mondayOf(now),7),nwk=iso(nextW);
+  const PF=profFac(),FIXED=facMode(PF)==="fixe";let nextW=addDays(mondayOf(now),7),semL="";
+  if(FIXED){const sw=await semesterWeek(PF,now);if(sw){nextW=sw.week;semL=sw.sem.label}}
+  const nwk=iso(nextW);
   const [sess,reqs,ans,pubN]=await Promise.all([
     q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",T.id).gte("session_date",iso(addDays(now,-60))).lte("session_date",iso(addDays(now,14))).order("session_date").order("start_time")),
     q(sb.from("absence_requests").select("id,session_id,reason,proposal,status,answer,created_at,decided_at").eq("teacher_id",T.id).order("created_at",{ascending:false})).catch(()=>[]),
     q(sb.from("availability_weeks").select("week_start").eq("teacher_id",T.id).eq("week_start",nwk).maybeSingle()),
-    q(sb.from("published_weeks").select("week_start").eq("week_start",nwk).maybeSingle())]);
+    q(sb.from("published_weeks").select("week_start").eq("week_start",nwk).eq("faculty_id",PF).maybeSingle())]);
   const reqOf=id=>reqs.find(r=>r.session_id===id&&r.status==="en_attente");
   const live=sess.filter(s=>s.status!=="annulee");
   const cur=live.find(s=>sStart(s)<=now&&now<sEnd(s));
@@ -915,8 +927,8 @@ async function viewHome(v){
         :`<p class="sub" style="margin:8px 0 0">✓ Toutes vos séances passées sont émargées.</p>`}
         ${toFix.length?`<div class="gpwarn" style="margin-top:10px">${toFix.length} émargement(s) à corriger à la demande du responsable : ${toFix.map(s=>`<button class="lnk" data-em="${s.id}">${fdate(s.session_date)} ${esc(s.teaching_assignments?.courses?.code||"")}</button>`).join(", ")}</div>`:""}</section>
 
-      <section class="panel hcard"><h2 style="margin:0 0 6px">Disponibilités · semaine du ${weekRange(nextW)}</h2>
-        ${pubN?`<p style="margin:0">L'emploi du temps de cette semaine est publié.</p><div class="row" style="margin-top:10px"><button class="btn" id="hTt">Voir mon emploi du temps</button></div>`
+      <section class="panel hcard"><h2 style="margin:0 0 6px">${FIXED?"Disponibilités du semestre"+(semL?" "+esc(semL):""):"Disponibilités · semaine du "+weekRange(nextW)}</h2>
+        ${pubN?`<p style="margin:0">L'emploi du temps ${FIXED?"du semestre":"de cette semaine"} est publié.</p><div class="row" style="margin-top:10px"><button class="btn" id="hTt">Voir mon emploi du temps</button></div>`
           :ans?`<p style="margin:0">✓ Vous avez donné vos disponibilités. Vous pouvez les modifier jusqu'à la publication de l'emploi du temps.</p><div class="row" style="margin-top:10px"><button class="btn" id="hAv">Modifier</button></div>`
           :`<p style="margin:0"><b style="color:var(--warn)">Pas encore données.</b> Indiquez vos créneaux avant que la direction publie l'emploi du temps : sans réponse, elle décide sans vous.</p><div class="row" style="margin-top:10px"><button class="btn primary" id="hAv">Donner mes disponibilités</button></div>`}</section>
 
@@ -1158,7 +1170,11 @@ const dayDate=(w,d)=>addDays(w,d-1).toLocaleDateString("fr-FR",{day:"numeric"});
 async function viewAvailability(v,opt={}){
   const asPlanner=!!opt.teacherId;
   if(!S.avWeek)S.avWeek=nextMonday();
-  const W=asPlanner&&opt.week?opt.week:S.avWeek,wk=iso(W),prevWk=iso(addDays(W,-7));
+  let W=asPlanner&&opt.week?opt.week:S.avWeek;
+  /* mode fixe : une seule grille par semestre, rangée sur la première semaine du semestre */
+  const facP=asPlanner?S.fac:profFac(),FIXED=facMode(facP)==="fixe";let semL=null;
+  if(FIXED){const sw=await semesterWeek(facP,asPlanner?W:new Date());if(sw){W=sw.week;semL=sw.sem.label}}
+  const wk=iso(W),prevWk=iso(addDays(W,-7));
   const sch=S.sched||SCHED_DEFAULT,tid=asPlanner?opt.teacherId:S.teacher.id,H0=Math.floor(hmin(sch.start)/60),H1=Math.ceil(hmin(sch.end)/60),N=H1-H0,D=sch.days;
   const lf=sch.lunchFrom?hmin(sch.lunchFrom):null,lt=sch.lunchTo?hmin(sch.lunchTo):null;
   const pause=Array.from({length:N},(_,i)=>lf!=null&&lt!=null&&Math.min(lt,(H0+i+1)*60)-Math.max(lf,(H0+i)*60)>=30);
@@ -1167,7 +1183,7 @@ async function viewAvailability(v,opt={}){
     q(sb.from("availability_weeks").select("declared_at,by_planner").eq("teacher_id",tid).eq("week_start",wk).maybeSingle()),
     q(sb.from("teacher_availability").select("day_of_week,start_time,end_time").eq("teacher_id",tid).eq("week_start",prevWk)),
     q(sb.from("availability_weeks").select("teacher_id").eq("teacher_id",tid).eq("week_start",prevWk).maybeSingle()),
-    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).maybeSingle()),
+    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).eq("faculty_id",facP).maybeSingle()),
     asPlanner?q(sb.from("teachers").select("first_name,last_name").eq("id",tid).single()):Promise.resolve(null)]);
   const locked=!!pub&&!asPlanner;
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
@@ -1192,28 +1208,28 @@ async function viewAvailability(v,opt={}){
   const who=asPlanner?esc(tch.first_name+" "+tch.last_name):"Vous";
   const draw=()=>{
     const g=document.getElementById("avGrid"),n=count();
-    g.innerHTML=`<div class="avg-c0"></div>${D.map(d=>`<button type="button" class="avg-h" data-day="${d}" ${locked?"disabled":""} aria-label="${DAYS[d]} : tout changer"><span class="full">${DAYS[d]} ${dayDate(W,d)}</span><span class="abbr">${DAYS[d].slice(0,3)}. ${dayDate(W,d)}</span></button>`).join("")}
+    g.innerHTML=`<div class="avg-c0"></div>${D.map(d=>`<button type="button" class="avg-h" data-day="${d}" ${locked?"disabled":""} aria-label="${DAYS[d]} : tout changer"><span class="full">${DAYS[d]}${FIXED?"":" "+dayDate(W,d)}</span><span class="abbr">${DAYS[d].slice(0,3)}.${FIXED?"":" "+dayDate(W,d)}</span></button>`).join("")}
       ${Array.from({length:N},(_,i)=>`<button type="button" class="avg-r" data-row="${i}" ${locked?"disabled":""} aria-label="${F((H0+i)*60)} : tout changer">${F((H0+i)*60)}</button>${D.map(d=>`<button type="button" class="avg-c ${pause[i]?"pause":on[d][i]?"on":"off"}" data-d="${d}" data-h="${i}" ${pause[i]||locked?"disabled":""} aria-pressed="${on[d][i]}" aria-label="${DAYS[d]} ${F((H0+i)*60)}–${F((H0+i+1)*60)}, ${pause[i]?"pause":on[d][i]?"disponible":"indisponible"}"></button>`).join("")}`).join("")}`;
     document.getElementById("avTotal").textContent=hrs(n*60);
     const nb=document.getElementById("avNote");nb.hidden=false;
-    if(locked){nb.className="panel avnote";nb.innerHTML=`<b>L'emploi du temps de cette semaine est publié.</b> Vos disponibilités ne sont plus modifiables ici. Pour un changement, contactez le directeur des études.`}
+    if(locked){nb.className="panel avnote";nb.innerHTML=`<b>L'emploi du temps ${FIXED?"du semestre":"de cette semaine"} est publié.</b> Vos disponibilités ne sont plus modifiables ici. Pour un changement, contactez le directeur des études.`}
     else if(!declared){nb.className="panel avnote";nb.innerHTML=`<b>${asPlanner?"Ce professeur n'a pas encore répondu pour cette semaine.":"Vous n'avez pas encore répondu pour cette semaine."}</b> Touchez les créneaux ${asPlanner?"où il est":"où vous êtes"} disponible, ou utilisez les boutons ci-dessous.`}
     else if(n===0){nb.className="panel avnote off";nb.innerHTML=`<b>${asPlanner?"Indiqué indisponible":"Vous avez indiqué être indisponible"} toute la semaine.</b> Aucun cours ne sera placé${asPlanner?" pour lui":" pour vous"} cette semaine.`}
     else nb.hidden=true;
     ["avAllOn","avAll","avCopy","avReset"].forEach(i=>{const b=document.getElementById(i);if(b)b.disabled=locked});
-    if(!locked){document.getElementById("avAll").disabled=declared&&n===0;document.getElementById("avReset").disabled=!declared;document.getElementById("avCopy").disabled=!prevResp}
+    if(!locked){document.getElementById("avAll").disabled=declared&&n===0;document.getElementById("avReset").disabled=!declared;const cp=document.getElementById("avCopy");if(cp)cp.disabled=!prevResp}
   };
   v.innerHTML=`${asPlanner?`<button class="btn sm" id="avBack" style="margin-bottom:10px">← Retour à l'emploi du temps</button>`:""}
     <h1>${asPlanner?"Disponibilités de "+who:"Mes disponibilités"}</h1>
-    <p class="lead">${asPlanner?"Saisie par le directeur des études (par exemple pour des disponibilités données par téléphone).":"Indiquez chaque semaine quand vous êtes disponible, avant la publication de l'emploi du temps. Touchez un créneau, un jour (en haut) ou une heure (à gauche)."}</p>
-    ${asPlanner?"":weekNavHtml(W,pub?'<span class="pill p-ok">Emploi du temps publié</span>':(declared?'<span class="pill p-info">Réponse envoyée</span>':'<span class="pill p-warn">Pas encore de réponse</span>'))}
-    ${asPlanner?`<div class="panel" style="padding:10px 14px;margin-bottom:12px"><b>Semaine du ${weekRange(W)}</b>${pub?' · <span class="pill p-ok">publiée</span>':""}</div>`:""}
+    <p class="lead">${asPlanner?"Saisie par le directeur des études (par exemple pour des disponibilités données par téléphone).":FIXED?"Votre faculté a un emploi du temps fixe : indiquez une fois, pour tout le semestre, les créneaux où vous êtes disponible chaque semaine. Touchez un créneau, un jour (en haut) ou une heure (à gauche).":"Indiquez chaque semaine quand vous êtes disponible, avant la publication de l'emploi du temps. Touchez un créneau, un jour (en haut) ou une heure (à gauche)."}</p>
+    ${FIXED?`<div class="panel" style="padding:10px 14px;margin-bottom:12px"><b>Disponibilités pour le semestre${semL?" "+esc(semL):""}</b> · valables chaque semaine${pub?' · <span class="pill p-ok">emploi du temps publié</span>':(!asPlanner?(declared?' · <span class="pill p-info">Réponse envoyée</span>':' · <span class="pill p-warn">Pas encore de réponse</span>'):"")}</div>`:asPlanner?"":weekNavHtml(W,pub?'<span class="pill p-ok">Emploi du temps publié</span>':(declared?'<span class="pill p-info">Réponse envoyée</span>':'<span class="pill p-warn">Pas encore de réponse</span>'))}
+    ${asPlanner&&!FIXED?`<div class="panel" style="padding:10px 14px;margin-bottom:12px"><b>Semaine du ${weekRange(W)}</b>${pub?' · <span class="pill p-ok">publiée</span>':""}</div>`:""}
     <div class="panel avnote" id="avNote" hidden></div>
-    <div class="avbar"><div class="stat"><b id="avTotal">—</b><span>disponible cette semaine</span></div><span class="sub" id="avState" aria-live="polite"></span>
-      <div class="avbtns"><button class="btn sm" id="avCopy" title="Reprendre la grille de la semaine précédente">Copier la semaine précédente</button><button class="btn sm" id="avAllOn">Disponible toute la semaine</button><button class="btn sm" id="avAll">Indisponible toute la semaine</button><button class="btn sm" id="avReset">Effacer la réponse</button></div></div>
+    <div class="avbar"><div class="stat"><b id="avTotal">—</b><span>disponible ${FIXED?"chaque semaine":"cette semaine"}</span></div><span class="sub" id="avState" aria-live="polite"></span>
+      <div class="avbtns">${FIXED?"":`<button class="btn sm" id="avCopy" title="Reprendre la grille de la semaine précédente">Copier la semaine précédente</button>`}<button class="btn sm" id="avAllOn">Disponible toute la semaine</button><button class="btn sm" id="avAll">Indisponible toute la semaine</button><button class="btn sm" id="avReset">Effacer la réponse</button></div></div>
     <div class="avg-wrap"><div class="avg" id="avGrid" style="--n:${D.length}"></div></div>
     <div class="tt-leg"><span><i class="avl on"></i>Disponible</span><span><i class="avl off"></i>Indisponible</span><span class="sub">${asPlanner?"":"Vos disponibilités sont visibles par le directeur des études et la secrétaire."}</span></div>`;
-  if(!asPlanner)wireWeekNav(v,()=>S.avWeek,w=>{S.avWeek=w});
+  if(!asPlanner&&!FIXED)wireWeekNav(v,()=>S.avWeek,w=>{S.avWeek=w});
   if(asPlanner)avBack.onclick=()=>{S.avFor=null;rerender()};
   draw();
   const grid=document.getElementById("avGrid");
@@ -1233,7 +1249,7 @@ async function viewAvailability(v,opt={}){
     const rw=e.target.closest("[data-row]");
     if(rw){const i=Number(rw.dataset.row);if(pause[i])return;const val=!D.every(d=>on[d][i]);D.forEach(d=>set(d,i,val));draw()}});
   const now=async()=>{clearTimeout(tm);await (saving=saving.then(flush))};
-  avCopy.onclick=async()=>{load(prev);draw();await now();toast("Grille de la semaine précédente reprise")};
+  if(!FIXED)avCopy.onclick=async()=>{load(prev);draw();await now();toast("Grille de la semaine précédente reprise")};
   avAllOn.onclick=async()=>{D.forEach(d=>on[d]=on[d].map((_,i)=>!pause[i]));draw();await now()};
   avAll.onclick=()=>openDialog(`<h3>Indisponible toute la semaine ?</h3><p style="margin:0">Aucun cours ne sera placé ${asPlanner?"pour ce professeur":"pour vous"} la semaine du ${weekRange(W)}.</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Confirmer</button></div>`,
@@ -1251,6 +1267,9 @@ async function viewPlanning(v){
   const W=S.ttWeek,wk=iso(W),wEnd=iso(addDays(W,6)),prevWk=iso(addDays(W,-7));
   const sc=S.sched||SCHED_DEFAULT;
   const SLOTSEL="id,week_start,assignment_id,day_of_week,start_time,end_time,published,room_id,rooms(code),teaching_assignments(teacher_id,group_id,assignment_groups(group_id,student_groups(code)),courses(code,name),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code))";
+  /* mode fixe : les disponibilités de référence sont celles de la première semaine du semestre */
+  const FIXED=facMode(S.fac)==="fixe";let avWk=wk;
+  if(FIXED){const sw=await semesterWeek(S.fac,W);if(sw&&sw.sem.start_date<=wEnd)avWk=iso(sw.week)}
   const [slots,allSlots,cancelled,sessW,conf,groups,teachers,rooms,assignsAll,sems,avails,answers,pub]=await Promise.all([
     q(sb.from("timetable_slots").select(SLOTSEL).eq("week_start",wk).order("start_time")),
     q(sb.from("timetable_slots").select("assignment_id,start_time,end_time,week_start")),
@@ -1261,10 +1280,10 @@ async function viewPlanning(v){
     q(sb.from("teachers").select("id,first_name,last_name,active,phone").order("last_name")),
     q(sb.from("rooms").select("id,code,name,capacity,room_type").order("code")),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name,room_type),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
-    q(sb.from("semesters").select("id,label,start_date,end_date,academic_years(label)").order("start_date")),
-    q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",wk)),
-    q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",wk)),
-    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).maybeSingle())]);
+    q(sb.from("semesters").select("id,label,start_date,end_date,faculty_id,academic_years(label)").order("start_date")),
+    q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",avWk)),
+    q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",avWk)),
+    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).eq("faculty_id",S.fac).maybeSingle())]);
   const mins=x=>toMin(x.end_time)-toMin(x.start_time);
   slots.forEach(x=>decorateTA(x.teaching_assignments));assignsAll.forEach(decorateTA);
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
@@ -1274,7 +1293,7 @@ async function viewPlanning(v){
   const isCancel=sl=>sessOf[sl.id]?.status==="annulee";
   const cancelIds=new Set(slots.filter(isCancel).map(s=>s.id));
   const live=slots.filter(s=>!isCancel(s));
-  const semIds=new Set(sems.filter(x=>x.start_date<=wEnd&&x.end_date>=wk).map(x=>x.id));
+  const semIds=new Set(sems.filter(x=>x.start_date<=wEnd&&x.end_date>=wk&&(!x.faculty_id||x.faculty_id===S.fac)).map(x=>x.id));
   const assigns=assignsAll.filter(a=>semIds.has(a.semester_id));
   const done={};allSlots.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)+mins(x)});
   cancelled.forEach(x=>{done[x.assignment_id]=(done[x.assignment_id]||0)-mins(x)});
@@ -1367,8 +1386,9 @@ async function viewPlanning(v){
       <button class="btn" id="autoGen" ${assigns.length&&rooms.length?"":"disabled"}>✨ Générer la semaine</button>
       <button class="btn" id="copyPrev" ${assigns.length?"":"disabled"}>Reprendre la semaine précédente</button>
       <button class="btn" id="ttExport" ${slots.length?"":"disabled"}>${DLI}Imprimer / exporter</button>
-      ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button><button class="btn danger" id="unpubBtn">Retirer la publication</button>`+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
+      ${pub?`<button class="btn" id="annBtn">Prévenir les professeurs</button><button class="btn danger" id="unpubBtn">Retirer la publication</button>`+(FIXED?`<button class="btn" id="applyFwd">Appliquer à partir de cette semaine</button>`:"")+(drafts?`<button class="btn primary" id="pubWeek">Publier ${drafts} cours en attente</button>`:""):FIXED?`<button class="btn primary" id="pubSem" ${slots.length?"":"disabled"}>Publier pour tout le semestre</button>`:`<button class="btn primary" id="pubWeek" ${slots.length?"":"disabled"}>Publier la semaine</button>`}
     </div>
+    ${FIXED?`<div class="gpwarn" style="margin-bottom:10px;background:var(--accent-soft);border-color:var(--accent)"><b>Emploi du temps fixe pour le semestre.</b> Construisez une semaine, puis « Publier pour tout le semestre » : elle est recopiée sur les semaines suivantes, en sautant les jours sans cours. Pour un changement ponctuel, modifiez la semaine concernée ; pour un changement durable, modifiez une semaine puis « Appliquer à partir de cette semaine ». Les disponibilités affichées sont celles données pour le semestre.</div>`:""}
     ${pub?`<div class="gpwarn" style="margin-bottom:10px;background:var(--ok-soft);border-color:var(--ok)">Semaine publiée : toute modification est visible tout de suite par les professeurs. Pour un empêchement, touchez le cours puis « Annuler » ou « Reporter » : le professeur voit le motif.</div>`:""}
     ${!assigns.length?`<div class="gpwarn" style="margin-bottom:10px">Aucune matière d'un semestre en cours cette semaine. Vérifiez les dates des semestres et les affectations.</div>`:""}
     <div class="seg ttseg" role="tablist" aria-label="Affichage">${TABS.map(([k,l])=>`<button role="tab" data-tt="${k}" aria-pressed="${S.ttTab===k}">${l}</button>`).join("")}</div>
@@ -1407,13 +1427,30 @@ async function viewPlanning(v){
     if(idle)L.push({k:"info",t:`${idle} matière(s) non terminée(s) sans cours cette semaine`});
     return L};
   const ICON={ok:"✓",warn:"!",bad:"✕",info:"i"};
+  /* mode fixe : publier pour tout le semestre, ou réappliquer une semaine aux suivantes */
+  const fwdResult=(r,title)=>{const sk=r.ecartes||[];
+    openDialog(`<h3>${esc(title)}</h3><p style="margin:0"><b>${r.semaines}</b> semaine(s) suivante(s) publiée(s) jusqu'au ${fdl(r.fin)}, <b>${r.cours}</b> cours recopiés.${r.gardees?` ${r.gardees} semaine(s) qui avaient déjà des cours n'ont pas été touchées.`:""}</p>
+      ${sk.length?`<div><div class="sub" style="margin-bottom:6px">${sk.length} cours non recopié(s) :</div><div class="rl">${sk.map(x=>`<div class="rlrow"><b>${esc(fdate(x.date)+" "+x.heure+" · "+x.cours)}</b><span class="sub">${esc(String(x.raison).replace(/^.*?: /,""))}</span></div>`).join("")}</div></div>`:`<p class="sub" style="margin:0">Aucun cours écarté.</p>`}
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{})};
+  const ps=document.getElementById("pubSem");
+  if(ps)ps.onclick=()=>{const L=checks();
+    openDialog(`<h3>Publier pour tout le semestre ?</h3>
+      <p style="margin:0">La semaine du ${weekRange(W)} (${live.length} cours, ${hrs(weekMin)}) est publiée, puis recopiée et publiée sur chaque semaine suivante jusqu'à la fin du semestre. Les jours sans cours sont sautés ; les semaines qui ont déjà des cours ne sont pas touchées.</p>
+      <ul class="chk">${L.map(x=>`<li class="${x.k}"><i>${ICON[x.k]}</i><span>${esc(x.t)}</span></li>`).join("")}</ul>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok" ${conf.length?"disabled":""}>Publier pour le semestre</button></div>`,
+    async()=>{const r=await q(sb.rpc("copy_week_forward",{p_week:wk,p_fac:S.fac,p_replace:false}));rerender();setTimeout(()=>fwdResult(r,"Semestre publié"),300);offerNotify(announce,"Prévenir les professeurs de leur emploi du temps ?")})};
+  const af=document.getElementById("applyFwd");
+  if(af)af.onclick=()=>openDialog(`<h3>Appliquer cette semaine à partir d'ici ?</h3>
+      <p style="margin:0">Les cours des semaines suivantes, jusqu'à la fin du semestre, sont remplacés par ceux de la semaine du ${weekRange(W)}. Les séances déjà émargées ne sont pas touchées. Les jours sans cours sont sautés.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok">Appliquer</button></div>`,
+    async()=>{const r=await q(sb.rpc("copy_week_forward",{p_week:wk,p_fac:S.fac,p_replace:true}));rerender();setTimeout(()=>fwdResult(r,"Semaines suivantes mises à jour"),300)});
   const pw=document.getElementById("pubWeek");
   if(pw)pw.onclick=()=>{const L=checks();
     openDialog(`<h3>Publier la semaine du ${weekRange(W)} ?</h3>
       <p style="margin:0">${live.length} cours, ${hrs(weekMin)}. Les séances sont créées, les professeurs voient leur emploi du temps et ne peuvent plus modifier leurs disponibilités de cette semaine.</p>
       <ul class="chk">${L.map(x=>`<li class="${x.k}"><i>${ICON[x.k]}</i><span>${esc(x.t)}</span></li>`).join("")}</ul>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok" ${conf.length?"disabled":""}>Publier</button></div>`,
-    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender();offerNotify(announce,"Prévenir les professeurs de leur emploi du temps ?")})};
+    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk,p_fac:S.fac}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender();offerNotify(announce,"Prévenir les professeurs de leur emploi du temps ?")})};
   /* prévenir les professeurs de leur emploi du temps publié */
   function announce(){
     const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=[]).push(x)});
@@ -1431,7 +1468,7 @@ async function viewPlanning(v){
     openDialog(`<h3>Retirer la publication de la semaine du ${weekRange(W)} ?</h3>
       <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li>les ${live.length} cours repassent en <b>brouillon</b> (rien n'est supprimé) ;</li><li>les séances datées sont retirées : les professeurs ne voient plus cette semaine ;</li><li>les professeurs peuvent de nouveau modifier leurs disponibilités ;</li><li>les cours annulés redeviennent des brouillons ordinaires.</li></ul>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn danger" value="ok">Retirer la publication</button></div>`,
-    async()=>{try{await q(sb.rpc("unpublish_week",{p_week:wk}))}catch(e){if(/Could not find the function|PGRST202/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « retirer_publication.sql » doit être exécuté dans Supabase.");throw e}
+    async()=>{try{await q(sb.rpc("unpublish_week",{p_week:wk,p_fac:S.fac}))}catch(e){if(/Could not find the function|PGRST202/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « retirer_publication.sql » doit être exécuté dans Supabase.");throw e}
       toast("Publication retirée : la semaine est de nouveau en brouillon");rerender();
       const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=1)});
       const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`}));
@@ -1581,7 +1618,7 @@ function ttExportWeek(fmt,by,ents,slots,c){
       /* en-tête */
       doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(70,80,92);
       pdfLogo(doc,PW-MR-11,6,11);
-      doc.text(APPN()+(S.cfg&&S.cfg.pdf_header?"  ·  "+S.cfg.pdf_header:"")+(year?"  ·  "+year:"")+"  ·  Semaine du "+weekRange(W)+(c.pub?"":"  ·  brouillon, non publiée"),ML,15);
+      doc.text(APPN()+(pdfHead()?"  ·  "+pdfHead().replace(/ · /g,"  ·  "):"")+(year?"  ·  "+year:"")+"  ·  Semaine du "+weekRange(W)+(c.pub?"":"  ·  brouillon, non publiée"),ML,15);
       doc.setFont("helvetica","bold");doc.setFontSize(24);doc.setTextColor(17,24,32);doc.text(String(name),ML,26);
       doc.setFont("helvetica","normal");doc.setFontSize(11);doc.setTextColor(70,80,92);doc.text(BYL+"  ·  "+dur(tot)+" cette semaine",PW-MR,26,{align:"right"});
       doc.setFillColor(11,110,91);doc.rect(ML,29,PW-ML-MR,0.9,"F");
@@ -1671,10 +1708,10 @@ function semesterRisk(a,doneMin,today){
 /* carte « semaine à préparer » du tableau de bord (directeur, secrétaire) */
 async function plannerWeekCard(el){
   let W=planDefaultWeek();
-  try{if(await q(sb.from("published_weeks").select("week_start").eq("week_start",iso(W)).maybeSingle()))W=addDays(W,7)}catch(e){}
+  try{if(await q(sb.from("published_weeks").select("week_start").eq("week_start",iso(W)).eq("faculty_id",S.fac).maybeSingle()))W=addDays(W,7)}catch(e){}
   const wk=iso(W),wEnd=iso(addDays(W,6)),today=iso(new Date());
   const [pub,answers,assigns,slots,canc,conf,teachers]=await Promise.all([
-    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).maybeSingle()),
+    q(sb.from("published_weeks").select("published_at").eq("week_start",wk).eq("faculty_id",S.fac).maybeSingle()),
     q(sb.from("availability_weeks").select("teacher_id").eq("week_start",wk)),
     q(sb.from("teaching_assignments").select("id,teacher_id,planned_hours,semester_id,semesters(start_date,end_date),courses(code,name),student_groups!teaching_assignments_group_id_fkey(code)")),
     q(sb.from("timetable_slots").select("assignment_id,start_time,end_time,week_start")),
@@ -2190,7 +2227,7 @@ function exportPdf(file,title,subtitle,sheets,landscape){
     doc.setFillColor(11,110,91);doc.rect(0,0,W,3,"F");
     const LX=pdfLogo(doc,14,7,14)?31:14;
     doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(22,32,46);doc.text(APPN(),LX,13);
-    if(S.cfg&&S.cfg.pdf_header){doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);doc.text(S.cfg.pdf_header,LX,18)}
+    if(pdfHead()){doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);doc.text(pdfHead(),LX,18)}
     doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(22,32,46);doc.text(title,14,25);
     doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(93,104,121);
     doc.text(subtitle+" · Édité le "+new Date().toLocaleDateString("fr-FR"),14,30.5);
@@ -2666,10 +2703,11 @@ function facultyDialog(f){let flogo=f?.logo||null;
       <div class="grid2"><label>Code<input id="fC" required maxlength="15" value="${esc(f?.code||"")}" placeholder="Ex. FSRC, FLSH"></label><label>Nom court (facultatif)<input id="fS" maxlength="60" value="${esc(f?.short_name||"")}"></label></div>
       <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
       <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
+      <label>Emploi du temps<select id="fM"><option value="hebdomadaire">Hebdomadaire : refait chaque semaine, disponibilités chaque semaine</option><option value="fixe" ${f?.timetable_mode==="fixe"?"selected":""}>Fixe : le même chaque semaine du semestre, disponibilités une fois par semestre</option></select></label>
       <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
       ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo};
+    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo,timetable_mode:fM.value};
       if(f){const r2=await q(sb.from("faculties").update(row).eq("id",f.id).select());if(!r2.length)throw new Error("Modification refusée.")}else await q(sb.from("faculties").insert(row));
       await loadFacs();toast(f?"Faculté enregistrée":"Faculté créée");rerender()});
     const show=()=>{fLB.innerHTML=flogo?`<img src="${esc(flogo)}" alt="">`:'<span class="sub">Pas de logo</span>';fLx.hidden=!flogo};show();
@@ -2679,8 +2717,8 @@ function facultyDialog(f){let flogo=f?.logo||null;
 /* administrateur de faculté : les réglages de sa faculté */
 async function viewEtabFac(v){
   await loadFacs();const L=adminFacs();
-  v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo et l'en-tête des documents de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
-    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
+  v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo, l'en-tête des documents et le mode d'emploi du temps de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
+    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""} · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
   v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facultyDialog(facById(Number(b.dataset.fe))));
 }
 
@@ -2710,7 +2748,7 @@ async function viewEtab(v){
 
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Facultés</h2><button class="btn sm primary" id="fNew">Nouvelle faculté</button></div>
       <p class="sub" style="margin:6px 0 10px">Chaque faculté a ses départements, ses salles, ses semestres, ses horaires et ses jours sans cours. Son nom et son logo figureront avec ceux de l'université sur ses documents.</p>
-      <div class="rl">${facs.map(f=>{const nd=depsAll.filter(d=>d.faculty_id===f.id).length;return `<div class="rlrow" style="align-items:center"><div style="display:flex;gap:10px;align-items:center;flex:1">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)} · ${nd} département(s)${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div>
+      <div class="rl">${facs.map(f=>{const nd=depsAll.filter(d=>d.faculty_id===f.id).length;return `<div class="rlrow" style="align-items:center"><div style="display:flex;gap:10px;align-items:center;flex:1">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)} · ${nd} département(s) · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-fe="${f.id}">Modifier</button>${nd||facs.length<2?"":`<button class="btn sm danger" data-fd="${f.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
 
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Postes</h2><button class="btn sm primary" id="pNew">Nouveau poste</button></div>
@@ -2833,7 +2871,7 @@ async function viewDgSynth(v){
     q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,attendance_records(status)").gte("session_date",m0).lte("session_date",m1)),
     q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),teachers(first_name,last_name),semesters(label,start_date,end_date),student_groups!teaching_assignments_group_id_fkey(code,programs(id,code,name,level,departments(code,name))),assignment_groups(student_groups(code,programs(id,code,name,level,departments(code,name))))")),
     q(sb.from("schedule_sessions").select("assignment_id,session_date,start_time,end_time,status")),
-    q(sb.from("published_weeks").select("week_start").in("week_start",[cw,nw])),
+    q(sb.from("published_weeks").select("week_start").in("week_start",[cw,nw]).eq("faculty_id",S.fac)),
     q(sb.from("pay_periods").select("id,name,status,end_date,visa_at").order("start_date",{ascending:false})),
     q(sb.from("academic_years").select("start_date,end_date").eq("is_current",true).maybeSingle()),
     q(sb.from("absence_requests").select("id").eq("status","en_attente")).catch(()=>[])]);
