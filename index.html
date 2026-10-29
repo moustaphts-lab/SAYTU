@@ -507,7 +507,7 @@ function offerNotify(fn,label){document.querySelectorAll(".offer").forEach(x=>x.
   document.body.appendChild(o);const t=setTimeout(()=>o.remove(),15000);
   o.querySelector(".btn").onclick=()=>{clearTimeout(t);o.remove();fn()};o.querySelector(".x").onclick=()=>{clearTimeout(t);o.remove()}}
 function toast(msg,bad){const t=document.createElement("div");t.className="toast"+(bad?" bad":"");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),bad?6000:3000)}
-const CONS={departments_code_key:"Ce code de département existe déjà.",programs_code_key:"Ce code de filière existe déjà.",student_groups_code_key:"Ce code de groupe existe déjà.",courses_code_key:"Ce code de matière existe déjà.",rooms_code_key:"Ce code de salle existe déjà.",
+const CONS={departments_code_key:"Ce code de département existe déjà.",programs_code_key:"Ce code de filière existe déjà.",student_groups_code_key:"Ce code de groupe existe déjà.",courses_code_key:"Ce code de matière existe déjà.",rooms_code_key:"Ce code de salle existe déjà.",rooms_faculty_code_key:"Ce code de salle existe déjà dans cette faculté.",faculties_code_key:"Ce code de faculté existe déjà.",semesters_year_faculty_label_key:"Ce semestre existe déjà pour cette année dans cette faculté.",
   academic_years_label_key:"Cette année universitaire existe déjà.",semesters_academic_year_id_label_key:"Ce semestre existe déjà pour cette année.",semesters_check:"La date de fin doit être après la date de début.",academic_years_check:"La date de fin doit être après la date de début.",
   student_groups_size_check:"L'effectif ne peut pas être négatif.",rooms_capacity_check:"La capacité doit être d'au moins 1 place.",
   programs_department_id_fkey:"Ce département contient encore des filières : supprimez-les ou déplacez-les d'abord.",courses_department_id_fkey:"Ce département contient encore des matières.",student_groups_program_id_fkey:"Cette filière contient encore des groupes : supprimez-les d'abord.",semesters_academic_year_id_fkey:"Cette année contient encore des semestres : supprimez-les d'abord."};
@@ -559,7 +559,7 @@ async function boot(){
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
-    await loadSchedule();await loadClosures();await loadAnnonces();await loadPostes();
+    await loadFacs();await loadSchedule();await loadClosures();await loadAnnonces();await loadPostes();
     try{const me=await q(sb.from("profiles").select("poste_id").eq("id",S.user.id).maybeSingle());S.myPoste=me?.poste_id||null}catch(e){S.myPoste=null}
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
@@ -575,8 +575,18 @@ async function boot(){
 const SCHED_DEFAULT={days:[1,2,3,4,5],start:"08:00",end:"18:00",len:120,lunchFrom:"12:00",lunchTo:"14:00",groupMax:8,teacherMax:6};
 const ROOM_TYPE={standard:"Standard",labo:"Laboratoire",amphi:"Amphithéâtre",informatique:"Salle informatique"};
 const hmin=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
+/* ---------- facultés ---------- */
+async function loadFacs(){try{S.facs=await q(sb.from("faculties").select("id,code,name,short_name,logo,pdf_header,timetable_mode,payroll_visa,sort").order("sort").order("name"))}catch(e){S.facs=S.facs||[]}
+  let saved=null;try{saved=Number(localStorage.getItem("ucab_fac"))}catch(e){}
+  if(!S.facs.some(f=>f.id===S.fac))S.fac=(S.facs.find(f=>f.id===saved)||S.facs[0])?.id||null;return S.facs}
+const facById=id=>(S.facs||[]).find(f=>f.id===id);
+const facCode=id=>facById(id)?.code||"";
+const multiFac=()=>(S.facs||[]).length>1;
+/* choix de la faculté de travail (référentiel, horaires, calendrier) */
+async function setFac(id){S.fac=id;try{localStorage.setItem("ucab_fac",String(id))}catch(e){}await loadSchedule();}
+const facSelect=(id,label)=>multiFac()?`<label style="max-width:360px">${label||"Faculté"}<select id="${id}">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:"";
 async function loadSchedule(){
-  try{const r=await q(sb.from("school_schedule").select("*").eq("id",1).maybeSingle());
+  try{const r=await q(sb.from("school_schedule").select("*").eq("faculty_id",S.fac).maybeSingle());
     S.sched=r?{days:[...r.days].sort(),start:hm(r.day_start),end:hm(r.day_end),len:r.slot_minutes,lunchFrom:r.lunch_start?hm(r.lunch_start):"",lunchTo:r.lunch_end?hm(r.lunch_end):"",groupMax:Number(r.group_max_hours)||8,teacherMax:Number(r.teacher_max_hours)||6}:{...SCHED_DEFAULT}}
   catch(e){S.sched={...SCHED_DEFAULT}}
   return S.sched;
@@ -585,7 +595,7 @@ async function loadSchedule(){
 const CLOSE_KIND={ferie:"Jour férié",vacances:"Vacances",examens:"Examens",evenement:"Événement"};
 const CLOSE_PART={jour:"Toute la journée",matin:"Matin",apres_midi:"Après-midi"};
 async function loadClosures(){try{S.closures=await q(sb.from("calendar_closures").select("*").order("date_from"))}catch(e){S.closures=S.closures||[]}return S.closures}
-function closuresOn(d){return (S.closures||[]).filter(c=>c.date_from<=d&&c.date_to>=d)}
+function closuresOn(d){return (S.closures||[]).filter(c=>c.date_from<=d&&c.date_to>=d&&(c.faculty_id==null||c.faculty_id===S.fac))}
 function lunchBounds(){const sc=S.sched||SCHED_DEFAULT;return[sc.lunchFrom?hmin(sc.lunchFrom):780,sc.lunchTo?hmin(sc.lunchTo):780]}
 /* fermeture qui touche ce créneau (minutes depuis minuit), ou null */
 function closureAt(d,st,en){const [lf,lt]=lunchBounds();return closuresOn(d).find(c=>c.part==="jour"||(c.part==="matin"&&st<lf)||(c.part==="apres_midi"&&en>lt))||null}
@@ -2332,6 +2342,9 @@ async function refLookups(){
 
 function refDefs(L){
   const dep=L.deps.map(d=>[d.id,d.code+" · "+d.name]);
+  /* faculté : colonne et champ affichés seulement quand il y a plusieurs facultés */
+  const FACCOL=multiFac()?[["Faculté",r=>esc(facCode(r.faculty_id))]]:[];
+  const FACFIELD=[{k:"faculty_id",l:"Faculté",t:"select",num:1,opt:(S.facs||[]).map(f=>[f.id,f.code+" · "+f.name]),req:1,hidden:!multiFac()}];
   const code=r=>`<span class="mono">${esc(r.code)}</span>`;
   return {
     enseignants:{title:"Enseignants",one:"enseignant",hint:"Le statut détermine le tarif horaire. L'e-mail sert à relier le compte de l'enseignant.",table:"teachers",select:"*,departments(code),teacher_statuses(label)",order:"last_name",
@@ -2363,22 +2376,22 @@ function refDefs(L){
     filieres:{title:"Filières",one:"filière",head:[1,0],hint:"Une filière appartient à un département (ex. Informatique L1).",table:"programs",select:"*,departments(code)",order:"code",
       cols:[["Code",code],["Filière",r=>esc(r.name)],["Niveau",r=>esc(r.level)],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"level",l:"Niveau (L1, L2, M1…)",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1}]},
-    salles:{title:"Salles",one:"salle",head:[1,0],hint:"La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",
-      cols:[["Code",code],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
-      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
+    salles:{title:"Salles",one:"salle",head:[1,0],hint:"Chaque salle appartient à une faculté. La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",defaults:{faculty_id:S.fac},
+      cols:[["Code",code],...FACCOL,["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
+      fields:[...FACFIELD,{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
         {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]],req:1}]},
-    departements:{title:"Départements",one:"département",head:[1,0],hint:"Commencez par les départements : filières, matières et enseignants en dépendent.",table:"departments",order:"code",
-      cols:[["Code",code],["Nom",r=>esc(r.name)]],
-      fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1}]},
+    departements:{title:"Départements",one:"département",head:[1,0],hint:"Chaque département appartient à une faculté. Commencez par les départements : filières, matières et enseignants en dépendent.",table:"departments",order:"code",defaults:{faculty_id:S.fac},
+      cols:[["Code",code],["Nom",r=>esc(r.name)],...FACCOL],
+      fields:[...FACFIELD,{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1}]},
     annees:{title:"Années universitaires",one:"année universitaire",hint:"Une seule année est « en cours ». Les semestres se créent dans l'année.",table:"academic_years",order:"label",
       cols:[["Année",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`],["En cours",r=>r.is_current?'<span class="pill p-ok">Oui</span>':""]],
       fields:[{k:"label",l:"Libellé (ex. 2027-2028)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1},{k:"is_current",l:"Année en cours",t:"bool"}],
       name:r=>r.label,
       check:o=>{if(o.end_date<=o.start_date)throw new Error("La date de fin doit être après la date de début.")},
       after:async(o,saved)=>{if(o.is_current)await q(sb.from("academic_years").update({is_current:false}).neq("id",saved.id))}},
-    semestres:{title:"Semestres",one:"semestre",head:[1,0],hint:"Les dates du semestre servent à calculer le nombre de semaines de cours.",table:"semesters",select:"*,academic_years(label)",order:"start_date",
-      cols:[["Année",r=>esc(r.academic_years?.label)],["Semestre",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`]],
-      fields:[{k:"academic_year_id",l:"Année",t:"select",num:1,opt:L.years.map(y=>[y.id,y.label]),req:1},{k:"label",l:"Libellé (ex. Semestre 1)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1}],
+    semestres:{title:"Semestres",one:"semestre",head:[1,0],hint:"Chaque faculté a ses semestres et leurs dates. Elles servent à calculer le nombre de semaines de cours.",table:"semesters",select:"*,academic_years(label)",order:"start_date",defaults:{faculty_id:S.fac},
+      cols:[["Année",r=>esc(r.academic_years?.label)],...FACCOL,["Semestre",r=>esc(r.label)],["Du",r=>`<span class="mono">${fdl(r.start_date)}</span>`],["Au",r=>`<span class="mono">${fdl(r.end_date)}</span>`]],
+      fields:[...FACFIELD,{k:"academic_year_id",l:"Année",t:"select",num:1,opt:L.years.map(y=>[y.id,y.label]),req:1},{k:"label",l:"Libellé (ex. Semestre 1)",req:1},{k:"start_date",l:"Début",t:"date",req:1},{k:"end_date",l:"Fin",t:"date",req:1}],
       name:r=>r.label,
       check:o=>{if(o.end_date<=o.start_date)throw new Error("La date de fin doit être après la date de début.");
         const y=L.years.find(x=>x.id===o.academic_year_id);
@@ -2387,6 +2400,7 @@ function refDefs(L){
 }
 
 function fieldHtml(f,val){
+  if(f.hidden){const h=fieldHtml({...f,hidden:false},val);return h.replace(/^<label>/,'<label style="display:none">')}
   const id="f_"+f.k;
   if(f.t==="select")return `<label>${f.l}<select id="${id}" ${f.req?"required":""}>${f.req?"":'<option value="">—</option>'}${f.opt.map(([v,l])=>`<option value="${esc(v)}" ${String(v)===String(val)?"selected":""}>${esc(l)}</option>`).join("")}</select></label>`;
   if(f.t==="bool")return `<label style="flex-direction:row;align-items:center;gap:8px;align-self:end"><input id="${id}" type="checkbox" ${val?"checked":""}> ${f.l}</label>`;
@@ -2487,8 +2501,9 @@ function slotsOf(sc){const out=[];const len=sc.len,st=hmin(sc.start),en=hmin(sc.
   dayStarts(st,en,len,lf,lt).forEach(t=>out.push(F(t)+"–"+F(t+len)));return out}
 async function viewSchedule(el){
   const sc=await loadSchedule();
-  el.innerHTML=`<div class="sechead"><h2>Jours et horaires</h2></div>
-    <p class="sub" style="margin:-4px 0 12px">Définissez la semaine type de l'université. Ces réglages s'appliquent à la grille de disponibilités des professeurs, à la grille de l'emploi du temps et au générateur automatique.</p>
+  el.innerHTML=`<div class="sechead"><h2>Jours et horaires${multiFac()?" · "+esc(facCode(S.fac)):""}</h2></div>
+    ${facSelect("shFac")}
+    <p class="sub" style="margin:-4px 0 12px">Définissez la semaine type de ${multiFac()?"la faculté":"l'établissement"}. Ces réglages s'appliquent à la grille de disponibilités des professeurs, à la grille de l'emploi du temps et au générateur automatique.</p>
     <div class="panel" style="padding:20px"><form id="schForm" style="display:grid;gap:16px">
       <div><div class="sub" style="margin-bottom:6px">Jours de cours</div><div class="chips" id="shDays">${[1,2,3,4,5,6].map(d=>`<button type="button" data-d="${d}" aria-pressed="${sc.days.includes(d)}">${DAYS[d]}</button>`).join("")}</div></div>
       <div class="grid2"><label>Début de journée<input id="shStart" type="time" required value="${sc.start}"></label><label>Fin de journée<input id="shEnd" type="time" required value="${sc.end}"></label>
@@ -2498,6 +2513,7 @@ async function viewSchedule(el){
       <div class="err" id="shErr"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
     <p class="sub">Les jours fériés, vacances, examens et événements se déclarent dans « Jours sans cours ». Pour un créneau ponctuel, utilisez « Générer la semaine ».</p>`;
+  const sf=document.getElementById("shFac");if(sf)sf.onchange=async()=>{await setFac(Number(sf.value));rerender()};
   const read=()=>({days:[...document.querySelectorAll("#shDays [aria-pressed=true]")].map(b=>Number(b.dataset.d)),start:shStart.value,end:shEnd.value,len:Number(shLen.value),groupMax:Number(shGm.value)||8,teacherMax:Number(shTm.value)||6,lunchFrom:shLf.value,lunchTo:shLt.value});
   const prev=()=>{const c=read();shPrev.innerHTML=(c.start&&c.end&&c.end>c.start?slotsOf(c):[]).map(x=>`<span class="pill p-info">${x}</span>`).join("")||'<span class="sub">Aucun créneau avec ces réglages.</span>'};
   document.querySelectorAll("#shDays button").forEach(b=>b.onclick=()=>{b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
@@ -2508,7 +2524,7 @@ async function viewSchedule(el){
       if(c.end<=c.start)throw new Error("La fin de journée doit être après le début.");
       if(!!c.lunchFrom!==!!c.lunchTo||(c.lunchFrom&&c.lunchTo<=c.lunchFrom))throw new Error("Pause : indiquez une heure de début et de fin (ou laissez les deux vides).");
       if(hmin(c.end)-hmin(c.start)<c.len)throw new Error("La journée est plus courte qu'un créneau.");
-      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,group_max_hours:c.groupMax,teacher_max_hours:c.teacherMax,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("id",1).select());
+      const r=await q(sb.from("school_schedule").update({days:c.days.sort(),day_start:c.start,day_end:c.end,slot_minutes:c.len,group_max_hours:c.groupMax,teacher_max_hours:c.teacherMax,lunch_start:c.lunchFrom||null,lunch_end:c.lunchTo||null,updated_at:new Date().toISOString()}).eq("faculty_id",S.fac).select());
       if(!r.length)throw new Error("Enregistrement refusé.");
       await loadSchedule();toast("Jours et horaires enregistrés")}
     catch(e){shErr.textContent=errMsg(e)}};
@@ -2516,32 +2532,38 @@ async function viewSchedule(el){
 
 /* ---------- jours sans cours du calendrier ---------- */
 async function viewClosures(el){
-  const [list,sems]=await Promise.all([q(sb.from("calendar_closures").select("*").order("date_from")),q(sb.from("semesters").select("label,start_date,end_date,academic_years(label,is_current)").order("start_date"))]);
-  S.closures=list;
+  const [list,sems0]=await Promise.all([q(sb.from("calendar_closures").select("*").order("date_from")),q(sb.from("semesters").select("label,start_date,end_date,faculty_id,academic_years(label,is_current)").order("start_date"))]);
+  S.closures=list;const sems=sems0.filter(x=>!x.faculty_id||x.faculty_id===S.fac);
   const today=iso(new Date());S.clPast=!!S.clPast;
-  const shown=list.filter(c=>S.clPast||c.date_to>=today);
+  /* la faculté choisie voit ses jours sans cours et ceux de toute l'université */
+  const shown=list.filter(c=>(S.clPast||c.date_to>=today)&&(c.faculty_id==null||c.faculty_id===S.fac));
+  const pour=c=>c.faculty_id==null?'<span class="pill p-info">Toute l\'université</span>':esc(facCode(c.faculty_id));
   const per=c=>c.date_from===c.date_to?fdl(c.date_from):`du ${fdl(c.date_from)} au ${fdl(c.date_to)}`;
   const KC={ferie:"p-warn",vacances:"p-info",examens:"p-bad",evenement:"p-ok"};
   const cur=sems.filter(x=>x.academic_years?.is_current);
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Jours sans cours</h2><button class="btn sm primary" id="clAdd">Ajouter</button></div>
+  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Jours sans cours${multiFac()?" · "+esc(facCode(S.fac)):""}</h2><button class="btn sm primary" id="clAdd">Ajouter</button></div>
+    ${facSelect("clFac")}
     <p class="sub" style="margin-top:0">Jours fériés, vacances, examens, Magal, Gamou… Le générateur ne place aucun cours ces jours-là, on ne peut pas y déplacer un cours, et le rythme des matières est calculé sans eux.</p>
     ${cur.length?`<div class="stats mini">${cur.map(x=>{const tot=(new Date(x.end_date)-new Date(x.start_date))/864e5/7,op=openWeeks(x.start_date,x.end_date);return `<div class="stat"><b>${op.toFixed(1).replace(".",",")}</b><span>semaines de cours en ${esc(x.label)} (sur ${tot.toFixed(1).replace(".",",")})</span></div>`}).join("")}</div>`:""}
     <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);margin-bottom:8px"><input type="checkbox" id="clPast" ${S.clPast?"checked":""}> Afficher aussi les dates passées</label>
-    <div class="panel tbl">${shown.length?`<table><thead><tr><th>Dates</th><th>Moment</th><th>Type</th><th>Libellé</th><th></th></tr></thead><tbody>
-      ${shown.map(c=>`<tr><td>${per(c)}</td><td>${CLOSE_PART[c.part]}</td><td><span class="pill ${KC[c.kind]}">${CLOSE_KIND[c.kind]}</span></td><td>${esc(c.label)}</td>
+    <div class="panel tbl">${shown.length?`<table><thead><tr><th>Dates</th>${multiFac()?"<th>Pour</th>":""}<th>Moment</th><th>Type</th><th>Libellé</th><th></th></tr></thead><tbody>
+      ${shown.map(c=>`<tr><td>${per(c)}</td>${multiFac()?`<td>${pour(c)}</td>`:""}<td>${CLOSE_PART[c.part]}</td><td><span class="pill ${KC[c.kind]}">${CLOSE_KIND[c.kind]}</span></td><td>${esc(c.label)}</td>
         <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-cle="${c.id}">Modifier</button><button class="btn sm danger" data-cld="${c.id}">Supprimer</button></div></td></tr>`).join("")}</tbody></table>`
       :`<p class="empty">Aucun jour sans cours à venir. Ajoutez les jours fériés et les vacances du semestre.</p>`}</div>`;
   clPast.onchange=()=>{S.clPast=clPast.checked;rerender()};
-  const form=c=>{c=c||{part:"jour",kind:"ferie"};
+  const cf=document.getElementById("clFac");if(cf)cf.onchange=async()=>{await setFac(Number(cf.value));rerender()};
+  const form=c=>{c=c||{part:"jour",kind:"ferie",faculty_id:S.fac};
     openDialog(`<h3>${c.id?"Modifier":"Ajouter"} un jour sans cours</h3>
       <label>Libellé<input id="clL" required maxlength="80" placeholder="Ex. Grand Magal, Tabaski, vacances de fin de semestre…" value="${esc(c.label||"")}"></label>
       <div class="grid2"><label>Du<input id="clF" type="date" required value="${c.date_from||""}"></label><label>Au (inclus)<input id="clT" type="date" required value="${c.date_to||""}"></label>
         <label>Type<select id="clK">${Object.entries(CLOSE_KIND).map(([k,l])=>`<option value="${k}" ${c.kind===k?"selected":""}>${l}</option>`).join("")}</select></label>
-        <label>Moment<select id="clP">${Object.entries(CLOSE_PART).map(([k,l])=>`<option value="${k}" ${c.part===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
+        <label>Moment<select id="clP">${Object.entries(CLOSE_PART).map(([k,l])=>`<option value="${k}" ${c.part===k?"selected":""}>${l}</option>`).join("")}</select></label>
+        ${multiFac()?`<label style="grid-column:1/-1">Pour<select id="clW"><option value="">Toute l'université</option>${S.facs.map(f=>`<option value="${f.id}" ${f.id===c.faculty_id?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:""}</div>
       <p class="sub" style="margin:0" id="clInfo"></p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{if(clT.value<clF.value)throw new Error("La date de fin doit être après la date de début.");
-      const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value};
+      const cw=document.getElementById("clW");
+      const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value,faculty_id:cw?(cw.value?Number(cw.value):null):(c.faculty_id??S.fac)};
       if(c.id)await q(sb.from("calendar_closures").update(row).eq("id",c.id));else await q(sb.from("calendar_closures").insert(row));
       await loadClosures();toast("Enregistré");rerender()});
     const info=async()=>{clInfo.textContent="";if(!clF.value||!clT.value||clT.value<clF.value)return;
@@ -2622,7 +2644,7 @@ function showCredentials(title,email,pwd){
 const BACKUP_KEY="ucab_last_backup";
 const lastBackup=()=>{try{return localStorage.getItem(BACKUP_KEY)}catch(e){return null}};
 async function viewEtab(v){
-  const [cfg,years,sems,,pcount]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date")),loadPostes(),q(sb.from("profiles").select("poste_id,active"))]);
+  const [cfg,years,sems,,pcount,facs,depsAll]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date")),loadPostes(),q(sb.from("profiles").select("poste_id,active")),loadFacs(),q(sb.from("departments").select("id,faculty_id"))]);
   const nOf=id=>pcount.filter(x=>x.poste_id===id&&x.active!==false).length;
   const cur=years.find(y=>y.is_current);
   const lb=lastBackup();
@@ -2642,6 +2664,11 @@ async function viewEtab(v){
         <div class="err" id="eErr"></div>
         <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
 
+    <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Facultés</h2><button class="btn sm primary" id="fNew">Nouvelle faculté</button></div>
+      <p class="sub" style="margin:6px 0 10px">Chaque faculté a ses départements, ses salles, ses semestres, ses horaires et ses jours sans cours. Son nom et son logo figureront avec ceux de l'université sur ses documents.</p>
+      <div class="rl">${facs.map(f=>{const nd=depsAll.filter(d=>d.faculty_id===f.id).length;return `<div class="rlrow" style="align-items:center"><div style="display:flex;gap:10px;align-items:center;flex:1">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)} · ${nd} département(s)${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-fe="${f.id}">Modifier</button>${nd||facs.length<2?"":`<button class="btn sm danger" data-fd="${f.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
+
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Postes</h2><button class="btn sm primary" id="pNew">Nouveau poste</button></div>
       <p class="sub" style="margin:6px 0 10px">Un poste est un nom (Trésorier, Scolarité, Adjoint…) posé sur des droits. Renommez-les comme dans votre établissement. Le nom apparaît dans la barre latérale, les comptes et la signature des messages.</p>
       <div class="rl">${(S.postes||[]).map(po=>{const off=!posteUsable(po),n=nOf(po.id);return `<div class="rlrow" style="align-items:flex-start;${off?"opacity:.55":""}"><div style="flex:1"><b>${esc(po.name)}</b> <span class="sub">· ${n} personne(s)</span>${off?' <span class="pill p-mute">droit désactivé</span>':""}
@@ -2654,7 +2681,7 @@ async function viewEtab(v){
       <div class="row" style="justify-content:flex-end"><button class="btn primary" id="orSave">Enregistrer les droits optionnels</button></div></section>
 
     <section class="adsec panel" style="padding:16px 18px"><h2>Année universitaire</h2>
-      <div class="rl">${years.map(y=>`<div class="rlrow"><div style="flex:1"><b>${esc(y.label)}</b> ${y.is_current?'<span class="pill p-ok">En cours</span>':""}<div class="sub">du ${fdl(y.start_date)} au ${fdl(y.end_date)} · ${semOf(y).map(x=>esc(x.label)).join(", ")||"aucun semestre"}</div></div>${y.is_current?"":`<button class="btn sm" data-cur="${y.id}">Mettre en cours</button>`}</div>`).join("")||'<p class="sub">Aucune année.</p>'}</div>
+      <div class="rl">${years.map(y=>`<div class="rlrow"><div style="flex:1"><b>${esc(y.label)}</b> ${y.is_current?'<span class="pill p-ok">En cours</span>':""}<div class="sub">du ${fdl(y.start_date)} au ${fdl(y.end_date)} · ${semOf(y).map(x=>esc((multiFac()?facCode(x.faculty_id)+" ":"")+x.label)).join(", ")||"aucun semestre"}</div></div>${y.is_current?"":`<button class="btn sm" data-cur="${y.id}">Mettre en cours</button>`}</div>`).join("")||'<p class="sub">Aucune année.</p>'}</div>
       <p class="sub">L'année en cours est celle affichée en haut de l'écran et utilisée par défaut. Les années passées restent consultables : rien n'est effacé.</p>
       <div class="row"><button class="btn primary" id="newYear">Préparer la nouvelle année</button></div></section>
 
@@ -2675,6 +2702,27 @@ async function viewEtab(v){
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
     try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,payroll_visa:eV.checked,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
+
+  /* facultés */
+  const facDlg=f=>{let flogo=f?.logo||null;
+    openDialog(`<h3>${f?"Modifier la faculté":"Nouvelle faculté"}</h3>
+      <div class="grid2"><label>Code<input id="fC" required maxlength="15" value="${esc(f?.code||"")}" placeholder="Ex. FSRC, FLSH"></label><label>Nom court (facultatif)<input id="fS" maxlength="60" value="${esc(f?.short_name||"")}"></label></div>
+      <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
+      <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
+      <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
+      ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo};
+      if(f)await q(sb.from("faculties").update(row).eq("id",f.id));else await q(sb.from("faculties").insert(row));
+      await loadFacs();toast(f?"Faculté enregistrée":"Faculté créée");rerender()});
+    const show=()=>{fLB.innerHTML=flogo?`<img src="${esc(flogo)}" alt="">`:'<span class="sub">Pas de logo</span>';fLx.hidden=!flogo};show();
+    fL.onchange=()=>{const fi=fL.files[0];if(!fi)return;const img=new Image(),url=URL.createObjectURL(fi);img.onload=()=>{const m=256,k=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);flogo=c.toDataURL("image/png");URL.revokeObjectURL(url);show()};img.src=url};
+    fLx.onclick=()=>{flogo=null;show()}};
+  fNew.onclick=()=>facDlg(null);
+  v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facDlg(facById(Number(b.dataset.fe))));
+  v.querySelectorAll("[data-fd]").forEach(b=>b.onclick=()=>{const f=facById(Number(b.dataset.fd));
+    openDialog(`<h3>Supprimer « ${esc(f.name)} » ?</h3><p style="margin:0">Elle n'a aucun département. Ses horaires et ses jours sans cours sont supprimés avec elle.</p><div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
+    async()=>{const r=await q(sb.from("faculties").delete().eq("id",f.id).select());if(!r.length)throw new Error("Suppression refusée : la faculté a encore des salles, des semestres ou des données.");await loadFacs();toast("Faculté supprimée");rerender()})});
 
   /* postes */
   const posteDlg=po=>{const avail=Object.keys(RIGHTS).filter(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r)||po?.roles.includes(r)),n=po?nOf(po.id):0;
@@ -2711,19 +2759,19 @@ async function viewEtab(v){
     const plus=d=>{if(!d)return"";const x=new Date(d+"T12:00:00");x.setFullYear(x.getFullYear()+1);return iso(x)};
     const nextLabel=base?base.label.replace(/(\d{4})\D+(\d{4})/,(m,a,b)=>`${+a+1}-${+b+1}`):"";
     const bs=base?semOf(base):[];
-    const rows=bs.length?bs.map(x=>({label:x.label,start:plus(x.start_date),end:plus(x.end_date),from:x.id})):[{label:"Semestre 1",start:"",end:"",from:""},{label:"Semestre 2",start:"",end:"",from:""}];
+    const rows=bs.length?bs.map(x=>({label:x.label,start:plus(x.start_date),end:plus(x.end_date),from:x.id,faculty:x.faculty_id})):(S.facs||[]).flatMap(f=>[{label:"Semestre 1",start:"",end:"",from:"",faculty:f.id},{label:"Semestre 2",start:"",end:"",from:"",faculty:f.id}]);
     openDialog(`<h3>Préparer la nouvelle année</h3>
       <p class="sub" style="margin:0">L'assistant crée l'année et ses semestres. Il peut recopier les affectations (qui enseigne quoi à quel groupe) pour gagner du temps. L'année ${base?esc(base.label):"actuelle"} reste intacte et consultable.</p>
       <div class="grid2"><label>Libellé<input id="nyL" required value="${esc(nextLabel)}"></label><span></span>
         <label>Début<input id="nyS" type="date" required value="${base?plus(base.start_date):""}"></label><label>Fin<input id="nyE" type="date" required value="${base?plus(base.end_date):""}"></label></div>
-      <div class="panel tbl"><table><thead><tr><th>Semestre</th><th>Début</th><th>Fin</th><th>Affectations reprises de</th></tr></thead><tbody>
-        ${rows.map((r,i)=>`<tr><td><input data-ny="label" data-i="${i}" value="${esc(r.label)}" required></td><td><input type="date" data-ny="start" data-i="${i}" value="${r.start}" required></td><td><input type="date" data-ny="end" data-i="${i}" value="${r.end}" required></td>
+      <div class="panel tbl"><table><thead><tr>${multiFac()?"<th>Faculté</th>":""}<th>Semestre</th><th>Début</th><th>Fin</th><th>Affectations reprises de</th></tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr>${multiFac()?`<td class="mono">${esc(facCode(r.faculty))}</td>`:""}<td><input data-ny="label" data-i="${i}" value="${esc(r.label)}" required></td><td><input type="date" data-ny="start" data-i="${i}" value="${r.start}" required></td><td><input type="date" data-ny="end" data-i="${i}" value="${r.end}" required></td>
           <td><select data-ny="from" data-i="${i}"><option value="">— aucune —</option>${years.map(y=>semOf(y).map(x=>`<option value="${x.id}" ${x.id===r.from?"selected":""}>${esc(y.label+" · "+x.label)}</option>`).join("")).join("")}</select></td></tr>`).join("")}</tbody></table></div>
       <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="nyC" checked> Recopier les affectations (les enseignants désactivés sont ignorés ; vous pourrez tout ajuster dans Affectations)</label>
       <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="nyCur"> En faire tout de suite l'année en cours (sinon, plus tard avec « Mettre en cours »)</label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer l'année</button></div>`,
     async()=>{const get=(k,i)=>document.querySelector(`[data-ny="${k}"][data-i="${i}"]`).value;
-      const p_sems=rows.map((r,i)=>({label:get("label",i).trim(),start:get("start",i),end:get("end",i),from:get("from",i)||null}));
+      const p_sems=rows.map((r,i)=>({label:get("label",i).trim(),start:get("start",i),end:get("end",i),from:get("from",i)||null,faculty:r.faculty||null}));
       const r=await rpcOrScript("new_academic_year",{p_label:nyL.value.trim(),p_start:nyS.value,p_end:nyE.value,p_sems,p_copy:nyC.checked,p_current:nyCur.checked});
       if(nyCur.checked)S.year=nyL.value.trim();
       toast(`Année ${nyL.value.trim()} créée`+(nyC.checked?` · ${r.copied} affectation(s) recopiée(s)`:""));rerender()});
