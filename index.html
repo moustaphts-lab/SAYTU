@@ -3302,14 +3302,18 @@ async function viewAccounts(el){
   /* fiche d'un compte */
   el.querySelectorAll("[data-det]").forEach(b=>b.onclick=()=>{
     const u=profiles.find(p=>p.id===b.dataset.det),rs=rolesOf(u.id),t=tOf(u.id),i=inf(u.id);
-    const linkable=teachers.filter(x=>!x.profile_id||x.profile_id===u.id);
+    /* seulement les fiches de la faculté du compte (ou de la faculté choisie pour un compte de l'université) */
+    const uFac=u.faculty_id??S.fac??null;
+    const linkable=teachers.filter(x=>(!x.profile_id||x.profile_id===u.id)&&(uFac==null||tFac(x)===uFac));
+    const uFacName=facById(uFac)?.code||"la faculté";
     openDialog(`<h3>${esc(u.full_name)}</h3>
       <dl class="kv"><dt>Adresse</dt><dd class="mono">${esc(u.email)}</dd><dt>Créé le</dt><dd>${i.created_at?fdt(i.created_at):"—"}</dd><dt>Dernière connexion</dt><dd>${info.length?fdt(i.last_sign_in_at):"—"}</dd>
         <dt>État</dt><dd>${u.active===false?"Désactivé":u.must_change_password?"Actif · mot de passe provisoire à changer":"Actif"}</dd>
         <dt>Poste</dt><dd>${esc(posteLabelU(u,rs)||"aucun")}</dd>
         <dt>Droits</dt><dd class="sub">${rs.length?rs.map(r=>esc((RIGHTS[r.role]||r.role)+(r.role==="responsable"?" · "+(r.department_id?dcode(r.department_id):"tous"):""))).join(", "):"aucun"}</dd></dl>
       <label>Fiche enseignant liée<select id="lnkT"><option value="">— aucune —</option>${linkable.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?"selected":""}>${esc(x.first_name+" "+x.last_name+(x.email?" · "+x.email:""))}</option>`).join("")}</select></label>
-      <p class="sub" style="margin:0">Nécessaire pour un professeur : c'est ce qui relie le compte à ses cours, ses disponibilités et ses émargements.</p>
+      <p class="sub" style="margin:0">Nécessaire pour un professeur : c'est ce qui relie le compte à ses cours, ses disponibilités et ses émargements.${linkable.length?" Seules les fiches libres de "+esc(uFacName)+" sont proposées.":""}</p>
+      ${!linkable.length&&!t?`<div class="gpwarn" style="margin:0">Aucune fiche enseignant libre dans ${esc(uFacName)}. Le directeur des études doit d'abord créer la fiche dans Référentiel › Enseignants ; revenez ensuite ici pour la lier.</div>`:""}
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap">
         <button class="btn" value="roles" formnovalidate>Changer le poste</button><button class="btn" value="pwd" formnovalidate>Réinitialiser le mot de passe</button>
         ${u.id!==S.user.id?`<button class="btn ${u.active===false?"":"danger"}" value="act" formnovalidate>${u.active===false?"Réactiver":"Désactiver"}</button>`:""}
