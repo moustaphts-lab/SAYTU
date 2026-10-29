@@ -676,7 +676,10 @@ function renderShell(){
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
-  return tab.fn(document.getElementById("view")).then(()=>showAnnonces()).catch(e=>{document.getElementById("view").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
+  /* si l'on change d'écran avant la fin du chargement, l'ancien écran est abandonné sans afficher d'erreur */
+  const seq=S.renderSeq=(S.renderSeq||0)+1,view=document.getElementById("view");
+  const live=()=>seq===S.renderSeq&&document.body.contains(view);
+  return tab.fn(view).then(()=>{if(live())showAnnonces()}).catch(e=>{if(!live())return;view.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`});
 }
 /* ---------- annonces : message court affiché en haut de l'écran (professeurs, ou tout le monde) ---------- */
 async function loadAnnonces(){const t=iso(new Date());
