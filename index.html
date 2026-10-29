@@ -595,6 +595,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  suividg:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   synthdg:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   budget:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   accueil:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
@@ -617,6 +618,7 @@ const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" s
 function availableTabs(){
   const t=[];
   if(has("direction"))t.push({id:"synthdg",label:"Synthèse",fn:viewDgSynth});
+  if(has("direction"))t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   else if(has("admin"))t.push({id:"admindash",label:"Tableau de bord",fn:viewAdminDash});
   if(isProf())t.push({id:"accueil",label:"Aujourd'hui",fn:viewHome});
@@ -2761,7 +2763,7 @@ async function viewDgSynth(v){
       <div class="stat"><b style="color:${done.length-em.length?"var(--warn)":"inherit"}">${pct(em.length,done.length)} %</b><span>Séances de ${ml} émargées (${em.length}/${done.length}) · ${val.length} validées</span></div>
       <div class="stat"><b style="color:${canc?"var(--warn)":"inherit"}">${canc}</b><span>Séances annulées en ${ml}</span></div>
       <div class="stat"><b style="color:${late.length?"var(--warn)":"var(--ok)"}">${late.length}</b><span>Matières en retard</span></div></div>
-    <div class="row" style="margin:-6px 0 18px;gap:8px"><button class="btn sm" data-dgo="budget">Voir le budget</button><button class="btn sm" data-dgo="dashboard">Tableau de bord des émargements</button></div>
+    <div class="row" style="margin:-6px 0 18px;gap:8px"><button class="btn sm primary" id="dgRep">${DLI}Rapport du mois (PDF)</button><button class="btn sm" data-dgo="suividg">Suivi des enseignements</button><button class="btn sm" data-dgo="budget">Voir le budget</button><button class="btn sm" data-dgo="dashboard">Tableau de bord des émargements</button></div>
     <h2 id="dgProg">Avancement par filière et niveau</h2>
     <p class="sub" style="margin:-4px 0 10px">Semestre en cours. Heures faites = séances passées non annulées. Une matière commune (tronc commun) compte pour chaque filière concernée. Touchez une filière pour voir ses matières.</p>
     ${progs.length?`<div class="panel" style="padding:4px 16px">${progs.map((o,i)=>`<div class="prow dgp" data-dp="${i}" style="cursor:pointer"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">
@@ -2772,8 +2774,92 @@ async function viewDgSynth(v){
           <span><span class="sub">${hrs(x.d)} / ${hrs(x.P)} · ${hrs(x.pl)} programmées</span> ${x.d>=x.P?'<span class="pill p-ok">Terminée</span>':x.late?`<span class="pill p-warn">En retard${x.miss!=null?" · manque ≈ "+hrs(Math.round(x.miss/30)*30):""}</span>`:""}</span></div>`).join("")}</div></div>`).join("")}</div>`
       :`<div class="panel"><p class="empty">Aucune matière dans un semestre en cours.</p></div>`}`;
   v.querySelectorAll("[data-dp]").forEach(r=>r.onclick=()=>{const d=r.querySelector(".dgd");d.hidden=!d.hidden});
+  dgRep.onclick=()=>{const opts=[];for(let i=0;i<12;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);opts.push(d)}
+    openDialog(`<h3>Rapport du mois</h3><p class="sub" style="margin:0">Un PDF de quelques pages : indicateurs, points d'attention, avancement par filière, matières en retard, suivi des enseignements et paie. À imprimer ou à partager en conseil de direction.</p>
+      <label>Mois<select id="rpM">${opts.map((d,i)=>{const l=d.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});return `<option value="${iso(d)}">${l.charAt(0).toUpperCase()+l.slice(1)}${i?"":" (en cours)"}</option>`}).join("")}</select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">${DLI}Générer le PDF</button></div>`,
+    async()=>{await monthlyReport(new Date(rpM.value+"T12:00:00"))})};
   v.querySelectorAll("[data-dgo]").forEach(b=>b.onclick=()=>{const g=b.dataset.dgo;if(g.startsWith("#")){document.querySelector(g)?.scrollIntoView({behavior:"smooth"});return}
     S.tab=g;if(g==="paie"&&visaWait[0])S.periodId=visaWait[0].id;try{history.replaceState(null,"","#"+g)}catch(e){}renderShell()});
+}
+
+/* constats sur les enseignements d'une période : annulations, demandes d'absence, émargements tardifs, corrigés, rejetés, par délégation */
+async function suiviData(from,to){
+  const now=new Date();
+  const [ss,abs]=await Promise.all([
+    q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,note,teacher_id,teachers(first_name,last_name,departments(code)),teaching_assignments(courses(code,name,departments(code))),student_groups(code),attendance_records(status,declared_minutes,retained_minutes,submitted_at,entered_for_teacher)").gte("session_date",from).lte("session_date",to).order("session_date")),
+    q(sb.from("absence_requests").select("id,status,reason,session_id,teacher_id,schedule_sessions!inner(session_date)").gte("schedule_sessions.session_date",from).lte("schedule_sessions.session_date",to)).catch(()=>[])]);
+  const T={},D={};const row=k=>({k,fin:0,ann:0,abs:0,tard:0,red:0,rej:0,cor:0,del:0,non:0});
+  const add=(o,f)=>{f(o)};
+  ss.forEach(x=>{const t=x.teacher_id,dep=x.teaching_assignments?.courses?.departments?.code||x.teachers?.departments?.code||"?";
+    const ot=T[t]??=Object.assign(row(t),{name:(x.teachers?.first_name||"")+" "+(x.teachers?.last_name||""),dep}),od=D[dep]??=row(dep);
+    [ot,od].forEach(o=>{if(x.status==="annulee"){o.ann++;return}if(sEnd(x)>now)return;o.fin++;const a=x.attendance_records;
+      if(!a){o.non++;return}if((new Date(a.submitted_at)-sEnd(x))/864e5>7)o.tard++;if(a.status==="rejete")o.rej++;if(a.status==="correction_demandee")o.cor++;
+      if(a.status==="valide"&&a.retained_minutes<a.declared_minutes)o.red++;if(a.entered_for_teacher)o.del++})});
+  abs.forEach(r=>{const t=T[r.teacher_id];if(t){t.abs++;D[t.dep]&&D[t.dep].abs++}});
+  const cancels=ss.filter(x=>x.status==="annulee").map(x=>({x,why:(x.note||"").replace(/^Annulé\s*:\s*/,"")||"motif non précisé"}));
+  const motifs={};cancels.forEach(c=>{const k=c.why.replace(/\s*\(.*\)$/,"").trim().toLowerCase();motifs[k]=(motifs[k]||0)+1});
+  return{T:Object.values(T).sort((a,b)=>a.name.localeCompare(b.name)),D:Object.values(D).sort((a,b)=>a.k.localeCompare(b.k)),cancels,motifs:Object.entries(motifs).sort((a,b)=>b[1]-a[1]),abs}
+}
+async function viewDgSuivi(v){
+  const now=new Date();
+  if(!S.sgF){S.sgF=iso(new Date(now.getFullYear(),now.getMonth(),1));S.sgT=iso(new Date(now.getFullYear(),now.getMonth()+1,0))}
+  const R=await suiviData(S.sgF,S.sgT);S.sgDep=S.sgDep||"";
+  const T=R.T.filter(t=>!S.sgDep||t.dep===S.sgDep);
+  const H=["Séances terminées","Annulées","Demandes d'absence","Émargés tardivement","Durée réduite","Rejetés","Correction en cours","Saisis par délégation","Non émargés"],K=["fin","ann","abs","tard","red","rej","cor","del","non"];
+  const cell=(o,k)=>{const n=o[k];return `<td class="num">${n?(k==="fin"?n:`<b style="color:var(--warn)">${n}</b>`):'<span class="sub">0</span>'}</td>`};
+  const tbl=(rows,first)=>`<div class="panel tbl"><table><thead><tr><th>${first}</th>${H.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(o=>`<tr><td>${esc(o.name||o.k)}${o.name?`<div class="sub">${esc(o.dep)}</div>`:""}</td>${K.map(k=>cell(o,k)).join("")}</tr>`).join("")||`<tr><td colspan="10" class="empty">Aucune séance sur cette période.</td></tr>`}</tbody></table></div>`;
+  v.innerHTML=`<h1>Suivi des enseignements</h1>
+    <p class="lead">Des constats, pas des notes : ce qui s'est passé sur la période, par département et par enseignant. Un chiffre élevé appelle une question, pas une conclusion.</p>
+    <div class="row" style="margin-bottom:14px;align-items:flex-end"><label>Du<input id="sgF" type="date" value="${S.sgF}"></label><label>Au<input id="sgT" type="date" value="${S.sgT}"></label>
+      ${R.D.length>1?`<label>Département<select id="sgD"><option value="">Tous</option>${R.D.map(d=>`<option ${d.k===S.sgDep?"selected":""}>${esc(d.k)}</option>`).join("")}</select></label>`:""}<span style="margin-left:auto">${xbar("sgX")}</span></div>
+    <h2>Par département</h2>${tbl(R.D.filter(d=>!S.sgDep||d.k===S.sgDep),"Département")}
+    <h2>Par enseignant</h2>${tbl(T,"Enseignant")}
+    <h2>Séances annulées · ${R.cancels.length}</h2>
+    ${R.motifs.length?`<div class="chips" style="margin-bottom:10px">${R.motifs.map(([k,n])=>`<span class="pill p-info">${esc(k)} · ${n}</span>`).join("")}</div>`:""}
+    <div class="panel tbl">${R.cancels.length?`<table><thead><tr><th>Date</th><th>Cours</th><th>Enseignant</th><th>Motif</th></tr></thead><tbody>${R.cancels.filter(c=>!S.sgDep||(c.x.teaching_assignments?.courses?.departments?.code||c.x.teachers?.departments?.code)===S.sgDep).map(c=>`<tr><td class="mono">${fdl(c.x.session_date)} ${hm(c.x.start_time)}</td><td>${esc(c.x.teaching_assignments?.courses?.code||"")} · ${esc(c.x.student_groups?.code||"")}</td><td>${esc((c.x.teachers?.first_name||"")+" "+(c.x.teachers?.last_name||""))}</td><td>${esc(c.why)}</td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucune séance annulée sur cette période.</p>`}</div>
+    <p class="sub">Émargé tardivement : plus de 7 jours après la séance. Durée réduite : validé pour moins que la durée déclarée. Les demandes d'absence comptent celles envoyées pour une séance de la période.</p>`;
+  const on=(id,f)=>{const e=document.getElementById(id);if(e)e.onchange=f};
+  on("sgF",()=>{S.sgF=sgF.value||S.sgF;rerender()});on("sgT",()=>{S.sgT=sgT.value||S.sgT;rerender()});on("sgD",()=>{S.sgDep=sgD.value;rerender()});
+  wireExport("sgX",()=>({file:"suivi-enseignements_"+S.sgF+"_"+S.sgT,title:"Suivi des enseignements",subtitle:`Du ${fdl(S.sgF)} au ${fdl(S.sgT)}`,landscape:true,sheets:[
+    {name:"Par département",title:"Par département",head:["Département",...H],rows:R.D.map(o=>[o.k,...K.map(k=>o[k])])},
+    {name:"Par enseignant",title:"Par enseignant",head:["Enseignant","Département",...H],rows:T.map(o=>[o.name,o.dep,...K.map(k=>o[k])])},
+    {name:"Annulations",title:"Séances annulées",head:["Date","Cours","Groupe","Enseignant","Motif"],rows:R.cancels.map(c=>[fdl(c.x.session_date)+" "+hm(c.x.start_time),c.x.teaching_assignments?.courses?.code||"",c.x.student_groups?.code||"",(c.x.teachers?.first_name||"")+" "+(c.x.teachers?.last_name||""),c.why])}]}));
+}
+/* rapport mensuel de la direction générale (PDF) */
+async function monthlyReport(M){
+  const now=new Date(),f=iso(M),t=iso(new Date(M.getFullYear(),M.getMonth()+1,0)),today=iso(now),ref=t<today?t:today,refD=new Date(ref+"T23:59:59");
+  const ml0=M.toLocaleDateString("fr-FR",{month:"long",year:"numeric"}),ml=ml0.charAt(0).toUpperCase()+ml0.slice(1);
+  const [R,assigns,allSess,slips,pays,periods]=await Promise.all([suiviData(f,t),
+    q(sb.from("teaching_assignments").select("id,planned_hours,courses(code,name),teachers(first_name,last_name),semesters(label,start_date,end_date),student_groups!teaching_assignments_group_id_fkey(code,programs(id,code,name,level,departments(code))),assignment_groups(student_groups(code,programs(id,code,name,level,departments(code))))")),
+    q(sb.from("schedule_sessions").select("assignment_id,session_date,start_time,end_time,status").lte("session_date",ref)),
+    q(sb.from("payslips").select("net_fcfa,pay_period_id,pay_periods!inner(name,start_date,end_date,status,visa_at)").lte("pay_periods.start_date",t).gte("pay_periods.end_date",f)),
+    q(sb.from("payments").select("amount_fcfa,paid_on").gte("paid_on",f).lte("paid_on",t)),
+    q(sb.from("pay_periods").select("name,status,start_date,end_date,visa_at").lte("start_date",t).gte("end_date",f))]);
+  const m=x=>toMin(hm(x.end_time))-toMin(hm(x.start_time));
+  const cur=assigns.filter(a=>a.semesters&&a.semesters.start_date<=ref&&a.semesters.end_date>=f);
+  const dn={};allSess.forEach(x=>{if(x.status!=="annulee"&&sEnd(x)<=refD)dn[x.assignment_id]=(dn[x.assignment_id]||0)+m(x)});
+  const rows=cur.map(a=>{const P=a.planned_hours*60,d=Math.min(P,dn[a.id]||0),r=semesterRisk(a,d,ref);const progs=[a.student_groups?.programs,...(a.assignment_groups||[]).map(g=>g.student_groups?.programs)].filter(Boolean);
+    return{a,P,d,late:d<P&&r&&r.risk,miss:r?.missing,progs:[...new Map(progs.map(x=>[x.id,x])).values()]}});
+  const byP={};rows.forEach(x=>x.progs.forEach(p=>{const o=byP[p.id]??={p,P:0,d:0,late:0};o.P+=x.P;o.d+=x.d;o.late+=x.late?1:0}));
+  const pc=(a,b)=>b?Math.round(a*100/b)+" %":"—";
+  const tot=R.D.reduce((o,d)=>{Object.keys(d).forEach(k=>{if(typeof d[k]==="number")o[k]=(o[k]||0)+d[k]});return o},{});
+  const totP=rows.reduce((s,x)=>s+x.P,0),totD=rows.reduce((s,x)=>s+x.d,0),late=rows.filter(x=>x.late);
+  const em=(tot.fin||0)-(tot.non||0);
+  const sheets=[
+    {title:"Indicateurs du mois",head:["Indicateur","Valeur"],rows:[
+      ["Séances terminées",tot.fin||0],["Séances émargées",`${em} (${pc(em,tot.fin)})`],["Séances annulées",tot.ann||0],["Demandes d'absence",tot.abs||0],
+      ["Émargements tardifs (plus de 7 jours)",tot.tard||0],["Émargements rejetés",tot.rej||0],
+      ["Avancement des programmes au "+fdl(ref),`${hrs(totD)} sur ${hrs(totP)} (${pc(totD,totP)})`],["Matières en retard",late.length],
+      ["Bulletins de la période de paie",slips.length?fcfa(slips.reduce((s,x)=>s+x.net_fcfa,0)):"aucun"],["Paiements enregistrés dans le mois",fcfa(pays.reduce((s,x)=>s+x.amount_fcfa,0))],
+      ["État de la paie",periods.map(p=>p.name+" : "+({ouverte:"ouverte",en_verification:"en vérification",approuvee:"approuvée",payee:"payée"}[p.status]||p.status)+(S.cfg?.payroll_visa&&["approuvee","payee"].includes(p.status)?(p.visa_at?", visée":", à viser"):"")).join(" ; ")||"aucune période"]]},
+    {title:"Avancement par filière",head:["Filière","Niveau","Département","Heures faites","Heures prévues","Avancement","Matières en retard"],
+      rows:Object.values(byP).sort((a,b)=>(a.p.departments?.code||"").localeCompare(b.p.departments?.code||"")||a.p.code.localeCompare(b.p.code)).map(o=>[o.p.code+" · "+o.p.name,o.p.level||"",o.p.departments?.code||"",hrs(o.d),hrs(o.P),pc(o.d,o.P),o.late])},
+    {title:"Matières en retard",head:["Matière","Enseignant","Faites / prévues","Manque estimé en fin de semestre"],keepEmpty:1,
+      rows:late.map(x=>[x.a.courses.code+" · "+x.a.courses.name,(x.a.teachers?.first_name||"")+" "+(x.a.teachers?.last_name||""),hrs(x.d)+" / "+hrs(x.P),x.miss!=null?"≈ "+hrs(Math.round(x.miss/30)*30):"—"])},
+    {title:"Suivi des enseignements par département",head:["Département","Terminées","Annulées","Absences","Tardifs","Réduits","Rejetés","Délégation","Non émargés"],rows:R.D.map(o=>[o.k,o.fin,o.ann,o.abs,o.tard,o.red,o.rej,o.del,o.non])},
+    {title:"Motifs d'annulation",head:["Motif","Séances"],rows:R.motifs.map(([k,n])=>[k,n])}];
+  exportPdf("rapport-mensuel_"+f.slice(0,7),"Rapport mensuel · "+ml,"Direction générale · situation au "+fdl(ref),sheets,false);
 }
 
 /* ---------- tableau de bord de l'administrateur ---------- */
