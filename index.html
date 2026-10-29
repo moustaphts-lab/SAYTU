@@ -2264,7 +2264,7 @@ async function viewDashboard(v){
   const gs=document.getElementById("goSans");if(gs)gs.onclick=()=>document.getElementById("sansList").scrollIntoView({behavior:"smooth",block:"start"});
   wireExport("dX",()=>({file:"tableau-de-bord_"+S.dFrom+"_"+S.dTo,title:"Tableau de bord",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),sheets:[
     {name:"Résumé",title:"Résumé",subtitle:"Du "+fdl(S.dFrom)+" au "+fdl(S.dTo),keepEmpty:1,head:["Indicateur","Valeur"],rows:[
-      ["Séances prévues (jusqu'à aujourd'hui)",K.prevues],["Séances annulées",K.annulees],["Séances émargées",K.emargees],["Taux d'émargement (%)",rate],
+      ["Séances terminées (à émarger)",K.prevues],["Séances annulées",K.annulees],["Séances émargées",K.emargees],["Taux d'émargement (%)",rate],
       ["Heures prévues",dh(K.minPrev)],["Heures validées",dh(K.minVal)],["Heures en attente de validation",dh(K.minWait)],["Émargements validés",K.valid],["Émargements en attente",K.wait],
       ["Corrections demandées",K.corr],["Émargements rejetés",K.rej],["Saisis par délégation",K.deleg],["Séances sans émargement",sans.length],
       ...(pay?[["Reste dû sur les paies approuvées (FCFA)",pay.due],["Heures validées pas encore payées",dh(pay.openMin)]]:[])]},
