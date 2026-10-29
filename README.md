@@ -22,7 +22,7 @@ L'application gère une université de plusieurs facultés. Chaque faculté a se
 - **Directeur des études de la faculté** : référentiel, affectations et emplois du temps de sa faculté.
 - **Doyen** : synthèse, suivi et visa de la paie de sa faculté. **Rectorat** : consultation de toute l'université.
 - **Emploi du temps** : chaque faculté choisit le mode **hebdomadaire** (refait chaque semaine) ou **fixe** (une semaine publiée pour tout le semestre, disponibilités données une fois par semestre).
-- **Paie** : chaque faculté a ses tarifs, ses périodes, ses bulletins (numérotés `CODE-ANNÉE-001`, ex. `FSRC-2026-001`) et son budget. L'administrateur de la faculté décide si le visa du doyen est obligatoire avant les paiements. Les statuts d'enseignants sont communs à l'université.
+- **Paie** : chaque faculté a ses tarifs, ses périodes, ses bulletins (numérotés `CODE-ANNÉE-001`, ex. `FSRC-2026-001`) et son budget. L'administrateur de la faculté décide si le visa du doyen est obligatoire avant les paiements. Les statuts d'enseignants sont communs à l'université. La paie est faite dans chaque faculté par son **représentant financier** (et son caissier) ; le **responsable financier de l'université** consulte et contrôle la paie de toutes les facultés, sans pouvoir la modifier.
 
 ## Postes et droits
 
@@ -63,6 +63,6 @@ Mot de passe commun : `Demo-2026!`. Ils s'affichent sur l'écran de connexion ta
 | directeur@univdemo.test | Directeur des études |
 | secretaire@univdemo.test | Secrétaire |
 | aide.finance@univdemo.test | Aide du responsable financier |
-| financier@univdemo.test | Responsable financier |
+| financier@univdemo.test | Représentant financier (FSRC) |
 | direction@univdemo.test | Direction générale |
 | admin@univdemo.test | Administrateur |

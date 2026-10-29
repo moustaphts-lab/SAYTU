@@ -469,7 +469,7 @@ const DEMO = [
   ["directeur@univdemo.test","Directeur des études (enseigne aussi)"],
   ["secretaire@univdemo.test","Secrétaire"],
   ["aide.finance@univdemo.test","Aide du responsable financier"],
-  ["financier@univdemo.test","Responsable financier"],
+  ["financier@univdemo.test","Représentant financier"],
   ["direction@univdemo.test","Direction générale"],
   ["admin@univdemo.test","Administrateur (comptes)"]];
 const DAYS = ["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
@@ -3317,11 +3317,13 @@ const pct=(a,b)=>b?Math.round(a/b*100):0;
 function ppill(map,st){const [l,c]=map[st]||[st,"p-mute"];return `<span class="pill ${c}">${l}</span>`}
 function fcfa(n){return Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA"}
 function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
-function canPay(){return has("finance")}
+/* on n'agit sur la paie qu'avec un droit rattaché à la faculté ; au niveau de l'université, c'est de la consultation */
+const roleHere=r=>(S.roles||[]).some(x=>x.role===r&&x.faculty_id&&x.faculty_id===S.fac);
+function canPay(){return roleHere("finance")}
 /* paie par faculté : visa du doyen réglé par chaque faculté ; seul le doyen de la faculté vise */
 const visaOn=()=>{const f=facById(S.fac);return f?!!f.payroll_visa:!!(S.cfg&&S.cfg.payroll_visa)};
 const isDoyen=()=>(S.roles||[]).some(r=>r.role==="direction"&&r.faculty_id&&r.faculty_id===S.fac);
-function canRecordPay(){return has("finance")||has("caissier")}
+function canRecordPay(){return roleHere("finance")||roleHere("caissier")}
 
 async function viewPayroll(v){
   const periods=await q(sb.from("pay_periods").select("*").eq("faculty_id",S.fac).order("start_date",{ascending:false}));
