@@ -178,6 +178,7 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .tt-gut span{position:absolute;right:8px;transform:translateY(-50%);font:500 11.5px var(--f-body);color:var(--muted)}.tt-gut span:first-child{transform:none;top:4px!important}
 .tt-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-size:100% 64px}
 .tt-col.today{background-color:color-mix(in srgb,var(--accent) 4%,transparent)}
+.cmp td.num{white-space:nowrap}
 .logobox{width:64px;height:64px;border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;overflow:hidden;background:#fff}.logobox img{width:100%;height:100%;object-fit:contain}.logobox .sub{font-size:11px;text-align:center}
 .hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.hcard{padding:16px 18px}.hcard h2{font-size:17px}.hwide{grid-column:1/-1}
 .hnext .hn-t{font:700 34px var(--f-display);letter-spacing:-.02em;margin:2px 0}.hnext .hn-t span{font-size:20px;color:var(--muted);font-weight:600}.hnext b{font-size:16px}
@@ -487,7 +488,7 @@ function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
 /* logo et lignes d'en-tête / de pied de page dans les PDF */
 /* faculté des documents : celle en cours ; son logo remplace celui de l'université s'il existe */
-const pdfFac=()=>facById(S.fac)||null;
+const pdfFac=()=>S._pdfUniv?null:(facById(S.fac)||null);
 function pdfHead(){const f=pdfFac();return [f&&f.name,(f&&f.pdf_header)||(S.cfg&&S.cfg.pdf_header)].filter(Boolean).join(" · ")}
 function pdfLogo(doc,x,y,size){const l=(pdfFac()&&pdfFac().logo)||(S.cfg&&S.cfg.logo);if(!l)return false;try{doc.addImage(l,/^data:image\/jpe?g/.test(l)?"JPEG":"PNG",x,y,size,size);return true}catch(e){return false}}
 function pdfFooterText(){return (S.cfg&&S.cfg.pdf_footer)||""}
@@ -585,6 +586,8 @@ async function loadFacs(){try{S.facs=await q(sb.from("faculties").select("id,cod
   if(!S.facs.some(f=>f.id===S.fac))S.fac=(S.facs.find(f=>f.id===saved)||S.facs[0])?.id||null;return S.facs}
 const facById=id=>(S.facs||[]).find(f=>f.id===id);
 /* portée : un droit sans faculté vaut pour toute l'université */
+/* rectorat, contrôle et responsable financier de l'université : consultation de toutes les facultés */
+const isCentralReader=()=>(S.roles||[]).some(r=>["direction","lecteur","finance"].includes(r.role)&&r.faculty_id==null);
 const isCentral=()=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id==null);
 const adminFacs=()=>isCentral()?(S.facs||[]):(S.facs||[]).filter(f=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id===f.id));
 const facCode=id=>facById(id)?.code||"";
@@ -654,6 +657,7 @@ const TABICON={
 const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABICON[id]||""}</svg>`;
 function availableTabs(){
   const t=[],reader=has("direction")||has("lecteur");
+  if(isCentralReader())t.push({id:"compare",label:"Comparaison des facultés",fn:viewCompare});
   if(reader)t.push({id:"synthdg",label:"Synthèse",fn:viewDgSynth});
   if(reader)t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
   if(has("chef_departement"))t.push({id:"dept",label:"Mon département",fn:viewDept});
@@ -2204,8 +2208,8 @@ function xbar(id){return `<div class="xbar" id="${id}"><button class="btn sm" ty
 function wireExport(id,build){
   const host=document.getElementById(id);if(!host)return;
   host.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{
-    try{const d=await build();if(b.dataset.x==="xlsx")exportExcel(d.file,d.sheets);else exportPdf(d.file,d.title,d.subtitle,d.sheets,d.landscape)}
-    catch(e){toast(errMsg(e),true)}});
+    try{const d=await build();S._pdfUniv=!!d.univ;if(b.dataset.x==="xlsx")exportExcel(d.file,d.sheets);else exportPdf(d.file,d.title,d.subtitle,d.sheets,d.landscape)}
+    catch(e){toast(errMsg(e),true)}finally{S._pdfUniv=false}});
 }
 function exportExcel(file,sheets){
   try{
@@ -2947,6 +2951,57 @@ async function suiviData(from,to){
   const motifs={};cancels.forEach(c=>{const k=c.why.replace(/\s*\(.*\)$/,"").trim().toLowerCase();motifs[k]=(motifs[k]||0)+1});
   return{T:Object.values(T).sort((a,b)=>a.name.localeCompare(b.name)),D:Object.values(D).sort((a,b)=>a.k.localeCompare(b.k)),cancels,motifs:Object.entries(motifs).sort((a,b)=>b[1]-a[1]),abs}
 }
+/* ---------- rectorat : comparaison des facultés ---------- */
+async function viewCompare(v){
+  const now=new Date();
+  if(!S.cmF){S.cmF=iso(new Date(now.getFullYear(),now.getMonth(),1));S.cmT=iso(new Date(now.getFullYear(),now.getMonth()+1,0))}
+  const R=await q(sb.rpc("compare_faculties",{p_from:S.cmF,p_to:S.cmT}));
+  const F=R.facultes||[];
+  const pc=(a,b)=>b?Math.round(100*a/b):null;
+  const pctTxt=x=>x==null?"—":x+" %";
+  const tone=(x,good,bad)=>x==null?"":x>=good?"var(--ok)":x<bad?"var(--warn)":"";
+  const ml=new Date(S.cmF+"T12:00:00").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const rows=F.map(f=>{const em=pc(f.seances_emargees,f.seances_terminees),late=f.avancement_pct!=null&&f.attendu_pct!=null&&f.avancement_pct<f.attendu_pct-10;
+    return {...f,em,late,reste:f.paie_engagee-f.paie_payee}});
+  const tot=k=>rows.reduce((a,f)=>a+(Number(f[k])||0),0);
+  const card=f=>`<section class="panel" style="padding:14px 16px">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><div><b>${esc(f.code)}</b> <span class="sub">${esc(f.nom)}</span></div>
+        <span class="sub">${f.enseignants} enseignant(s) · emploi du temps ${f.mode==="fixe"?"fixe":"hebdomadaire"}</span></div>
+      <div class="sub" style="margin-bottom:4px">Avancement des programmes${f.semestre?" · "+esc(f.semestre):""}</div>
+      ${f.avancement_pct==null?`<p class="sub" style="margin:0 0 8px">Aucun semestre en cours ou aucune affectation.</p>`:`<div class="hbar" style="position:relative"><i style="width:${Math.min(100,f.avancement_pct)}%;background:${f.late?"var(--warn)":"var(--accent)"}"></i></div>
+      <div class="sub" style="margin:4px 0 10px">${f.avancement_pct} % fait (${hrs(Math.round(f.heures_faites*60))} sur ${hrs(Math.round(f.heures_prevues*60))}) · attendu à ce jour ≈ ${f.attendu_pct} %${f.late?' · <b style="color:var(--warn)">en retard</b>':""}</div>`}
+      <div class="stats" style="margin:0">
+        <div class="stat"><b style="color:${tone(f.em,95,80)}">${pctTxt(f.em)}</b><span>séances émargées (${f.seances_emargees}/${f.seances_terminees})</span></div>
+        <div class="stat"><b>${f.seances_annulees}</b><span>séance(s) annulée(s)</span></div>
+        <div class="stat"><b>${hrs(Math.round(f.heures_validees*60))}</b><span>heures validées${f.a_controler?` · ${f.a_controler} à contrôler`:""}</span></div>
+        <div class="stat"><b>${fcfa(f.paie_engagee)}</b><span>paie engagée sur l'année · payé ${fcfa(f.paie_payee)}</span></div>
+      </div>
+      ${f.paies_attente_visa?`<div class="gpwarn" style="margin-top:10px">${f.paies_attente_visa} paie(s) en attente du visa du doyen.</div>`:""}
+    </section>`;
+  v.innerHTML=`<h1>Comparaison des facultés</h1>
+    <p class="lead">Les mêmes indicateurs pour chaque faculté, pour situer chacune et repérer où poser une question. Les séances, émargements et heures portent sur la période choisie ; l'avancement porte sur le semestre en cours, la paie sur l'année universitaire${R.annee?" "+esc(R.annee):""}.</p>
+    <div class="row" style="margin-bottom:14px;align-items:flex-end"><label>Du<input id="cmF" type="date" value="${S.cmF}"></label><label>Au<input id="cmT" type="date" value="${S.cmT}"></label>
+      <button class="btn sm" id="cmM">Ce mois</button><button class="btn sm" id="cmP">Mois précédent</button><span style="margin-left:auto">${xbar("cmX")}</span></div>
+    <div class="panel tbl cmp"><table><thead><tr><th>Faculté</th><th>Avancement</th><th>Séances terminées</th><th>Émargées</th><th>Annulées</th><th>Heures validées</th><th>À contrôler</th><th>Paie engagée</th><th>Payé</th><th>Visa en attente</th></tr></thead><tbody>
+      ${rows.map(f=>`<tr><td title="${esc(f.nom)}"><b>${esc(f.code)}</b></td>
+        <td class="num">${f.avancement_pct==null?"—":`<b style="color:${f.late?"var(--warn)":""}">${f.avancement_pct} %</b><div class="sub">attendu ${f.attendu_pct} %</div>`}</td>
+        <td class="num">${f.seances_terminees}</td><td class="num"><b style="color:${tone(f.em,95,80)}">${pctTxt(f.em)}</b></td><td class="num">${f.seances_annulees||'<span class="sub">0</span>'}</td>
+        <td class="num">${hrs(Math.round(f.heures_validees*60))}</td><td class="num">${f.a_controler?`<b style="color:var(--warn)">${f.a_controler}</b>`:'<span class="sub">0</span>'}</td>
+        <td class="num">${fcfa(f.paie_engagee)}</td><td class="num">${fcfa(f.paie_payee)}</td><td class="num">${f.paies_attente_visa?`<b style="color:var(--warn)">${f.paies_attente_visa}</b>`:'<span class="sub">0</span>'}</td></tr>`).join("")||`<tr><td colspan="10" class="empty">Aucune faculté.</td></tr>`}
+      ${rows.length>1?`<tr><td><b>Université</b></td><td></td><td class="num"><b>${tot("seances_terminees")}</b></td><td class="num"><b>${pctTxt(pc(tot("seances_emargees"),tot("seances_terminees")))}</b></td><td class="num"><b>${tot("seances_annulees")}</b></td><td class="num"><b>${hrs(Math.round(tot("heures_validees")*60))}</b></td><td class="num"><b>${tot("a_controler")}</b></td><td class="num"><b>${fcfa(tot("paie_engagee"))}</b></td><td class="num"><b>${fcfa(tot("paie_payee"))}</b></td><td class="num"><b>${tot("paies_attente_visa")}</b></td></tr>`:""}
+    </tbody></table></div>
+    <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));margin-top:16px">${rows.map(card).join("")}</div>
+    <p class="sub" style="margin-top:12px">Pour le détail d'une faculté, choisissez-la en haut de l'écran puis ouvrez « Synthèse », « Suivi des enseignements » ou « Paie ».</p>`;
+  const go=(f,t)=>{S.cmF=f;S.cmT=t;rerender()};
+  cmF.onchange=()=>{if(cmF.value)go(cmF.value,S.cmT<cmF.value?cmF.value:S.cmT)};
+  cmT.onchange=()=>{if(cmT.value)go(S.cmF>cmT.value?cmT.value:S.cmF,cmT.value)};
+  cmM.onclick=()=>go(iso(new Date(now.getFullYear(),now.getMonth(),1)),iso(new Date(now.getFullYear(),now.getMonth()+1,0)));
+  cmP.onclick=()=>go(iso(new Date(now.getFullYear(),now.getMonth()-1,1)),iso(new Date(now.getFullYear(),now.getMonth(),0)));
+  wireExport("cmX",()=>({file:"comparaison-facultes_"+S.cmF+"_"+S.cmT,title:"Comparaison des facultés",subtitle:"Du "+fdl(S.cmF)+" au "+fdl(S.cmT)+(R.annee?" · paie de l'année "+R.annee:""),landscape:true,univ:true,sheets:[
+    {name:"Facultés",title:"Indicateurs par faculté",head:["Faculté","Nom","Semestre","Avancement (%)","Attendu (%)","Heures faites","Heures prévues","Séances terminées","Émargées (%)","Annulées","Heures validées","À contrôler","Paie engagée (FCFA)","Payé (FCFA)","Visa en attente"],
+     rows:rows.map(f=>[f.code,f.nom,f.semestre||"",f.avancement_pct??"",f.attendu_pct??"",f.heures_faites,f.heures_prevues,f.seances_terminees,f.em??"",f.seances_annulees,f.heures_validees,f.a_controler,f.paie_engagee,f.paie_payee,f.paies_attente_visa])}]}));
+}
+
 async function viewDgSuivi(v){
   const now=new Date();
   if(!S.sgF){S.sgF=iso(new Date(now.getFullYear(),now.getMonth(),1));S.sgT=iso(new Date(now.getFullYear(),now.getMonth()+1,0))}
