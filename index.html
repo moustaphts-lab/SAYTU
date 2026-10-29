@@ -55,6 +55,7 @@ nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--
 nav.tabs button{display:flex;align-items:center;gap:12px}
 nav.tabs button svg{flex:none;opacity:.8}
 .yr{display:none}
+.hdrfac{margin-left:auto;margin-right:10px}.hdrfac select{padding:6px 28px 6px 10px;font:600 13px var(--f-body);border-radius:10px;min-height:0}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (min-width:721px){
   :root{--sbw:224px}
   #app.hasnav{padding-left:var(--sbw)}
@@ -555,7 +556,7 @@ async function boot(){
   if(!session){renderLogin();return}
   S.user=session.user;
   try{
-    S.roles=await q(sb.rpc("my_roles"));
+    try{S.roles=await q(sb.rpc("my_scope"))}catch(e){S.roles=await q(sb.rpc("my_roles"))}
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
     S.teacher=t;
@@ -580,6 +581,9 @@ async function loadFacs(){try{S.facs=await q(sb.from("faculties").select("id,cod
   let saved=null;try{saved=Number(localStorage.getItem("ucab_fac"))}catch(e){}
   if(!S.facs.some(f=>f.id===S.fac))S.fac=(S.facs.find(f=>f.id===saved)||S.facs[0])?.id||null;return S.facs}
 const facById=id=>(S.facs||[]).find(f=>f.id===id);
+/* portée : un droit sans faculté vaut pour toute l'université */
+const isCentral=()=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id==null);
+const adminFacs=()=>isCentral()?(S.facs||[]):(S.facs||[]).filter(f=>(S.roles||[]).some(r=>r.role==="admin"&&r.faculty_id===f.id));
 const facCode=id=>facById(id)?.code||"";
 const multiFac=()=>(S.facs||[]).length>1;
 /* choix de la faculté de travail (référentiel, horaires, calendrier) */
@@ -615,6 +619,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  calendrier:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M9 14l6 4M15 14l-6 4"/>',
   comptes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',
   dept:'<path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-4h4v4M9 11h6M9 14h6"/>',
   suividg:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
@@ -653,9 +658,10 @@ function availableTabs(){
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
   if(has("finance")||reader||has("caissier"))t.push({id:"paie",label:has("caissier")&&!has("finance")&&!reader?"Paiements":"Paie",fn:viewPayroll});
   if(has("finance")||reader){t.push({id:"tarifs",label:"Tarifs",fn:viewRates});t.push({id:"budget",label:"Budget",fn:viewBudget})}
-  if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:"Référentiel",fn:v=>viewRef(v,"ref")});
+  if(has("planificateur"))t.push({id:"referentiel",label:"Référentiel",fn:v=>viewRef(v,"ref")});
   if(has("admin"))t.push({id:"comptes",label:"Comptes",fn:v=>viewRef(v,"comptes")});
-  if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
+  if(isCentral()&&!has("planificateur"))t.push({id:"calendrier",label:"Jours sans cours",fn:v=>{S._univ=true;return viewClosures(v).finally(()=>{S._univ=false})}});
+  if(has("admin"))t.push(isCentral()?{id:"etab",label:"Établissement",fn:viewEtab}:{id:"etab",label:"Ma faculté",fn:viewEtabFac});
   if(has("admin")||reader||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
   /* quelqu'un qui gère et enseigne : la gestion d'abord, puis « Mon enseignement » */
   const me=t.filter(x=>x.me),other=t.filter(x=>!x.me);
@@ -666,11 +672,13 @@ function renderShell(){
   $app.classList.add("hasnav");
   const tabs=availableTabs();
   const name=S.user.user_metadata?.full_name||S.user.email;
-  const roles=posteById(S.myPoste)?posteLabelU({poste_id:S.myPoste},S.roles):[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · ");
+  const myFac=[...new Set((S.roles||[]).filter(r=>r.role!=="professeur"||S.roles.length===1).map(r=>r.faculty_id))];
+  const roles=(posteById(S.myPoste)?posteLabelU({poste_id:S.myPoste},S.roles):[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · "))+(S.facs&&S.facs.length?(myFac.length===1&&myFac[0]!=null?" · "+facCode(myFac[0]):myFac.includes(null)&&!(S.roles||[]).every(r=>r.role==="professeur")?" · Université":""):"");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       ${brandHtml("Année universitaire "+(S.year||""))}
       <span class="yr">Année universitaire ${esc(S.year||"")}</span>
+      ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
     <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
@@ -686,6 +694,7 @@ function renderShell(){
   document.onkeydown=e=>{if(e.key==="Escape"){setNav(false);closeAcct()}};
   document.onclick=e=>{if(acct&&acct.open&&!acct.contains(e.target))closeAcct()};
   pwBtn.onclick=()=>{closeAcct();passwordDialog()};
+  const hf=document.getElementById("hdrFac");if(hf)hf.onchange=async()=>{await setFac(Number(hf.value));renderShell()};
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
@@ -717,10 +726,11 @@ async function annonceDialog(){
     <div class="panel" style="padding:12px 14px;display:grid;gap:10px"><b>Nouvelle annonce</b>
       <label>Message<textarea id="anM" rows="3" maxlength="500" placeholder="Ex. Merci de donner vos disponibilités de la semaine prochaine avant jeudi 18 h."></textarea></label>
       <div class="grid2"><label>Pour<select id="anA"><option value="professeurs">Les professeurs</option><option value="tous">Tout le monde</option></select></label>
-        <label>À partir du<input id="anF" type="date" value="${t}"></label><label>Jusqu'au (facultatif)<input id="anT" type="date" value="${iso(addDays(new Date(),7))}"></label></div></div>
+        <label>À partir du<input id="anF" type="date" value="${t}"></label>${multiFac()||isCentral()?`<label>Faculté<select id="anW">${isCentral()?`<option value="">Toute l'université</option>`:""}${(S.facs||[]).map(f=>`<option value="${f.id}" ${f.id===S.fac&&!isCentral()?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}<label>Jusqu'au (facultatif)<input id="anT" type="date" value="${iso(addDays(new Date(),7))}"></label></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button><button class="btn primary" value="ok">Publier l'annonce</button></div>`,
   async()=>{const m=anM.value.trim();if(!m)throw new Error("Écrivez le message.");if(anT.value&&anT.value<anF.value)throw new Error("La date de fin doit être après la date de début.");
-    await q(sb.from("announcements").insert({message:m,audience:anA.value,starts_on:anF.value||t,ends_on:anT.value||null}));
+    const anW=document.getElementById("anW");
+    await q(sb.from("announcements").insert({message:m,audience:anA.value,starts_on:anF.value||t,ends_on:anT.value||null,faculty_id:anW?(anW.value?Number(anW.value):null):(isCentral()?null:S.fac)}));
     await loadAnnonces();toast("Annonce publiée");
     rerender()});
   document.querySelectorAll("[data-anndel]").forEach(b=>b.onclick=async()=>{try{await q(sb.from("announcements").update({ends_on:iso(addDays(new Date(),-1))}).eq("id",b.dataset.anndel));await loadAnnonces();toast("Annonce retirée");annonceDialog()}catch(e){toast(errMsg(e),true)}});
@@ -2539,13 +2549,15 @@ async function viewClosures(el){
   S.closures=list;const sems=sems0.filter(x=>!x.faculty_id||x.faculty_id===S.fac);
   const today=iso(new Date());S.clPast=!!S.clPast;
   /* la faculté choisie voit ses jours sans cours et ceux de toute l'université */
-  const shown=list.filter(c=>(S.clPast||c.date_to>=today)&&(c.faculty_id==null||c.faculty_id===S.fac));
+  const U=!!S._univ;
+  const shown=list.filter(c=>(S.clPast||c.date_to>=today)&&(U?c.faculty_id==null:(c.faculty_id==null||c.faculty_id===S.fac)));
   const pour=c=>c.faculty_id==null?'<span class="pill p-info">Toute l\'université</span>':esc(facCode(c.faculty_id));
   const per=c=>c.date_from===c.date_to?fdl(c.date_from):`du ${fdl(c.date_from)} au ${fdl(c.date_to)}`;
   const KC={ferie:"p-warn",vacances:"p-info",examens:"p-bad",evenement:"p-ok"};
   const cur=sems.filter(x=>x.academic_years?.is_current);
-  el.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Jours sans cours${multiFac()?" · "+esc(facCode(S.fac)):""}</h2><button class="btn sm primary" id="clAdd">Ajouter</button></div>
-    ${facSelect("clFac")}
+  el.innerHTML=`${U?`<h1>Jours sans cours de l'université</h1><p class="lead">Les fêtes nationales et religieuses communes à toutes les facultés. Chaque faculté ajoute ses propres jours (examens, vacances) dans son Référentiel.</p><div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm primary" id="clAdd">Ajouter</button></div>`
+      :`<div class="row" style="justify-content:space-between"><h2 style="margin-top:0">Jours sans cours${multiFac()?" · "+esc(facCode(S.fac)):""}</h2><button class="btn sm primary" id="clAdd">Ajouter</button></div>
+    ${facSelect("clFac")}`}
     <p class="sub" style="margin-top:0">Jours fériés, vacances, examens, Magal, Gamou… Le générateur ne place aucun cours ces jours-là, on ne peut pas y déplacer un cours, et le rythme des matières est calculé sans eux.</p>
     ${cur.length?`<div class="stats mini">${cur.map(x=>{const tot=(new Date(x.end_date)-new Date(x.start_date))/864e5/7,op=openWeeks(x.start_date,x.end_date);return `<div class="stat"><b>${op.toFixed(1).replace(".",",")}</b><span>semaines de cours en ${esc(x.label)} (sur ${tot.toFixed(1).replace(".",",")})</span></div>`}).join("")}</div>`:""}
     <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);margin-bottom:8px"><input type="checkbox" id="clPast" ${S.clPast?"checked":""}> Afficher aussi les dates passées</label>
@@ -2555,18 +2567,18 @@ async function viewClosures(el){
       :`<p class="empty">Aucun jour sans cours à venir. Ajoutez les jours fériés et les vacances du semestre.</p>`}</div>`;
   clPast.onchange=()=>{S.clPast=clPast.checked;rerender()};
   const cf=document.getElementById("clFac");if(cf)cf.onchange=async()=>{await setFac(Number(cf.value));rerender()};
-  const form=c=>{c=c||{part:"jour",kind:"ferie",faculty_id:S.fac};
+  const form=c=>{c=c||{part:"jour",kind:"ferie",faculty_id:U?null:S.fac};
     openDialog(`<h3>${c.id?"Modifier":"Ajouter"} un jour sans cours</h3>
       <label>Libellé<input id="clL" required maxlength="80" placeholder="Ex. Grand Magal, Tabaski, vacances de fin de semestre…" value="${esc(c.label||"")}"></label>
       <div class="grid2"><label>Du<input id="clF" type="date" required value="${c.date_from||""}"></label><label>Au (inclus)<input id="clT" type="date" required value="${c.date_to||""}"></label>
         <label>Type<select id="clK">${Object.entries(CLOSE_KIND).map(([k,l])=>`<option value="${k}" ${c.kind===k?"selected":""}>${l}</option>`).join("")}</select></label>
         <label>Moment<select id="clP">${Object.entries(CLOSE_PART).map(([k,l])=>`<option value="${k}" ${c.part===k?"selected":""}>${l}</option>`).join("")}</select></label>
-        ${multiFac()?`<label style="grid-column:1/-1">Pour<select id="clW"><option value="">Toute l'université</option>${S.facs.map(f=>`<option value="${f.id}" ${f.id===c.faculty_id?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:""}</div>
+        ${multiFac()&&!U?`<label style="grid-column:1/-1">Pour<select id="clW">${isCentral()||(S.roles||[]).some(r=>r.role==="planificateur"&&r.faculty_id==null)?`<option value="">Toute l'université</option>`:""}${S.facs.map(f=>`<option value="${f.id}" ${f.id===c.faculty_id?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:""}</div>
       <p class="sub" style="margin:0" id="clInfo"></p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{if(clT.value<clF.value)throw new Error("La date de fin doit être après la date de début.");
       const cw=document.getElementById("clW");
-      const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value,faculty_id:cw?(cw.value?Number(cw.value):null):(c.faculty_id??S.fac)};
+      const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value,faculty_id:cw?(cw.value?Number(cw.value):null):(U?null:(c.faculty_id??S.fac))};
       if(c.id)await q(sb.from("calendar_closures").update(row).eq("id",c.id));else await q(sb.from("calendar_closures").insert(row));
       await loadClosures();toast("Enregistré");rerender()});
     const info=async()=>{clInfo.textContent="";if(!clF.value||!clT.value||clT.value<clF.value)return;
@@ -2600,7 +2612,7 @@ const OPT_DESC={chef_departement:"Voit l'emploi du temps et l'avancement des mat
 const rightsOn=()=>S.cfg?.enabled_rights||[];
 /* signature des messages WhatsApp / SMS : le nom et le poste de la personne qui envoie */
 function sig(){const n=(S.user?.user_metadata?.full_name||"").trim(),p=posteById(S.myPoste);const pn=p&&!isProfPoste(p)?p.name:"";return [n,pn].filter(Boolean).join(", ")||"l'administration"}
-async function loadPostes(){try{S.postes=await q(sb.from("postes").select("id,name,roles,sort").order("sort").order("name"))}catch(e){S.postes=S.postes||[]}return S.postes}
+async function loadPostes(){try{S.postes=await q(sb.from("postes").select("id,name,roles,sort,scope").order("sort").order("name"))}catch(e){S.postes=S.postes||[]}return S.postes}
 const posteById=id=>(S.postes||[]).find(p=>p.id===id);
 const posteUsable=p=>p.roles.every(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r));
 const visiblePostes=()=>(S.postes||[]).filter(posteUsable);
@@ -2612,27 +2624,32 @@ function posteLabelU(u,rs){const p=posteById(u?.poste_id),t=rs.some(r=>r.role===
 /* formulaire « poste » (création de compte, changement de poste) */
 function posteForm(deps,u,rs){
   rs=rs||[];const cur=u?.poste_id,teach=rs.some(r=>r.role==="professeur"),dep=rs.find(r=>["responsable","chef_departement"].includes(r.role))?.department_id||"";
-  const L=visiblePostes();
-  return `<label>Poste<select id="rPoste"><option value="">Choisir le poste…</option>${L.map(p=>`<option value="${p.id}" ${p.id===cur?"selected":""}>${esc(p.name)}</option>`).join("")}</select></label>
+  const L=visiblePostes().filter(p=>isCentral()||p.scope!=="universite");
+  const AF=adminFacs(),uf=u?.faculty_id??(AF.length===1?AF[0].id:S.fac);
+  return `${AF.length>1||isCentral()?`<label id="rFacL">Faculté<select id="rFac">${AF.map(f=>`<option value="${f.id}" ${f.id===uf?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:`<input type="hidden" id="rFac" value="${AF[0]?.id||""}">`}
+    <label>Poste<select id="rPoste"><option value="">Choisir le poste…</option>${L.map(p=>`<option value="${p.id}" ${p.id===cur?"selected":""}>${esc(p.name)}${p.scope==="universite"?" (université)":""}</option>`).join("")}</select></label>
     <label id="rDepL">Département<select id="rDep"></select></label>
     <label id="rTeachL" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="rTeach" ${teach?"checked":""}> Enseigne aussi (a des cours, des disponibilités et des émargements)</label>
     <p class="sub" id="rSum" style="margin:0"></p>
-    <p class="sub" style="margin:0">Les postes et leurs noms se règlent dans Établissement › Postes.</p>
-    <template id="rDepData">${JSON.stringify({deps:deps.map(d=>[d.id,d.code+" · "+d.name]),dep})}</template>`}
+    <p class="sub" style="margin:0">${isCentral()?"Les postes et leurs noms se règlent dans Établissement › Postes.":"Les postes sont définis par l'administrateur central."}</p>
+    <template id="rDepData">${JSON.stringify({deps:deps.map(d=>[d.id,d.code+" · "+d.name,d.faculty_id]),dep})}</template>`}
 function wirePosteForm(){
   const f=document.getElementById("dlgForm"),sel=f.querySelector("#rPoste");if(!sel)return;
   const D=JSON.parse(f.querySelector("#rDepData").innerHTML),dsel=f.querySelector("#rDep");
+  const fl=f.querySelector("#rFacL");
   const show=()=>{const p=posteById(Number(sel.value));
+    if(fl)fl.hidden=!!p&&p.scope==="universite";
     f.querySelector("#rTeachL").hidden=!p||p.roles.includes("professeur");
     const sc=scoped(p),chef=p&&p.roles.includes("chef_departement");f.querySelector("#rDepL").hidden=!sc;
-    if(sc){const v=dsel.value||String(D.dep||"");dsel.innerHTML=(chef?"":`<option value="">Tous les départements</option>`)+D.deps.map(([id,l])=>`<option value="${id}">${esc(l)}</option>`).join("");dsel.value=v&&[...dsel.options].some(o=>o.value===v)?v:dsel.options[0]?.value||""}
+    if(sc){const v=dsel.value||String(D.dep||"");dsel.innerHTML=(chef?"":`<option value="">Tous les départements</option>`)+D.deps.filter(x=>{const fv=f.querySelector("#rFac")?.value;return !fv||x[2]==null||String(x[2])===fv}).map(([id,l])=>`<option value="${id}">${esc(l)}</option>`).join("");dsel.value=v&&[...dsel.options].some(o=>o.value===v)?v:dsel.options[0]?.value||""}
     f.querySelector("#rSum").textContent=p?"Droits : "+p.roles.map(r=>RIGHTS[r]||r).join(" · ")+".":""};
-  sel.onchange=show;f._setPoste=id=>{sel.value=String(id||"");show()};show();
+  sel.onchange=show;const rf=f.querySelector("select#rFac");if(rf)rf.onchange=show;f._setPoste=id=>{sel.value=String(id||"");show()};show();
 }
 function readPosteForm(){const f=document.getElementById("dlgForm"),p=posteById(Number(f.querySelector("#rPoste").value));
   if(!p)throw new Error("Choisissez le poste de la personne.");
-  return{p_poste:p.id,p_dep:scoped(p)&&f.querySelector("#rDep").value?Number(f.querySelector("#rDep").value):null,p_teaches:!p.roles.includes("professeur")&&f.querySelector("#rTeach").checked}}
-async function assignPoste(userId,o){return rpcOrScript("admin_assign_poste",{p_user:userId,...o},"postes_et_nettoyage.sql")}
+  const fv=f.querySelector("#rFac")?.value;
+  return{p_poste:p.id,p_dep:scoped(p)&&f.querySelector("#rDep").value?Number(f.querySelector("#rDep").value):null,p_teaches:!p.roles.includes("professeur")&&f.querySelector("#rTeach").checked,p_fac:p.scope==="universite"?null:(fv?Number(fv):null)}}
+async function assignPoste(userId,o){return q(sb.rpc("admin_assign_poste",{p_user:userId,p_fac:o.p_fac??null,p_poste:o.p_poste,p_dep:o.p_dep,p_teaches:o.p_teaches}))}
 function showCredentials(title,email,pwd){
   const f=document.getElementById("dlgForm");
   f.innerHTML=`<h3>${esc(title)}</h3>
@@ -2641,6 +2658,30 @@ function showCredentials(title,email,pwd){
     <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="cpPwd">Copier</button><button class="btn primary" value="cancel">Fermer</button></div>`;
   document.getElementById("cpPwd").onclick=async()=>{try{await navigator.clipboard.writeText(pwd);toast("Copié")}catch(e){const r=document.createRange();r.selectNodeContents(document.getElementById("tmpPwd"));const s=getSelection();s.removeAllRanges();s.addRange(r)}};
   document.getElementById("dlg").addEventListener("close",()=>rerender(),{once:true});
+}
+
+/* fenêtre de création ou de modification d'une faculté */
+function facultyDialog(f){let flogo=f?.logo||null;
+    openDialog(`<h3>${f?"Modifier la faculté":"Nouvelle faculté"}</h3>
+      <div class="grid2"><label>Code<input id="fC" required maxlength="15" value="${esc(f?.code||"")}" placeholder="Ex. FSRC, FLSH"></label><label>Nom court (facultatif)<input id="fS" maxlength="60" value="${esc(f?.short_name||"")}"></label></div>
+      <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
+      <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
+      <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
+      ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
+    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo};
+      if(f){const r2=await q(sb.from("faculties").update(row).eq("id",f.id).select());if(!r2.length)throw new Error("Modification refusée.")}else await q(sb.from("faculties").insert(row));
+      await loadFacs();toast(f?"Faculté enregistrée":"Faculté créée");rerender()});
+    const show=()=>{fLB.innerHTML=flogo?`<img src="${esc(flogo)}" alt="">`:'<span class="sub">Pas de logo</span>';fLx.hidden=!flogo};show();
+    fL.onchange=()=>{const fi=fL.files[0];if(!fi)return;const img=new Image(),url=URL.createObjectURL(fi);img.onload=()=>{const m=256,k=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);flogo=c.toDataURL("image/png");URL.revokeObjectURL(url);show()};img.src=url};
+    fLx.onclick=()=>{flogo=null;show()}}
+
+/* administrateur de faculté : les réglages de sa faculté */
+async function viewEtabFac(v){
+  await loadFacs();const L=adminFacs();
+  v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo et l'en-tête des documents de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
+    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
+  v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facultyDialog(facById(Number(b.dataset.fe))));
 }
 
 /* ---------- administrateur : établissement (identité, année universitaire, sauvegarde) ---------- */
@@ -2674,7 +2715,7 @@ async function viewEtab(v){
 
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Postes</h2><button class="btn sm primary" id="pNew">Nouveau poste</button></div>
       <p class="sub" style="margin:6px 0 10px">Un poste est un nom (Trésorier, Scolarité, Adjoint…) posé sur des droits. Renommez-les comme dans votre établissement. Le nom apparaît dans la barre latérale, les comptes et la signature des messages.</p>
-      <div class="rl">${(S.postes||[]).map(po=>{const off=!posteUsable(po),n=nOf(po.id);return `<div class="rlrow" style="align-items:flex-start;${off?"opacity:.55":""}"><div style="flex:1"><b>${esc(po.name)}</b> <span class="sub">· ${n} personne(s)</span>${off?' <span class="pill p-mute">droit désactivé</span>':""}
+      <div class="rl">${(S.postes||[]).map(po=>{const off=!posteUsable(po),n=nOf(po.id);return `<div class="rlrow" style="align-items:flex-start;${off?"opacity:.55":""}"><div style="flex:1"><b>${esc(po.name)}</b> <span class="pill ${po.scope==="universite"?"p-warn":"p-mute"}">${po.scope==="universite"?"Université":"Faculté"}</span> <span class="sub">· ${n} personne(s)</span>${off?' <span class="pill p-mute">droit désactivé</span>':""}
         <div class="chips" style="margin-top:4px">${po.roles.map(r=>`<span class="pill p-info">${esc(RIGHTS[r]||r)}</span>`).join("")}</div></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-pe="${po.id}">Modifier</button>${n?"":`<button class="btn sm danger" data-pd="${po.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
 
@@ -2707,20 +2748,7 @@ async function viewEtab(v){
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
   /* facultés */
-  const facDlg=f=>{let flogo=f?.logo||null;
-    openDialog(`<h3>${f?"Modifier la faculté":"Nouvelle faculté"}</h3>
-      <div class="grid2"><label>Code<input id="fC" required maxlength="15" value="${esc(f?.code||"")}" placeholder="Ex. FSRC, FLSH"></label><label>Nom court (facultatif)<input id="fS" maxlength="60" value="${esc(f?.short_name||"")}"></label></div>
-      <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
-      <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
-      <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
-      ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
-    async()=>{const row={code:fC.value.trim().toUpperCase(),name:fN.value.trim(),short_name:fS.value.trim()||null,pdf_header:fH.value.trim(),logo:flogo};
-      if(f)await q(sb.from("faculties").update(row).eq("id",f.id));else await q(sb.from("faculties").insert(row));
-      await loadFacs();toast(f?"Faculté enregistrée":"Faculté créée");rerender()});
-    const show=()=>{fLB.innerHTML=flogo?`<img src="${esc(flogo)}" alt="">`:'<span class="sub">Pas de logo</span>';fLx.hidden=!flogo};show();
-    fL.onchange=()=>{const fi=fL.files[0];if(!fi)return;const img=new Image(),url=URL.createObjectURL(fi);img.onload=()=>{const m=256,k=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);flogo=c.toDataURL("image/png");URL.revokeObjectURL(url);show()};img.src=url};
-    fLx.onclick=()=>{flogo=null;show()}};
+  const facDlg=f=>facultyDialog(f);
   fNew.onclick=()=>facDlg(null);
   v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facDlg(facById(Number(b.dataset.fe))));
   v.querySelectorAll("[data-fd]").forEach(b=>b.onclick=()=>{const f=facById(Number(b.dataset.fd));
@@ -2731,13 +2759,14 @@ async function viewEtab(v){
   const posteDlg=po=>{const avail=Object.keys(RIGHTS).filter(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r)||po?.roles.includes(r)),n=po?nOf(po.id):0;
     openDialog(`<h3>${po?"Modifier le poste":"Nouveau poste"}</h3>
       <label>Nom du poste<input id="pN" required maxlength="60" value="${esc(po?.name||"")}" placeholder="Ex. Trésorier, Scolarité, Adjoint du directeur"></label>
+      <label>Portée<select id="pSc"><option value="faculte" ${po?.scope!=="universite"?"selected":""}>Une faculté (choisie à l'attribution)</option><option value="universite" ${po?.scope==="universite"?"selected":""}>Toute l'université</option></select></label>
       <div style="display:grid;gap:6px"><span class="sub">Droits donnés par ce poste</span>${avail.map(r=>`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-pr="${r}" ${po?.roles.includes(r)?"checked":""}> ${esc(RIGHTS[r])}</label>`).join("")}</div>
       ${n?`<p class="sub" style="margin:0">${n} personne(s) occupent ce poste : si vous changez les droits, les leurs seront mis à jour.</p>`:""}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{const roles=[...document.querySelectorAll("#dlgForm [data-pr]")].filter(c=>c.checked).map(c=>c.dataset.pr);
       if(!pN.value.trim())throw new Error("Donnez un nom au poste.");if(!roles.length)throw new Error("Cochez au moins un droit.");
       const ch=po&&[...po.roles].sort().join()!==[...roles].sort().join();
-      const k=await rpcOrScript("admin_save_poste",{p_id:po?.id||null,p_name:pN.value.trim(),p_roles:roles},"postes_et_nettoyage.sql");
+      const k=await q(sb.rpc("admin_save_poste",{p_id:po?.id||null,p_name:pN.value.trim(),p_roles:roles,p_scope:pSc.value}));
       await loadPostes();toast(po?(ch&&k?`Poste enregistré · droits mis à jour pour ${k} personne(s)`:"Poste enregistré"):"Poste créé");rerender()})};
   pNew.onclick=()=>posteDlg(null);
   v.querySelectorAll("[data-pe]").forEach(b=>b.onclick=()=>posteDlg(posteById(Number(b.dataset.pe))));
@@ -3053,12 +3082,15 @@ async function viewAdminDash(v){
 
 async function viewAccounts(el){
   let [profiles,roles,teachers,deps,info]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
-    q(sb.from("user_roles").select("id,user_id,role,department_id")),
-    q(sb.from("teachers").select("id,profile_id,first_name,last_name,email,phone,active").order("last_name")),
-    q(sb.from("departments").select("id,code,name").order("code")),
+    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id,faculty_id").order("full_name")),
+    q(sb.from("user_roles").select("id,user_id,role,department_id,faculty_id")),
+    q(sb.from("teachers").select("id,profile_id,first_name,last_name,email,phone,active,department_id").order("last_name")),
+    q(sb.from("departments").select("id,code,name,faculty_id").order("code")),
     q(sb.rpc("admin_users_info")).catch(()=>[])]);
   info=Array.isArray(info)?info:[];
+  /* plusieurs facultés : on affiche celle choisie en haut de l'écran, plus les comptes de l'université */
+  const tFac=t=>deps.find(d=>d.id===t.department_id)?.faculty_id??null;
+  if(multiFac()){profiles=profiles.filter(u=>u.faculty_id==null||u.faculty_id===S.fac);teachers=teachers.filter(t=>tFac(t)===S.fac)}
   const dcode=id=>deps.find(d=>d.id===id)?.code;
   const inf=id=>info.find(x=>x.id===id)||{};
   const rolesOf=id=>roles.filter(r=>r.user_id===id);
@@ -3084,7 +3116,7 @@ async function viewAccounts(el){
   const stateOf=(u,li)=>`${u.active===false?"off":"on"}${u.must_change_password?" tmp":""}${info.length&&!li?" never":""}`;
   const lienT=(u,t)=>t?esc(t.first_name+" "+t.last_name):teaches(u)?'<span class="pill p-bad">À lier</span>':'<span class="sub">—</span>';
   const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
-  const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div></td>`;
+  const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div>${(S.facs||[]).length>1||u.faculty_id==null?`<div class="sub">${u.faculty_id==null?"Université":esc(facCode(u.faculty_id))}</div>`:""}</td>`;
   const posteCell=(u,rs)=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>(RIGHTS[r.role]||r.role)+(["responsable","chef_departement"].includes(r.role)?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabelU(u,rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
   el.innerHTML=`<div class="row" style="justify-content:flex-end"><div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
@@ -3127,7 +3159,7 @@ async function viewAccounts(el){
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer le compte</button></div>`,
     async()=>{
       const po=readPosteForm();
-      const r=await callUsers({action:"create",email:aE.value,full_name:aN.value});
+      const r=await callUsers({action:"create",email:aE.value,full_name:aN.value,faculty_id:po.p_fac});
       try{await assignPoste(r.user_id,po)}catch(e){toast("Compte créé, mais le poste n'a pas pu être enregistré : "+errMsg(e),true)}
       try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
       showCredentials("Compte créé",r.email,r.temp_password);
@@ -3146,8 +3178,8 @@ async function viewAccounts(el){
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer les comptes</button></div>`,
     async()=>{const done=[],errs=[];
       for(const t of tNoAcc){try{if(!t.email)throw new Error("pas d'adresse e-mail");
-        const r=await callUsers({action:"create",email:t.email,full_name:t.first_name+" "+t.last_name});
-        const pp=profPoste();if(pp)await assignPoste(r.user_id,{p_poste:pp.id,p_dep:null,p_teaches:false});else await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
+        const r=await callUsers({action:"create",email:t.email,full_name:t.first_name+" "+t.last_name,faculty_id:tFac(t)});
+        const pp=profPoste();if(pp)await assignPoste(r.user_id,{p_poste:pp.id,p_dep:null,p_teaches:false,p_fac:tFac(t)});else await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
         try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
         try{await q(sb.rpc("admin_link_teacher",{p_user:r.user_id,p_teacher:t.id}))}catch(e){}
         done.push({t,email:r.email,pwd:r.temp_password})}catch(e){errs.push(t.first_name+" "+t.last_name+" : "+errMsg(e))}}

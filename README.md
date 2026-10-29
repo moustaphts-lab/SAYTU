@@ -13,6 +13,15 @@ Application web de gestion universitaire : emplois du temps hebdomadaires, émar
 3. Framework preset : **None**. Build command : *(vide)*. Build output directory : `/`.
 4. Chaque modification poussée sur `main` est publiée automatiquement.
 
+## Facultés
+
+L'application gère une université de plusieurs facultés. Chaque faculté a ses départements, filières, groupes, matières, salles, semestres, jours et horaires, et jours sans cours. Les membres d'une faculté ne voient rien des autres facultés (règles vérifiées dans la base).
+
+- **Administrateur central** : crée les facultés, nomme leurs administrateurs, règle ce qui est commun (identité, années, postes, droits optionnels, jours sans cours de toute l'université, sauvegarde).
+- **Administrateur de faculté** : comptes et postes de sa faculté, nom et logo de sa faculté.
+- **Directeur des études de la faculté** : référentiel, affectations et emplois du temps de sa faculté.
+- **Doyen** : synthèse, suivi et visa de la paie de sa faculté. **Rectorat** : consultation de toute l'université.
+
 ## Postes et droits
 
 Un **poste** est un nom choisi par l'établissement (Directeur des études, Trésorier, Scolarité…) posé sur une combinaison de **droits**. L'administrateur crée, renomme et modifie les postes dans **Établissement › Postes**. Une personne peut aussi « enseigner » en plus de son poste.
