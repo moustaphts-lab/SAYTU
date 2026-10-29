@@ -2192,7 +2192,7 @@ async function viewDashboard(v){
   if(S.dPreset==="perso")dOk.onclick=()=>{if(dT.value<dF.value){toast("La date de fin doit être après la date de début.",true);return}S.dFrom=dF.value;S.dTo=dT.value;rerender()};
 
   const sess=await qAll(()=>sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,teacher_id,teachers(first_name,last_name,departments(code)),teaching_assignments(courses(code,name,departments(code))),student_groups(code),attendance_records(status,retained_minutes,declared_minutes,entered_for_teacher)").gte("session_date",S.dFrom).lte("session_date",S.dTo).order("session_date"));
-  const due=sess.filter(s=>s.status!=="annulee"&&s.session_date<=today);
+  const due=sess.filter(s=>s.status!=="annulee"&&sEnd(s)<=new Date());
   const K={prevues:due.length,annulees:sess.filter(s=>s.status==="annulee").length,emargees:0,valid:0,wait:0,corr:0,rej:0,deleg:0,minPrev:0,minVal:0,minWait:0};
   const dep={},tea={},sans=[],bk={};
   const span=(new Date(S.dTo)-new Date(S.dFrom))/864e5,byDay=span<=14;
