@@ -380,7 +380,7 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
 
 <script id="pdf-builder">
 /* Bulletin PDF : construit uniquement à partir de la version figée (snapshot) du bulletin */
-function makePayslipPdf(jsPDF, slip, payments){
+function makePayslipPdf(jsPDF, slip, payments, detailed){
   const sn=slip.snapshot, E=sn.enseignant, P=sn.periode;
   const money=n=>Math.round(n||0).toLocaleString("fr-FR").replace(/[  ]/g," ")+" FCFA";
   const d=s=>{const [y,m,j]=String(s).slice(0,10).split("-");return j+"/"+m+"/"+y};
@@ -394,7 +394,7 @@ function makePayslipPdf(jsPDF, slip, payments){
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...muted);
   doc.text((S.cfg&&S.cfg.pdf_header?S.cfg.pdf_header+" · ":"")+"Service financier",LX,23.5);
   doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...ink);
-  doc.text("Bulletin de rémunération",R,16,{align:"right"});
+  doc.text(detailed?"Relevé détaillé des heures":"Bulletin de rémunération",R,16,{align:"right"});
   doc.setFont("courier","normal"); doc.setFontSize(10); doc.text(slip.number,R,22,{align:"right"});
 
   doc.setDrawColor(...line); doc.line(L,29,R,29);
@@ -404,15 +404,26 @@ function makePayslipPdf(jsPDF, slip, payments){
   block(L,"Enseignant",[["Nom",E.nom],["Statut",E.statut],["Département",E.departement],["E-mail",E.email]]);
   block(112,"Période",[["Libellé",P.nom],["Du",d(P.debut)],["Au",d(P.fin)],["Approuvé le",d(sn.approuve_le)]]);
 
-  const lines=sn.lignes.map(l=>[d(l.date)+(l.rattrapage?" (rattrapage)":""),l.cours,l.groupe,h(l.minutes),
-    money(l.tarif)+(l.source==="individuel"?" *":""),money(l.montant)]);
-  doc.autoTable({startY:68,head:[["Date","Cours","Groupe","Durée","Tarif horaire","Montant"]],body:lines,
+  /* bulletin : un résumé par tarif horaire ; relevé détaillé : chaque séance */
+  let lines,head;
+  if(detailed){head=[["Date","Cours","Groupe","Durée","Tarif horaire","Montant"]];
+    lines=sn.lignes.map(l=>[d(l.date)+(l.rattrapage?" (rattrapage)":""),l.cours,l.groupe,h(l.minutes),money(l.tarif)+(l.source==="individuel"?" *":""),money(l.montant)]);
+    lines.push([{content:"Total ("+sn.lignes.length+" séances)",colSpan:3,styles:{fontStyle:"bold"}},{content:h(slip.total_minutes),styles:{fontStyle:"bold"}},"",{content:money(slip.gross_fcfa),styles:{fontStyle:"bold"}}])}
+  else{const g={};sn.lignes.forEach(l=>{const k=l.tarif+"|"+(l.rattrapage?1:0);(g[k]??={t:l.tarif,r:l.rattrapage,m:0,a:0,i:l.source==="individuel"});g[k].m+=l.minutes;g[k].a+=l.montant});
+    head=[["Désignation","Heures","Tarif horaire","Montant"]];
+    lines=Object.values(g).sort((a,b)=>a.r-b.r||b.t-a.t).map(x=>[(x.r?"Heures antérieures régularisées":"Enseignements du "+d(P.debut)+" au "+d(P.fin)),h(x.m),money(x.t)+(x.i?" *":""),money(x.a)])}
+  doc.autoTable({startY:68,head,body:lines,
     theme:"plain",margin:{left:L,right:16},
     styles:{font:"helvetica",fontSize:8.5,textColor:ink,cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:line,lineWidth:{bottom:0.2}},
     headStyles:{fontStyle:"bold",textColor:muted,fontSize:7.5,lineWidth:{bottom:0.4},lineColor:ink},
-    columnStyles:{0:{cellWidth:30},2:{cellWidth:22},3:{halign:"right",cellWidth:16},4:{halign:"right",cellWidth:30},5:{halign:"right",cellWidth:28}}});
+    columnStyles:detailed?{0:{cellWidth:30},2:{cellWidth:22},3:{halign:"right",cellWidth:16},4:{halign:"right",cellWidth:30},5:{halign:"right",cellWidth:28}}:{1:{halign:"right",cellWidth:22},2:{halign:"right",cellWidth:34},3:{halign:"right",cellWidth:32}}});
 
   let y=doc.lastAutoTable.finalY+8;
+  if(detailed){doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text("Relevé joint au bulletin "+slip.number+". Il reprend chaque séance émargée et validée prise en compte dans ce bulletin.",L,y);
+    doc.setFontSize(7.5);doc.text("* Tarif individuel. Édité le "+new Date().toLocaleDateString("fr-FR")+" · "+slip.number,L,285);
+    return doc}
+  if(!detailed){doc.setFontSize(8);doc.setTextColor(...muted);doc.text("Le détail des séances figure dans le relevé détaillé des heures, disponible sur demande ou dans l'application.",L,y-2);y+=4}
   if(y>230){doc.addPage();y=20}
   const paid=(payments||[]).reduce((s,p)=>s+p.amount_fcfa,0);
   const tot=[["Heures payables",h(slip.total_minutes)],["Rémunération brute",money(slip.gross_fcfa)],["Primes",money(0)],
@@ -432,7 +443,7 @@ function makePayslipPdf(jsPDF, slip, payments){
     doc.text("Règlements : "+payments.map(p=>d(p.paid_on)+" "+p.method+" "+money(p.amount_fcfa)+(p.reference?" ("+p.reference+")":"")).join(" ; "),L,y+16,{maxWidth:R-L})}
 
   doc.setFontSize(7.5); doc.setTextColor(...muted);
-  const foot=["Montant = durée retenue × tarif horaire en vigueur à la date de la séance. * Tarif individuel.",
+  const foot=["Montant = heures retenues × tarif horaire en vigueur à la date de chaque séance. * Tarif individuel.",
     "Aucune retenue ni cotisation n'est appliquée selon les règles actuelles de l'établissement.",
     "Bulletin approuvé par "+(sn.approuve_par||"le service financier")+". Ce document ne vaut pas preuve de paiement.",
     "Édité le "+new Date().toLocaleDateString("fr-FR")+" · "+slip.number];
@@ -3062,7 +3073,7 @@ async function periodDetail(el,p){
   const tot=slips.reduce((s,x)=>s+x.net_fcfa,0),tp=slips.reduce((s,x)=>s+paid(x.id),0);
   const slipRows=list=>list.map(s=>{const pd=paid(s.id),du=s.net_fcfa-pd;return `<div class="slip"><div class="sl-main"><b>${esc(s.snapshot.enseignant.nom)}</b><div class="sub">${esc(s.snapshot.enseignant.statut||"")} · ${hrs(s.total_minutes)} · <span class="mono">${esc(s.number)}</span></div></div>
       <div class="sl-amt"><div class="sl-net">${fcfa(s.net_fcfa)}</div><div class="hbar"><i style="width:${pct(pd,s.net_fcfa)}%;background:${du?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${du?`Réglé ${fcfa(pd)} · reste ${fcfa(du)}`:"Entièrement réglé"}</div></div>
-      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">PDF</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
+      <div class="sl-act">${ppill(SLIP,s.status)}<button class="btn sm" data-pdf="${s.id}">Bulletin</button><button class="btn sm" data-sdet="${s.id}">Relevé</button>${canPay()&&s.status!=="paye"?`<button class="btn primary sm" data-pay="${s.id}">Payer</button>`:""}</div></div>`}).join("");
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
       ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}
@@ -3073,6 +3084,7 @@ async function periodDetail(el,p){
     ${pays.length?`<h2>Règlements enregistrés</h2><div class="panel tbl"><table><thead><tr><th>Date</th><th>Bulletin</th><th>Mode</th><th>Référence</th><th>Montant</th></tr></thead><tbody>
     ${pays.map(x=>`<tr><td class="mono">${fdl(x.paid_on)}</td><td class="mono">${esc(slips.find(s=>s.id===x.payslip_id)?.number)}</td><td>${esc(x.method)}</td><td class="mono">${esc(x.reference||"—")}</td><td class="num">${fcfa(x.amount_fcfa)}</td></tr>`).join("")}</tbody></table></div>`:""}`;
   const wireSlips=()=>{el.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  el.querySelectorAll("[data-sdet]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.sdet),pays,true));
   wireExport("pX",()=>({file:"paie_"+slug(p.name),title:"État de paie : "+p.name,subtitle:"Du "+fdl(p.start_date)+" au "+fdl(p.end_date)+" · approuvée le "+fdl(p.approved_at),landscape:true,sheets:[
     {name:"Bulletins",title:"Bulletins (FCFA)",head:["Bulletin","Enseignant","Statut","Heures","Net à payer (FCFA)","Réglé (FCFA)","Reste dû (FCFA)","État"],
      rows:slips.map(s=>[s.number,s.snapshot.enseignant.nom,s.snapshot.enseignant.statut||"",dh(s.total_minutes),s.net_fcfa,paid(s.id),s.net_fcfa-paid(s.id),s.status])
@@ -3170,11 +3182,11 @@ function linesDialog(o){
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button></div>`,async()=>{});
 }
 
-function downloadSlip(slip,payments){
+function downloadSlip(slip,payments,detailed){
   try{
     if(!window.jspdf)throw new Error("Le module PDF n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
-    const doc=makePayslipPdf(window.jspdf.jsPDF,slip,payments.filter(p=>p.payslip_id===slip.id));
-    doc.save(`${slip.number}_${slip.snapshot.enseignant.nom.replace(/\s+/g,"-")}.pdf`);
+    const doc=makePayslipPdf(window.jspdf.jsPDF,slip,payments.filter(p=>p.payslip_id===slip.id),detailed);
+    doc.save(`${detailed?"releve-heures_":""}${slip.number}_${slip.snapshot.enseignant.nom.replace(/\s+/g,"-")}.pdf`);
   }catch(e){toast(errMsg(e),true)}
 }
 
@@ -3257,8 +3269,9 @@ async function viewMyPayslips(v){
     <div class="panel tbl">${slips.length?`<table><thead><tr><th>Bulletin</th><th>Période</th><th>Heures</th><th>Net à payer</th><th>Réglé</th><th>État</th><th></th></tr></thead><tbody>
     ${slips.map(s=>`<tr><td class="mono">${esc(s.number)}</td><td>${esc(s.snapshot.periode.nom)}<div class="sub mono">${fdl(s.snapshot.periode.debut)} au ${fdl(s.snapshot.periode.fin)}</div></td>
       <td class="num">${hrs(s.total_minutes)}</td><td class="num"><b>${fcfa(s.net_fcfa)}</b></td><td class="num">${fcfa(paid(s.id))}</td><td>${ppill(SLIP,s.status)}</td>
-      <td><button class="btn sm primary" data-pdf="${s.id}">Télécharger le PDF</button></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucun bulletin pour l'instant. Il apparaîtra ici dès que le service financier aura approuvé une période.</p>`}</div>`;
+      <td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-pdf="${s.id}">Bulletin (PDF)</button><button class="btn sm" data-det="${s.id}">Relevé détaillé</button></div></td></tr>`).join("")}</tbody></table>`:`<p class="empty">Aucun bulletin pour l'instant. Il apparaîtra ici dès que le service financier aura approuvé une période.</p>`}</div>`;
   v.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.pdf),pays));
+  v.querySelectorAll("[data-det]").forEach(b=>b.onclick=()=>downloadSlip(slips.find(s=>s.id==b.dataset.det),pays,true));
   mPrev.onclick=()=>{S.payM=new Date(M.getFullYear(),M.getMonth()-1,1);rerender()};
   mNext.onclick=()=>{S.payM=new Date(M.getFullYear(),M.getMonth()+1,1);rerender()};
   mNow.onclick=()=>{S.payM=null;rerender()};
