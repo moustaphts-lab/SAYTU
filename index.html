@@ -187,6 +187,8 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .pbar{display:flex;height:9px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0 6px}.pbar i{display:block;height:100%;background:var(--accent)}.pbar i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent)}
 .pleg{display:inline-flex;align-items:center;gap:6px;margin-left:8px}.pleg i{display:inline-block;width:12px;height:8px;border-radius:3px;background:var(--accent)}.pleg i.pl{background:color-mix(in srgb,var(--accent) 35%,transparent);margin-left:6px}
 .rvh{font-size:15px;margin:14px 0 2px;padding-top:8px;border-top:1px solid var(--line)}
+.bgm{display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}.bgc{flex:1;min-width:38px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px}
+.bgb{height:140px;width:100%;max-width:44px;background:var(--bg);border-radius:6px;display:flex;flex-direction:column-reverse;overflow:hidden}.bgb i{display:block;width:100%;background:var(--accent)}.bgb i.dr{background:color-mix(in srgb,var(--accent) 35%,transparent)}.bgc small{color:var(--muted);font-size:11px}
 .annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
 .ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
 .tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
@@ -592,6 +594,7 @@ function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
 const TABICON={
+  budget:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   accueil:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
   etab:'<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6M9 11h.01M15 11h.01"/>',
   get admindash(){return this.dashboard},
@@ -623,7 +626,8 @@ function availableTabs(){
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
   if(has("finance")||has("direction")){
     t.push({id:"paie",label:"Paie",fn:viewPayroll});
-    t.push({id:"tarifs",label:"Tarifs",fn:viewRates});}
+    t.push({id:"tarifs",label:"Tarifs",fn:viewRates});
+    t.push({id:"budget",label:"Budget",fn:viewBudget});}
   if(has("finance")||has("direction")||has("planificateur")||has("responsable"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
   if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
   if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
@@ -3030,6 +3034,7 @@ async function periodDetail(el,p){
     let ctl=null;try{const now=new Date(),ss=(await q(sb.from("schedule_sessions").select("id,session_date,start_time,end_time,status,attendance_records(status)").gte("session_date",p.start_date).lte("session_date",p.end_date))).filter(x=>x.status!=="annulee");
       const past=ss.filter(x=>sEnd(x)<=now);ctl={fut:ss.length-past.length,sub:past.filter(x=>x.attendance_records?.status==="soumis").length,cor:past.filter(x=>x.attendance_records?.status==="correction_demandee").length,non:past.filter(x=>!x.attendance_records).length}}catch(e){}
     const ready=ctl&&!ctl.fut&&!ctl.sub&&!ctl.cor&&!ctl.non;
+    const VC=items.length?await payChecks(p,items,by,tot):[];
     el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)}</div></div>${ppill(PER,p.status)}</div>
       ${canPay()?`<div class="ph-act"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
         ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
@@ -3039,12 +3044,14 @@ async function periodDetail(el,p){
         ${ready?"":`<ul class="chk" style="margin-top:8px">${ctl.fut?`<li class="info"><i>i</i><span>${ctl.fut} séance(s) de la période sont encore à venir.</span></li>`:""}${ctl.sub?`<li class="warn"><i>!</i><span>${ctl.sub} émargement(s) en attente de contrôle.</span></li>`:""}${ctl.cor?`<li class="warn"><i>!</i><span>${ctl.cor} correction(s) demandée(s), sans réponse du professeur.</span></li>`:""}${ctl.non?`<li class="bad"><i>✕</i><span>${ctl.non} séance(s) passée(s) non émargée(s).</span></li>`:""}</ul>
         <p class="sub" style="margin:6px 0 0">Vous pouvez calculer quand même : ce qui n'est pas validé ne sera pas payé dans cette période et passera dans une suivante. L'aide du responsable financier voit le détail dans Contrôle › Prêt pour la paie.</p>`}</div>`:pending.length?`<p class="pill p-warn" style="display:inline-block;margin:0 0 12px">${pending.length} émargement(s) de la période ne sont pas encore validés : ils ne seront pas payés dans cette période.</p>`:""}
       ${p.status==="en_verification"?`<p class="sub" style="margin:0 0 12px">Dernier calcul : ${new Date(p.calculated_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}. Recalculez si de nouveaux émargements ont été validés depuis.</p>`:""}
+      ${VC.length?`<div class="panel hcard" style="margin-bottom:12px"><b>Vérifications avant d'approuver</b><ul class="chk" style="margin-top:8px">${VC.map(x=>`<li class="${x.k}"><i>${{ok:"✓",warn:"!",bad:"✕",info:"i"}[x.k]}</i><span>${x.t}</span></li>`).join("")}</ul></div>`:""}
       ${items.length?`<div class="stats"><div class="stat big"><b>${fcfa(tot)}</b><span>Total à payer (brut = net)</span></div><div class="stat"><b>${by.length}</b><span>Enseignants</span></div><div class="stat"><b>${items.length}</b><span>Séances payables</span></div></div>
       <div class="sechead"><h2>Enseignants</h2><span class="sub" id="tCount">${by.length}</span></div>${searchBox("tSearch","Rechercher un enseignant…")}<div id="tList">${teacherTable(by)}</div>`:`<div class="panel"><p class="empty">${p.status==="ouverte"?"Lancez le calcul pour obtenir les montants de la période.":"Aucune heure validée payable dans cette période."}</p></div>`}`;
     if(canPay()){
       calc.onclick=async()=>{try{const r=await q(sb.rpc("calculate_payroll",{p_period:p.id}));
         toast(`${r.lignes} séance(s) payable(s) · ${fcfa(r.total_fcfa)}`+(r.sans_tarif?` · ${r.sans_tarif} sans tarif défini`:""),r.sans_tarif>0);rerender()}catch(e){toast(errMsg(e),true)}};
       document.getElementById("appr")&&(appr.onclick=()=>openDialog(`<h3>Approuver la période ?</h3>
+        ${VC.some(x=>x.k==="warn"||x.k==="bad")?`<div class="gpwarn">${VC.filter(x=>x.k==="warn"||x.k==="bad").length} point(s) signalé(s) dans les vérifications : relisez-les avant d'approuver.</div>`:""}
         <p style="margin:0">${by.length} bulletin(s) pour un total de <b>${fcfa(tot)}</b> vont être générés. Après approbation, les montants sont figés et ces séances ne pourront plus être payées dans une autre période.</p>
         ${pending.length?`<p class="sub" style="margin:0">${pending.length} émargement(s) non validé(s) restent en dehors de cette paie.</p>`:""}
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Approuver</button></div>`,
@@ -3161,6 +3168,83 @@ function payOrderDialog(p,slips,paid,ts){
     else exportPdf("ordre-paiement_"+slug(p.name),"Ordre de paiement : "+p.name,sub,[{title:"",head,rows:body.map(r=>r.map((c,j)=>j===4?fcfa(c):c))}]);
     return "keep"});
 }
+/* vérifications avant d'approuver une paie : tarifs manquants, écarts avec la période précédente, heures inhabituelles */
+async function payChecks(p,items,by,tot){
+  const L=[];
+  try{
+    const ids=new Set(items.map(i=>i.attendance_id));
+    const val=await q(sb.from("attendance_records").select("id,teacher_id,teachers(first_name,last_name),schedule_sessions!inner(session_date)").eq("status","valide").is("pay_period_id",null).lte("schedule_sessions.session_date",p.end_date));
+    const miss=val.filter(a=>!ids.has(a.id)),mt=[...new Map(miss.map(a=>[a.teacher_id,a.teachers])).values()];
+    L.push(miss.length?{k:"bad",t:`${miss.length} séance(s) validée(s) sans tarif, donc non payées : ${esc(mt.map(t=>t.first_name+" "+t.last_name).join(", "))}. Ajoutez un tarif (Tarifs) puis recalculez.`}:{k:"ok",t:"Chaque séance validée a un tarif."});
+    const prevP=(await q(sb.from("pay_periods").select("id,name,start_date,status").lt("start_date",p.start_date).in("status",["approuvee","payee"]).order("start_date",{ascending:false}).limit(1)))[0];
+    if(prevP){const ps=await q(sb.from("payslips").select("teacher_id,net_fcfa,total_minutes").eq("pay_period_id",prevP.id));
+      const pt=ps.reduce((a,x)=>a+x.net_fcfa,0),d=pt?Math.round((tot-pt)*100/pt):null;
+      L.push({k:d!=null&&Math.abs(d)>50?"warn":"info",t:`Total : ${fcfa(tot)}, contre ${fcfa(pt)} pour « ${esc(prevP.name)} »${d!=null?` (${d>0?"+":""}${d} %)`:""}.`});
+      const big=by.map(o=>{const x=ps.find(y=>y.teacher_id===o.id);return x&&x.net_fcfa?{o,prev:x.net_fcfa,d:Math.round((o.amt-x.net_fcfa)*100/x.net_fcfa)}:null}).filter(x=>x&&Math.abs(x.d)>50);
+      L.push(big.length?{k:"warn",t:`Écart de plus de 50 % avec « ${esc(prevP.name)} » : ${big.map(x=>`${esc(x.o.t.first_name+" "+x.o.t.last_name)} ${fcfa(x.o.amt)} (avant ${fcfa(x.prev)}, ${x.d>0?"+":""}${x.d} %)`).join(" · ")}.`}:{k:"ok",t:"Aucun écart de plus de 50 % par enseignant avec la période précédente."});
+      const fresh=by.filter(o=>!ps.some(y=>y.teacher_id===o.id));if(fresh.length)L.push({k:"info",t:`Payé(s) pour la première fois ou absent(s) de la période précédente : ${esc(fresh.map(o=>o.t.first_name+" "+o.t.last_name).join(", "))}.`})}
+    else L.push({k:"info",t:"Pas de période précédente approuvée pour comparer."});
+    const ms=by.map(o=>o.min).sort((a,b)=>a-b),med=ms.length?ms[Math.floor(ms.length/2)]:0;
+    const hi=by.filter(o=>by.length>=3&&o.min>2*med&&o.min>=20*60);
+    if(hi.length)L.push({k:"warn",t:`Nombre d'heures inhabituel (plus du double de la médiane, ${hrs(med)}) : ${esc(hi.map(o=>o.t.first_name+" "+o.t.last_name+" "+hrs(o.min)).join(", "))}.`});
+  }catch(e){L.push({k:"info",t:"Vérifications indisponibles : "+esc(errMsg(e))})}
+  return L}
+
+/* ---------- budget des enseignements (responsable financier, direction générale) ---------- */
+async function viewBudget(v){
+  const years=await q(sb.from("academic_years").select("id,label,start_date,end_date,is_current").order("start_date",{ascending:false}));
+  if(!years.length){v.innerHTML=`<h1>Budget</h1><p class="empty">Aucune année universitaire.</p>`;return}
+  if(!years.some(y=>y.id===S.bgYear))S.bgYear=(years.find(y=>y.is_current)||years[0]).id;
+  const Y=years.find(y=>y.id===S.bgYear),today=iso(new Date());
+  const [items,slips,pays,assigns,att,teachers,rates,statuses]=await Promise.all([
+    q(sb.from("payroll_items").select("pay_period_id,teacher_id,session_date,minutes,amount_fcfa,pay_periods(status),teachers(department_id,departments(code),status_id,teacher_statuses(label))").gte("session_date",Y.start_date).lte("session_date",Y.end_date)),
+    q(sb.from("payslips").select("id,net_fcfa,pay_period_id,pay_periods!inner(start_date)").gte("pay_periods.start_date",Y.start_date).lte("pay_periods.start_date",Y.end_date)),
+    q(sb.from("payments").select("payslip_id,amount_fcfa")),
+    q(sb.from("teaching_assignments").select("id,teacher_id,planned_hours,semesters!inner(academic_year_id,end_date)").eq("semesters.academic_year_id",Y.id)),
+    q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,schedule_sessions!inner(assignment_id,session_date)").in("status",["valide","soumis","correction_demandee"]).gte("schedule_sessions.session_date",Y.start_date).lte("schedule_sessions.session_date",Y.end_date)),
+    q(sb.from("teachers").select("id,first_name,last_name,status_id,department_id,departments(code),teacher_statuses(label)")),
+    q(sb.from("hourly_rates").select("status_id,teacher_id,rate_fcfa,effective_from").lte("effective_from",today).order("effective_from",{ascending:false})),
+    q(sb.from("teacher_statuses").select("id,label"))]);
+  /* coûts réels : lignes de paie (bulletins approuvés ou en cours de calcul) */
+  const fixed=items.filter(i=>["approuvee","payee"].includes(i.pay_periods?.status)),draft=items.filter(i=>!["approuvee","payee"].includes(i.pay_periods?.status));
+  const sum=a=>a.reduce((t,x)=>t+x.amount_fcfa,0);
+  const slipIds=new Set(slips.map(x=>x.id)),paid=pays.filter(x=>slipIds.has(x.payslip_id)).reduce((t,x)=>t+x.amount_fcfa,0),net=slips.reduce((t,x)=>t+x.net_fcfa,0);
+  /* estimation : heures prévues non encore faites × tarif actuel de l'enseignant */
+  const done={};att.forEach(a=>{const k=a.schedule_sessions.assignment_id;done[k]=(done[k]||0)+(a.status==="valide"?a.retained_minutes||0:a.declared_minutes||0)});
+  const rateOf=tid=>{const t=teachers.find(x=>x.id===tid);const r=rates.find(x=>x.teacher_id===tid)||rates.find(x=>t&&x.status_id===t.status_id&&!x.teacher_id);return r?r.rate_fcfa:null};
+  let estMin=0,est=0,noRate=0;const estBy={};
+  assigns.forEach(a=>{const left=Math.max(0,a.planned_hours*60-(done[a.id]||0));if(!left)return;const r=rateOf(a.teacher_id);estMin+=left;if(r==null){noRate+=left;return}
+    const c=Math.round(left*r/60);est+=c;const t=teachers.find(x=>x.id===a.teacher_id);const k=t?.departments?.code||"?";estBy[k]=(estBy[k]||0)+c});
+  const real=sum(items);
+  /* par mois, par département, par statut */
+  const months=[];for(let d=new Date(Y.start_date+"T12:00:00");iso(d)<=Y.end_date;d=new Date(d.getFullYear(),d.getMonth()+1,1))months.push(iso(d).slice(0,7));
+  const byM=Object.fromEntries(months.map(m=>[m,{f:0,d:0}]));items.forEach(i=>{const m=i.session_date.slice(0,7);if(byM[m])byM[m][fixed.includes(i)?"f":"d"]+=i.amount_fcfa});
+  const mx=Math.max(1,...months.map(m=>byM[m].f+byM[m].d));
+  const grp=(f)=>{const o={};items.forEach(i=>{const k=f(i)||"?";o[k]??={a:0,m:0};o[k].a+=i.amount_fcfa;o[k].m+=i.minutes});return Object.entries(o).sort((a,b)=>b[1].a-a[1].a)};
+  const byD=grp(i=>i.teachers?.departments?.code),byS=grp(i=>i.teachers?.teacher_statuses?.label);
+  const ml=m=>{const s=new Date(m+"-15").toLocaleDateString("fr-FR",{month:"short"});return s.charAt(0).toUpperCase()+s.slice(1)};
+  const tbl=(rows,extra)=>`<div class="panel tbl"><table><thead><tr><th></th><th>Heures</th><th>Coût</th><th>Part</th>${extra?"<th>Estimation restante</th>":""}</tr></thead><tbody>${rows.map(([k,o])=>`<tr><td>${esc(k)}</td><td class="num">${hrs(o.m)}</td><td class="num"><b>${fcfa(o.a)}</b></td><td class="num">${real?Math.round(o.a*100/real):0} %</td>${extra?`<td class="num">${fcfa(estBy[k]||0)}</td>`:""}</tr>`).join("")||`<tr><td colspan="${extra?5:4}" class="empty">Aucune paie calculée sur cette année.</td></tr>`}</tbody></table></div>`;
+  v.innerHTML=`<h1>Budget des enseignements</h1>
+    <p class="lead">Ce que coûtent les enseignements sur l'année : les montants réels viennent de la paie ; l'estimation du reste à venir est calculée à partir des affectations.</p>
+    <div class="row" style="margin-bottom:14px;align-items:flex-end"><label>Année universitaire<select id="bgY">${years.map(y=>`<option value="${y.id}" ${y.id===Y.id?"selected":""}>${esc(y.label)}</option>`).join("")}</select></label><span style="margin-left:auto">${xbar("bgX")}</span></div>
+    <div class="stats"><div class="stat big"><b>${fcfa(sum(fixed))}</b><span>Engagé (bulletins approuvés)</span></div>
+      <div class="stat"><b>${fcfa(paid)}</b><span>Déjà payé · reste ${fcfa(Math.max(0,net-paid))}</span></div>
+      <div class="stat"><b>${fcfa(sum(draft))}</b><span>Paie en cours de calcul</span></div>
+      <div class="stat"><b style="color:var(--muted)">≈ ${fcfa(est)}</b><span>Estimation du reste à venir (${hrs(estMin)})</span></div></div>
+    <div class="panel hcard" style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><b>Total de l'année, estimation comprise</b><b>≈ ${fcfa(real+est)}</b></div>
+      <p class="sub" style="margin:6px 0 0"><b>Estimation</b> : heures prévues dans les affectations de l'année, moins les heures déjà émargées, multipliées par le tarif actuel de chaque enseignant. Elle change avec les affectations, les annulations et les tarifs${noRate?` · ${hrs(noRate)} sans tarif ne sont pas comptées`:""}.</p></div>
+    <h2>Par mois</h2><div class="panel hcard"><div class="bgm">${months.map(m=>{const o=byM[m];return `<div class="bgc" title="${ml(m)} : ${fcfa(o.f+o.d)}"><div class="bgb"><i style="height:${o.f*100/mx}%"></i><i style="height:${o.d*100/mx}%" class="dr"></i></div><span>${ml(m)}</span><small>${o.f+o.d?Math.round((o.f+o.d)/1000)+" k":""}</small></div>`}).join("")}</div>
+      <p class="sub" style="margin:8px 0 0"><span class="pleg"><i></i>approuvé <i class="pl"></i>en cours de calcul</span> · montants par mois de la séance, en milliers de FCFA</p></div>
+    <h2>Par département</h2>${tbl(byD,true)}
+    <h2>Par statut d'enseignant</h2>${tbl(byS)}`;
+  bgY.onchange=()=>{S.bgYear=Number(bgY.value);rerender()};
+  wireExport("bgX",()=>({file:"budget_"+slug(Y.label),title:"Budget des enseignements "+Y.label,subtitle:"Montants réels issus de la paie ; estimation calculée à partir des affectations",sheets:[
+    {name:"Synthèse",title:"Synthèse",head:["Rubrique","Montant (FCFA)"],rows:[["Engagé (bulletins approuvés)",sum(fixed)],["Déjà payé",paid],["Paie en cours de calcul",sum(draft)],["Estimation du reste à venir",est],["Total estimé de l'année",real+est]]},
+    {name:"Par mois",title:"Par mois",head:["Mois","Approuvé (FCFA)","En cours (FCFA)","Total (FCFA)"],rows:months.map(m=>[ml(m)+" "+m.slice(0,4),byM[m].f,byM[m].d,byM[m].f+byM[m].d])},
+    {name:"Par département",title:"Par département",head:["Département","Heures","Coût (FCFA)","Estimation restante (FCFA)"],rows:byD.map(([k,o])=>[k,dh(o.m),o.a,estBy[k]||0])},
+    {name:"Par statut",title:"Par statut",head:["Statut","Heures","Coût (FCFA)"],rows:byS.map(([k,o])=>[k,dh(o.m),o.a])}]}));
+}
+
 const norm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const searchBox=(id,ph)=>`<label class="searchbox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="${id}" type="search" placeholder="${ph}" autocomplete="off"></label>`;
 function groupBy(items){
