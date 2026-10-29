@@ -190,6 +190,9 @@ dialog h3{margin:0;font:700 20px var(--f-display);letter-spacing:-.01em}
 .bgm{display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}.bgc{flex:1;min-width:38px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px}
 .bgb{height:140px;width:100%;max-width:44px;background:var(--bg);border-radius:6px;display:flex;flex-direction:column-reverse;overflow:hidden}.bgb i{display:block;width:100%;background:var(--accent)}.bgb i.dr{background:color-mix(in srgb,var(--accent) 35%,transparent)}.bgc small{color:var(--muted);font-size:11px}
 .visa{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}.visa.ok{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}.visa b{color:var(--warn)}.visa.ok b{color:var(--ok)}
+nav.tabs .navh{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:14px 12px 4px}nav.tabs .navh:first-of-type{padding-top:4px}
+.offer{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);padding:10px 10px 10px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:min(560px,94vw);font-size:14px}
+.offer .btn{white-space:nowrap}.offer .x{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:0 6px;opacity:.7}
 .annbar{display:grid;gap:8px;margin:0 0 16px}.ann{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
 .ann>svg{flex:none;color:var(--accent);margin-top:2px}.ann>div{flex:1}.ann p{margin:2px 0 0;font-size:15px}.ann small{color:var(--muted);font-size:12px}
 .tt-closed{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 8%,transparent) 0 8px,color-mix(in srgb,var(--warn) 16%,transparent) 8px 16px);display:flex;justify-content:center;align-items:flex-start;pointer-events:none;border-top:2px solid var(--warn);z-index:1}
@@ -475,9 +478,9 @@ const ATT = {
 
 const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()), filter:"soumis", planView:"group", planId:null};
 /* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
-const CFG_DEFAULT={name:"UCAB Touba",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false};
+const CFG_DEFAULT={name:"UCAB Touba",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   document.title=APPN()+" · "+(S.cfg.subtitle||"Enseignements");return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
@@ -497,6 +500,12 @@ function hm(t){return (t||"").slice(0,5)}
 function hrs(min){if(min==null)return "—";const h=Math.floor(min/60),m=min%60;return h+" h"+(m?" "+pad(m):"")}
 function has(r){return S.roles.some(x=>x.role===r)}
 function pill(st){const [l,c]=ATT[st]||["Non émargé","p-mute"];return `<span class="pill ${c}">${l}</span>`}
+/* proposition discrète de prévenir par WhatsApp / SMS (au lieu d'ouvrir une fenêtre d'office) */
+function offerNotify(fn,label){document.querySelectorAll(".offer").forEach(x=>x.remove());
+  const o=document.createElement("div");o.className="offer";o.setAttribute("role","status");
+  o.innerHTML=`<span>${esc(label||"Voulez-vous prévenir les personnes concernées ?")}</span><button type="button" class="btn sm primary">Prévenir par WhatsApp / SMS</button><button type="button" class="x" aria-label="Fermer">×</button>`;
+  document.body.appendChild(o);const t=setTimeout(()=>o.remove(),15000);
+  o.querySelector(".btn").onclick=()=>{clearTimeout(t);o.remove();fn()};o.querySelector(".x").onclick=()=>{clearTimeout(t);o.remove()}}
 function toast(msg,bad){const t=document.createElement("div");t.className="toast"+(bad?" bad":"");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),bad?6000:3000)}
 const CONS={departments_code_key:"Ce code de département existe déjà.",programs_code_key:"Ce code de filière existe déjà.",student_groups_code_key:"Ce code de groupe existe déjà.",courses_code_key:"Ce code de matière existe déjà.",rooms_code_key:"Ce code de salle existe déjà.",
   academic_years_label_key:"Cette année universitaire existe déjà.",semesters_academic_year_id_label_key:"Ce semestre existe déjà pour cette année.",semesters_check:"La date de fin doit être après la date de début.",academic_years_check:"La date de fin doit être après la date de début.",
@@ -531,9 +540,9 @@ function renderLogin(msg){
       ${msg?`<div class="err">${esc(msg)}</div>`:""}
       <button class="btn primary" type="submit">Se connecter</button>
     </form>
-    <details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
+    ${S.cfg?.show_demo?`<details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
       ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
-    </details></div></div>`;
+    </details>`:""}</div></div>`;
   document.getElementById("loginForm").onsubmit=async ev=>{ev.preventDefault();
     const {error}=await sb.auth.signInWithPassword({email:lEmail.value.trim(),password:lPass.value});
     if(error)renderLogin(errMsg(error)); else boot()};
@@ -621,11 +630,10 @@ function availableTabs(){
   if(has("direction"))t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
   if(has("planificateur")||has("responsable")||has("finance")||has("direction"))t.push({id:"dashboard",label:"Tableau de bord",fn:viewDashboard});
   else if(has("admin"))t.push({id:"admindash",label:"Tableau de bord",fn:viewAdminDash});
-  if(isProf())t.push({id:"accueil",label:"Aujourd'hui",fn:viewHome});
-  if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable});
-  if(isProf())t.push({id:"seances",label:"Mes séances",fn:viewTeacher});
-  if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability});
-  if(isProf())t.push({id:"bulletins",label:"Heures et paiements",fn:viewMyPayslips});
+  if(isProf())t.push({id:"accueil",label:"Aujourd'hui",fn:viewHome,me:1});
+  if(isProf())t.push({id:"monplanning",label:"Mon emploi du temps",fn:viewMyTimetable,me:1});
+  if(isProf())t.push({id:"dispos",label:"Mes disponibilités",fn:viewAvailability,me:1});
+  if(isProf())t.push({id:"bulletins",label:"Heures et paiements",fn:viewMyPayslips,me:1});
   if(has("responsable"))t.push({id:"controle",label:"Contrôle",fn:viewReview});
   if(has("planificateur"))t.push({id:"affect",label:"Affectations",fn:viewAssign});
   if(has("planificateur"))t.push({id:"planning",label:"Emplois du temps",fn:viewPlanning});
@@ -633,11 +641,12 @@ function availableTabs(){
     t.push({id:"paie",label:"Paie",fn:viewPayroll});
     t.push({id:"tarifs",label:"Tarifs",fn:viewRates});
     t.push({id:"budget",label:"Budget",fn:viewBudget});}
-  if(has("finance")||has("direction")||has("planificateur")||has("responsable"))t.push({id:"synthese",label:"Heures validées",fn:viewSummary});
   if(has("planificateur")||has("admin"))t.push({id:"referentiel",label:has("planificateur")?"Référentiel":"Comptes",fn:viewRef});
   if(has("admin"))t.push({id:"etab",label:"Établissement",fn:viewEtab});
   if(has("admin")||has("direction")||has("finance"))t.push({id:"journal",label:"Journal",fn:viewAudit});
-  return t;
+  /* quelqu'un qui gère et enseigne : la gestion d'abord, puis « Mon enseignement » */
+  const me=t.filter(x=>x.me),other=t.filter(x=>!x.me);
+  return other.length&&me.length?[...other,...me]:t;
 }
 
 function renderShell(){
@@ -651,7 +660,9 @@ function renderShell(){
       <span class="yr">Année universitaire ${esc(S.year||"")}</span>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml("Année universitaire "+(S.year||""))}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${tabs.map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`).join("")}</nav></div>
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml("Année universitaire "+(S.year||""))}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
+      return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
+        return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}</nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
   const setNav=o=>{document.body.classList.toggle("nav-open",o);burger.setAttribute("aria-expanded",o);burger.setAttribute("aria-label",o?"Fermer le menu":"Ouvrir le menu")};
   document.body.classList.remove("nav-open");
@@ -739,7 +750,9 @@ function openDialog(html,onSubmit){
 /* ---------- professeur ---------- */
 const SESSION_SEL="id,session_date,start_time,end_time,status,note,teaching_assignments(courses(code,name),assignment_groups(student_groups(code))),student_groups(code,name),rooms(code,name),attendance_records(id,status,declared_start,declared_end,declared_minutes,retained_minutes,planned_minutes,teacher_comment,review_reason,submitted_at,entered_for_teacher)";
 
-async function viewTeacher(v){
+/* liste des séances de la semaine (vue « Liste » de Mon emploi du temps) : émargement, demandes d'absence */
+async function viewTeacher(v,emb){
+  if(emb)S.week=S.ttWeek;
   const from=iso(S.week),to=iso(addDays(S.week,6));
   const [week,all]=await Promise.all([
     q(sb.from("schedule_sessions").select(SESSION_SEL).eq("teacher_id",S.teacher.id).gte("session_date",from).lte("session_date",to).order("session_date").order("start_time")),
@@ -752,16 +765,16 @@ async function viewTeacher(v){
   const wait=all.filter(a=>a.status==="soumis").reduce((s,a)=>s+a.declared_minutes,0);
   const toFix=all.filter(a=>a.status==="correction_demandee").length;
   const now=new Date();
-  v.innerHTML=`<h1>Mes séances</h1>
-    <p class="lead">${esc(S.teacher.first_name+" "+S.teacher.last_name)}. Émargez chaque séance après l'avoir dispensée. Seules les heures validées par le responsable comptent pour la rémunération.</p>
-    <div class="stats">
+  v.innerHTML=`${emb?"":`<h1>Mes séances</h1>
+    <p class="lead">${esc(S.teacher.first_name+" "+S.teacher.last_name)}. Émargez chaque séance après l'avoir dispensée. Seules les heures validées par le responsable comptent pour la rémunération.</p>`}
+    <div class="stats" ${emb?'style="display:none"':""}>
       <div class="stat"><b>${hrs(val)}</b><span>Heures validées</span></div>
       <div class="stat"><b>${hrs(wait)}</b><span>En attente de contrôle</span></div>
       <div class="stat"><b style="color:${missing?"var(--warn)":"inherit"}">${missing}</b><span>Séances passées à émarger</span></div>
       <div class="stat"><b style="color:${toFix?"var(--accent)":"inherit"}">${toFix}</b><span>Corrections demandées</span></div>
     </div>
     ${missing>1?`<div class="row" style="margin:-6px 0 14px"><button class="btn primary" id="tAll">Émarger les ${missing} séances passées aux horaires prévus</button></div>`:""}
-    <div class="weeknav">
+    <div class="weeknav" ${emb?'style="display:none"':""}>
       <button class="wbtn" id="wPrev" aria-label="Semaine précédente"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       <div class="wmid"><small>Semaine du</small><b>${S.week.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</b></div>
       <button class="wbtn" id="wNext" aria-label="Semaine suivante"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
@@ -784,9 +797,9 @@ async function viewTeacher(v){
               ${a?.entered_for_teacher?`<div class="sub">Saisi par délégation${a.teacher_comment?" · « "+esc(a.teacher_comment)+" »":""}</div>`:""}
               ${a?.review_reason?`<div class="sub">Motif : ${esc(a.review_reason)}</div>`:""}</div>
             <div class="sact">${act}</div></div>`}).join("")}</div>`}).join("")})():`<div class="panel"><p class="empty">Aucune séance cette semaine.</p></div>`}`;
-  wPrev.onclick=()=>{S.week=addDays(S.week,-7);rerender()};
+  if(!emb){wPrev.onclick=()=>{S.week=addDays(S.week,-7);rerender()};
   wNext.onclick=()=>{S.week=addDays(S.week,7);rerender()};
-  wNow.onclick=()=>{S.week=mondayOf(new Date());rerender()};
+  wNow.onclick=()=>{S.week=mondayOf(new Date());rerender()}}
   v.querySelectorAll("[data-em]").forEach(b=>b.onclick=()=>emargeDialog(week.find(s=>s.id==b.dataset.em)));
   v.querySelectorAll("[data-qe]").forEach(b=>b.onclick=async()=>{b.disabled=true;await quickEmarge([week.find(s=>s.id==b.dataset.qe)])});
   v.querySelectorAll("[data-abs]").forEach(b=>b.onclick=()=>absenceDialog(week.find(s=>s.id==b.dataset.abs)));
@@ -917,10 +930,10 @@ async function absenceCard(el){
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" value="cancel" formnovalidate>Plus tard</button><button class="btn danger" value="refuse" formnovalidate>Refuser</button><button class="btn" value="report" formnovalidate>Reporter…</button><button class="btn primary" value="annul" formnovalidate>Annuler la séance</button></div>`,
     async(act)=>{const a=abA.value.trim();
       if(act==="refuse"){await q(sb.rpc("refuse_absence",{p_id:r.id,p_answer:a||null}));toast("Demande refusée");rerender();
-        setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, la Direction des études.`}]}),400);return}
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?");return}
       if(act==="report"){S.ttWeek=mondayOf(new Date(s.session_date+"T12:00:00"));S.ttTab="grille";S.planView="teacher";S.planId=r.teacher_id;S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell();setTimeout(()=>toast("Touchez le cours, puis « Reporter »."),500);return}
       if(act==="annul"){await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+(a||"absence du professeur ("+r.reason+")")}).eq("id",s.id));toast("Séance annulée");rerender();
-        setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, la Direction des études.`}]}),400)}})});
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?")}})});
 }
 
 /* ---------- responsable ---------- */
@@ -1374,7 +1387,7 @@ async function viewPlanning(v){
       <p style="margin:0">${live.length} cours, ${hrs(weekMin)}. Les séances sont créées, les professeurs voient leur emploi du temps et ne peuvent plus modifier leurs disponibilités de cette semaine.</p>
       <ul class="chk">${L.map(x=>`<li class="${x.k}"><i>${ICON[x.k]}</i><span>${esc(x.t)}</span></li>`).join("")}</ul>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn primary" value="ok" ${conf.length?"disabled":""}>Publier</button></div>`,
-    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender();setTimeout(announce,400)})};
+    async()=>{const n=await q(sb.rpc("publish_week",{p_week:wk}));toast(`Semaine publiée · ${n} cours transformé(s) en séances`);rerender();offerNotify(announce,"Prévenir les professeurs de leur emploi du temps ?")})};
   /* prévenir les professeurs de leur emploi du temps publié */
   function announce(){
     const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=[]).push(x)});
@@ -1396,7 +1409,7 @@ async function viewPlanning(v){
       toast("Publication retirée : la semaine est de nouveau en brouillon");rerender();
       const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=1)});
       const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`}));
-      setTimeout(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`,items}),400)})};
+      offerNotify(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, la Direction des études.`,items}),"Prévenir les professeurs ?")})};
 
   /* ----- reprendre la semaine précédente : on recopie ce qui est encore possible, et on dit pourquoi le reste ne l'est pas ----- */
   copyPrev.onclick=async()=>{
@@ -1476,7 +1489,7 @@ async function viewPlanning(v){
     async()=>{const why=document.getElementById("cWhy").value.trim();await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+why}).eq("id",s.id));toast("Cours annulé");rerender();
       tellTeacher(sl,`votre cours ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) du ${dayLong(sl.day_of_week).toLowerCase()} de ${hm(sl.start_time)} à ${hm(sl.end_time)} est annulé. Motif : ${why}.`)})};
   const tellTeacher=(sl,txt)=>{const t=teachers.find(y=>y.id===sl.teaching_assignments.teacher_id);if(!t)return;
-    setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, la Direction des études.`}]}),400)};
+    offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, la Direction des études.`}]}),"Prévenir le professeur ?")};
   const restoreSlot=async sl=>{try{await q(sb.from("schedule_sessions").update({status:"planifiee",note:null}).eq("id",sessOf[sl.id].id));toast("Cours rétabli");rerender()}
     catch(e){toast(/overlap|exclu/i.test(e.message||"")?"Impossible de rétablir : l'horaire a été repris par un autre cours.":errMsg(e),true)}};
   v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{if(b.dataset.dragged)return;const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments,s=sessOf[sl.id];
@@ -1818,13 +1831,16 @@ async function viewMyTimetable(v){
   v.innerHTML=`<h1>Mon emploi du temps</h1>
     <p class="lead">Vos cours de la semaine, tels qu'ils ont été publiés par le directeur des études ou sa secrétaire. Les heures payées restent celles que vous émargez et que le responsable valide.</p>
     ${weekNavHtml(W)}
+    <div class="row" style="margin:0 0 12px;justify-content:space-between;align-items:center"><div class="seg" role="tablist" aria-label="Affichage"><button role="tab" data-myv="grille" aria-pressed="${S.myView!=="liste"}">Grille</button><button role="tab" data-myv="liste" aria-pressed="${S.myView==="liste"}">Liste et émargement</button></div></div>
     <div class="row" id="myTools" style="margin:0 0 12px"><button class="btn" id="myPdf" ${slots.length?"":"disabled"}>${DLI}Télécharger la semaine (PDF)</button><button class="btn" id="myIcs">Ajouter à mon calendrier</button></div>
-    ${slots.length?`<div class="stats"><div class="stat big"><b>${hrs(total)}</b><span>cette semaine</span></div><div class="stat"><b>${slots.length}</b><span>Créneaux</span></div><div class="stat"><b>${days}</b><span>Jours de cours</span></div></div>
+    ${S.myView==="liste"?`<div id="myList"><p class="empty">Chargement…</p></div>`:slots.length?`<div class="stats"><div class="stat big"><b>${hrs(total)}</b><span>cette semaine</span></div><div class="stat"><b>${slots.length}</b><span>Créneaux</span></div><div class="stat"><b>${days}</b><span>Jours de cours</span></div></div>
       ${cancelled.size?`<div class="gpwarn" style="margin-bottom:10px">${cancelled.size} cours annulé(s) cette semaine : touchez-les pour voir le motif.</div>`:""}
       ${timetableGrid({mine:slots,conf:new Set(),cancelled,view:"teacher",avOf:()=>avails,outside:()=>false,teacherId:tid,week:W,readonly:1})}
 `
     :`<div class="panel"><p class="empty">Aucun cours publié pour vous cette semaine.<br>L'emploi du temps apparaît ici dès que le directeur des études l'a publié.</p></div>`}
     <h2>Avancement de mes matières</h2>${progressHtml(assigns,allSess,byA)}`;
+  v.querySelectorAll("[data-myv]").forEach(b=>b.onclick=()=>{S.myView=b.dataset.myv;rerender()});
+  if(S.myView==="liste")await viewTeacher(document.getElementById("myList"),true);
   /* emporter son emploi du temps : PDF de la semaine, ou fichier calendrier pour le téléphone */
   const tb=document.getElementById("myTools");
   if(tb){myPdf.onclick=()=>ttExportWeek("pdf","teacher",[[tid,S.teacher.first_name+" "+S.teacher.last_name]],slots,{W,pub:true,isCancel:x=>cancelled.has(x.id),KEY:{teacher:x=>x.teaching_assignments.teacher_id},MATCH:(by,x,id)=>x.teaching_assignments.teacher_id==id});
@@ -2297,26 +2313,6 @@ async function viewDashboard(v){
 }
 
 /* ---------- synthèse ---------- */
-async function viewSummary(v){
-  const rows=await q(sb.from("attendance_records").select("status,retained_minutes,declared_minutes,teacher_id,teachers(first_name,last_name,teacher_statuses(label),departments(code))"));
-  const by={};
-  rows.forEach(a=>{const k=a.teacher_id;by[k]??={t:a.teachers,val:0,wait:0,n:0,rej:0};const o=by[k];o.n++;
-    if(a.status==="valide")o.val+=a.retained_minutes; if(a.status==="soumis")o.wait+=a.declared_minutes; if(a.status==="rejete")o.rej++});
-  const list=Object.values(by).sort((a,b)=>b.val-a.val);
-  const tot=list.reduce((s,o)=>s+o.val,0),tw=list.reduce((s,o)=>s+o.wait,0);
-  v.innerHTML=`<h1>Heures validées</h1>
-    <p class="lead">Base du calcul de rémunération : seules les durées retenues des émargements validés sont payables.</p>
-    <p style="margin:0 0 16px">${xbar("sX")}</p>
-    <div class="stats"><div class="stat"><b>${hrs(tot)}</b><span>Total validé</span></div><div class="stat"><b>${hrs(tw)}</b><span>En attente</span></div>
-      <div class="stat"><b>${rows.length}</b><span>Émargements</span></div></div>
-    <div class="panel tbl"><table><thead><tr><th>Professeur</th><th>Département</th><th>Statut</th><th>Validé</th><th>En attente</th><th>Rejets</th></tr></thead><tbody>
-    ${list.map(o=>`<tr><td>${esc(o.t.first_name+" "+o.t.last_name)}</td><td>${esc(o.t.departments?.code)}</td><td>${esc(o.t.teacher_statuses?.label)}</td>
-      <td class="num">${hrs(o.val)}</td><td class="num">${hrs(o.wait)}</td><td class="num">${o.rej}</td></tr>`).join("")}</tbody></table></div>`;
-  wireExport("sX",()=>({file:"heures-validees_"+iso(new Date()),title:"Heures validées",subtitle:"Situation au "+fdl(iso(new Date())),sheets:[
-    {name:"Heures validées",title:"Heures validées par enseignant",keepEmpty:1,head:["Enseignant","Département","Statut","Heures validées","Heures en attente","Rejets"],
-     rows:list.map(o=>[o.t.last_name+" "+o.t.first_name,o.t.departments?.code||"",o.t.teacher_statuses?.label||"",dh(o.val),dh(o.wait),o.rej])}]}));
-}
-
 /* ---------- référentiel ---------- */
 const SEC_LABEL={structure:"Structure",calendrier:"Années et semestres",horaires:"Jours et horaires",fermetures:"Jours sans cours",matieres:"Matières",salles:"Salles",enseignants:"Enseignants",comptes:"Comptes et rôles"};
 const BLOCKS_BY_SEC={structure:["departements","filieres","groupes"],calendrier:["annees","semestres"],matieres:["matieres"],salles:["salles"],enseignants:["enseignants","statuts"]};
@@ -2646,6 +2642,7 @@ async function viewEtab(v){
           <span class="sub">PNG ou JPEG, carré de préférence. Il est réduit automatiquement.</span></div>
         <div class="panel" style="padding:12px 14px;background:var(--bg)"><div class="sub" style="margin-bottom:8px">Aperçu</div><div id="ePrev"></div></div>
         <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eV" ${cfg.payroll_visa?"checked":""}> Visa de la direction générale obligatoire avant d'enregistrer les paiements</label>
+        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eD" ${cfg.show_demo?"checked":""}> Afficher les comptes de démonstration sur l'écran de connexion <span class="sub">(à décocher avant d'utiliser de vraies données)</span></label>
         <div class="err" id="eErr"></div>
         <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
 
@@ -2669,7 +2666,7 @@ async function viewEtab(v){
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);logo=c.toDataURL("image/png");URL.revokeObjectURL(url);prev()};img.onerror=()=>toast("Image illisible.",true);img.src=url};
   eLx.onclick=()=>{logo=null;eL.value="";prev()};
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
-    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,payroll_visa:eV.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
+    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,payroll_visa:eV.checked,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
   /* année en cours */
@@ -3205,7 +3202,7 @@ async function periodDetail(el,p){
         <p style="margin:0">${by.length} bulletin(s) pour un total de <b>${fcfa(tot)}</b> vont être générés. Après approbation, les montants sont figés et ces séances ne pourront plus être payées dans une autre période.</p>
         ${pending.length?`<p class="sub" style="margin:0">${pending.length} émargement(s) non validé(s) restent en dehors de cette paie.</p>`:""}
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Approuver</button></div>`,
-        async()=>{const n=await q(sb.rpc("approve_payroll",{p_period:p.id}));toast(`${n} bulletin(s) générés`);rerender();setTimeout(()=>slipNotify(p),600)}));
+        async()=>{const n=await q(sb.rpc("approve_payroll",{p_period:p.id}));toast(`${n} bulletin(s) générés`);rerender();offerNotify(()=>slipNotify(p),"Annoncer les bulletins aux professeurs ?")}));
       document.getElementById("delP")&&(delP.onclick=()=>openDialog(`<h3>Supprimer « ${esc(p.name)} » ?</h3><p style="margin:0">La période n'a pas encore été approuvée. Aucune donnée d'émargement ne sera perdue.</p>
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer</button></div>`,
         async()=>{await q(sb.from("pay_periods").delete().eq("id",p.id));S.periodId=null;toast("Période supprimée");rerender()}));
@@ -3260,7 +3257,7 @@ async function periodDetail(el,p){
       <p class="sub" style="margin:0">Le paiement est enregistré par le service financier. Il n'exécute aucun virement.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
     async()=>{const amt=Number(pA.value),d=pD.value,m=pM.value;await q(sb.rpc("record_payment",{p_payslip:s.id,p_amount:amt,p_paid_on:d,p_method:m,p_reference:pR.value.trim()||null}));toast("Paiement enregistré");rerender();
-      const ts=await payTeachers([s]);setTimeout(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le paiement est visible dans son espace « Heures et paiements ». Vous pouvez aussi le lui confirmer.",items:[{t:ts[0],msg:payMsg(ts[0],amt,d,m,p)}]}),500)});
+      const ts=await payTeachers([s]);offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le paiement est visible dans son espace « Heures et paiements ». Vous pouvez aussi le lui confirmer.",items:[{t:ts[0],msg:payMsg(ts[0],amt,d,m,p)}]}),"Prévenir le professeur ?")});
     const t0=tOfSlip(s);if(t0&&t0.pay_method){const o=[...pM.options].find(x=>x.value===t0.pay_method);if(o)pM.value=t0.pay_method}})};
   const tAll=await payTeachers(slips),tOfSlip=sl=>tAll.find(t=>t.id===sl.teacher_id);
   const pb=document.getElementById("payBulk");if(pb)pb.onclick=()=>bulkPayDialog(p,slips,paid,tAll);
@@ -3308,7 +3305,7 @@ function bulkPayDialog(p,slips,paid,ts){
     const d=bpD.value,ref=bpR.value.trim()||null,ok=[],errs=[];
     for(const x of sel){try{await q(sb.rpc("record_payment",{p_payslip:x.s.id,p_amount:x.a,p_paid_on:d,p_method:x.m,p_reference:ref}));ok.push(x)}catch(e){errs.push((x.t.last_name||"")+" : "+errMsg(e))}}
     toast(`${ok.length} paiement(s) enregistré(s)`+(errs.length?` · ${errs.length} refusé(s) : ${errs[0]}`:""),errs.length>0);rerender();
-    if(ok.length)setTimeout(()=>notifyDialog({title:"Prévenir les professeurs payés",intro:"Chaque professeur voit le paiement dans son espace. Vous pouvez aussi le lui confirmer.",items:ok.map(x=>({t:x.t,msg:payMsg(x.t,x.a,d,x.m,p)}))}),500)});
+    if(ok.length)offerNotify(()=>notifyDialog({title:"Prévenir les professeurs payés",intro:"Chaque professeur voit le paiement dans son espace. Vous pouvez aussi le lui confirmer.",items:ok.map(x=>({t:x.t,msg:payMsg(x.t,x.a,d,x.m,p)}))}),"Prévenir les professeurs payés ?")});
   const sum=()=>{let n=0,t=0;due.forEach((x,i)=>{if(document.querySelector(`[data-bi="${i}"]`).checked){n++;t+=Number(document.querySelector(`[data-ba="${i}"]`).value)||0}});bpSum.textContent=`${n} paiement(s) · total ${fcfa(t)}`};
   document.querySelectorAll("#dlgForm [data-bi],#dlgForm [data-ba]").forEach(e=>e.oninput=e.onchange=sum);
   bpAll.onchange=()=>{document.querySelectorAll("#dlgForm [data-bi]").forEach(c=>c.checked=bpAll.checked);sum()};sum();
@@ -3507,7 +3504,7 @@ async function viewMyPayslips(v){
       <div class="stat"><b>${hrs(mWait)}</b><span>En attente de contrôle</span></div>
       <div class="stat"><b style="color:${mFix||mTodo?"var(--warn)":"inherit"}">${hrs(mFix+mTodo)}</b><span>À émarger ou à corriger</span></div>
       <div class="stat"><b>${fcfa(mPaid)}</b><span>Reçu ce mois</span></div></div>
-    ${mRej?`<p class="sub" style="margin:-8px 0 14px">${mRej} émargement(s) rejeté(s) ce mois : voir « Mes séances ».</p>`:""}
+    ${mRej?`<p class="sub" style="margin:-8px 0 14px">${mRej} émargement(s) rejeté(s) ce mois : voir « Mon emploi du temps » › Liste et émargement.</p>`:""}
     <h2>Depuis le début</h2>
     <div class="stats"><div class="stat"><b>${fcfa(totNet)}</b><span>Total net des bulletins (${slips.length})</span></div>
       <div class="stat"><b>${fcfa(totPaid)}</b><span>Déjà payé</span></div>
