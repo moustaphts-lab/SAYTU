@@ -1081,7 +1081,27 @@ const X={
 "enseignant": "أستاذ",
 "virement": "تحويل بنكي",
 "pour vous": "لك",
-"pour lui": "له"
+"pour lui": "له",
+"Bulletin de rémunération": "كشف الرواتب",
+"Relevé détaillé des heures": "الكشف التفصيلي للساعات",
+"Service financier": "المصلحة المالية",
+"ENSEIGNANT": "الأستاذ",
+"PÉRIODE": "الفترة",
+"Approuvé le": "صودق عليها في",
+"Désignation": "البيان",
+"Heures antérieures régularisées": "ساعات سابقة مسوّاة",
+"Le détail des séances figure dans le relevé détaillé des heures, disponible sur demande ou dans l'application.": "تفاصيل الحصص واردة في الكشف التفصيلي للساعات، المتاح عند الطلب أو في التطبيق.",
+"Heures payables": "الساعات القابلة للدفع",
+"Rémunération brute": "الأجر الإجمالي",
+"Primes": "المكافآت",
+"Retenues et cotisations": "الاقتطاعات والاشتراكات",
+"Réglé à ce jour": "المسدَّد حتى اليوم",
+"Montant = heures retenues × tarif horaire en vigueur à la date de chaque séance. * Tarif individuel.": "المبلغ = الساعات المحتسبة × أجر الساعة الساري في تاريخ كل حصة. * أجر فردي.",
+"Aucune retenue ni cotisation n'est appliquée selon les règles actuelles de l'établissement.": "لا يُطبَّق أي اقتطاع أو اشتراك وفق القواعد الحالية للمؤسسة.",
+"le service financier": "المصلحة المالية",
+"Rapport mensuel": "التقرير الشهري",
+"brouillon, non publiée": "مسودة، غير منشورة",
+"brouillon": "مسودة"
 };
 const P=[
 [
@@ -1185,6 +1205,10 @@ const P=[
 "ستظهر في أعلى الشاشة للجميع§1. لا تتغير بيانات السنوات الأخرى."
 ],
 [
+"^Relevé joint au bulletin (.*?)\\. Il reprend chaque séance émargée et validée prise en compte dans ce bulletin\\.$",
+"كشف مرفق بالكشف §1. يتضمن كل حصة سُجّل حضورها واعتُمدت واحتُسبت في هذا الكشف."
+],
+[
 "^(.*?) séance\\(s\\) validée\\(s\\) sans tarif, donc non payées : (.*?)\\. Ajoutez un tarif \\(Tarifs\\) puis recalculez\\.$",
 "§1 حصة معتمدة دون أجر ساعة، فهي غير مدفوعة: §2. أضف أجر ساعة (أجر الساعة) ثم أعد الاحتساب."
 ],
@@ -1263,6 +1287,10 @@ const P=[
 [
 "^Touchez les créneaux (.*?) disponible, ou utilisez les boutons ci\\-dessous\\.$",
 "المس الحصص التي §1 متاحًا فيها، أو استعمل الأزرار أدناه."
+],
+[
+"^Bulletin approuvé par (.*?)\\. Ce document ne vaut pas preuve de paiement\\.$",
+"صادق على الكشف: §1. لا تُعدّ هذه الوثيقة إثباتًا للدفع."
 ],
 [
 "^(.*?) cours annulé\\(s\\) cette semaine : touchez\\-les pour voir le motif\\.$",
@@ -1561,6 +1589,10 @@ const P=[
 "ليعتمدها زميل · §1"
 ],
 [
+"^\\* Tarif individuel\\. Édité le (.*?) · (.*?)$",
+"* أجر فردي. حُرّر في §1 · §2"
+],
+[
 "^Relancer (.*?) professeur(.*?) sans réponse$",
 "تذكير §1 أستاذ دون رد"
 ],
@@ -1749,6 +1781,10 @@ const P=[
 "· صالحة كل أسبوع§1"
 ],
 [
+"^Budget des enseignements (.*?)$",
+"ميزانية التدريس §1"
+],
+[
 "^(.*?) la période de paie « (.*?) »$",
 "§1 فترة الرواتب «§2»"
 ],
@@ -1763,6 +1799,10 @@ const P=[
 [
 "^émargement(.*?) en attente · (.*?)$",
 "تسجيل حضور في الانتظار · §2"
+],
+[
+"^Montants restant dus au (.*?)$",
+"المبالغ المتبقية المستحقة في §1"
 ],
 [
 "^(.*?) paiement\\(s\\) · total (.*?)$",
@@ -1783,6 +1823,10 @@ const P=[
 [
 "^les (.*?) cours repassent en$",
 "تعود §1 درس إلى"
+],
+[
+"^Semaine du (.*?) · Édité le (.*?)$",
+"أسبوع §1 · حُرّر في §2"
 ],
 [
 "^(.*?) bulletin\\(s\\) générés$",
@@ -1837,6 +1881,10 @@ const P=[
 "· نهاية السداسي في §1"
 ],
 [
+"^Enseignements du (.*?) au (.*?)$",
+"التدريس من §1 إلى §2"
+],
+[
 "^(.*?) séance(.*?) émargée(.*?) sur (.*?)$",
 "تم تسجيل الحضور في §1 حصة من §4"
 ],
@@ -1863,6 +1911,10 @@ const P=[
 [
 "^Émarger les (.*?) séances$",
 "تسجيل الحضور في §1 حصص"
+],
+[
+"^Ordre de paiement : (.*?)$",
+"أمر بالدفع: §1"
 ],
 [
 "^(.*?) cours en brouillon$",
@@ -1911,6 +1963,14 @@ const P=[
 [
 "^… et (.*?) autre\\(s\\)\\.$",
 "… و§1 أخرى."
+],
+[
+"^Total \\((.*?) séances\\)$",
+"المجموع (§1 حصة)"
+],
+[
+"^Édité le (.*?) avec (.*?) · (.*?)$",
+"حُرّر في §1 بواسطة §2 · §3"
 ],
 [
 "^(.*?) la séance du (.*?) à (.*?)$",
@@ -2021,6 +2081,10 @@ const P=[
 "+ إضافة §1"
 ],
 [
+"^(.*?) \\(rattrapage\\)$",
+"§1 (استدراك)"
+],
+[
 "^(.*?) cours (.*?) sur (.*?)(.*?)\\.$",
 "§1 درس §2 من §3§4."
 ],
@@ -2085,6 +2149,14 @@ const P=[
 "تمت استعادة §1 درس"
 ],
 [
+"^Règlements : (.*?)$",
+"التسديدات: §1"
+],
+[
+"^situation au (.*?)$",
+"الوضعية في §1"
+],
+[
 "^(.*?) \\((.*?)\\) du (.*?) à (.*?)$",
 "§1 (§2) من §3 إلى §4"
 ],
@@ -2145,6 +2217,10 @@ const P=[
 "تعديل: §1"
 ],
 [
+"^Édité avec (.*?)$",
+"حُرّر بواسطة §1"
+],
+[
 "^(.*?) % occupée$",
 "مشغولة بنسبة §1 %"
 ],
@@ -2189,6 +2265,14 @@ const P=[
 "الكل (§1)"
 ],
 [
+"^Édité le (.*?)$",
+"حُرّر في §1"
+],
+[
+"^édité le (.*?)$",
+"حُرّر في §1"
+],
+[
 "^(.*?) à faire$",
 "§1 للإنجاز"
 ],
@@ -2205,6 +2289,10 @@ const P=[
 "درس · §1"
 ],
 [
+"^salle : (.*?)$",
+"القاعة: §1"
+],
+[
 "^Du (.*?) au (.*?)$",
 "من §1 إلى §2"
 ],
@@ -2215,6 +2303,10 @@ const P=[
 [
 "^du (.*?) au (.*?)$",
 "من §1 إلى §2"
+],
+[
+"^Salle (.*?)$",
+"القاعة §1"
 ],
 [
 "^(.*?)Excel$",

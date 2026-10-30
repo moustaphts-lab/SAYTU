@@ -17,6 +17,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="i18n-ar.js"></script>
 <script src="i18n-ar-gestion.js"></script>
+<script src="pdf-ar.js"></script>
 <style>
 /* Design : sobre, vert profond, grandes zones tactiles. Sur téléphone : navigation en bas, tableaux en cartes, fenêtres en feuille basse. */
 :root{
@@ -613,6 +614,8 @@ function startLang(){
   document.documentElement.lang=LANG;document.documentElement.dir=LANG==="ar"?"rtl":"ltr";
   if(LANG!=="ar")return;
   document.body.classList.add("ar");
+  /* PDF en arabe : police chargée d'avance, et documents arabisés à leur création */
+  try{if(window.SAYTU_PDF){SAYTU_PDF.hook();SAYTU_PDF.loadFonts().catch(()=>{})}}catch(e){}
   try{const l=document.createElement("link");l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap";document.head.appendChild(l)}catch(e){}
   /* dates en arabe avec les chiffres 0-9, heures sur 24 h */
   const fix=l=>(!l||l==="fr-FR"||l==="fr")?"ar-u-nu-latn":l;
