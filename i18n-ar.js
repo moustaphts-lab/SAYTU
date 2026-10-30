@@ -182,7 +182,10 @@ const pats=[
 [/^Disponibilités de (.+)$/,"الأوقات المتاحة لـ $1"],
 [/^(\d+) comptes? actifs?$/,"الحسابات النشطة: $1"],[/^(\d+) facultés?$/,"الكليات: $1"],[/^(\d+) administrateurs?$/,"المهندسون العامون: $1"],
 [/^Créé le (.+)$/,(_,d)=>"أُنشئ في "+tr(d)],
-[/^Dernière connexion : (.+)$/,(_,d)=>"آخر دخول: "+tr(d)]
+[/^Dernière connexion : (.+)$/,(_,d)=>"آخر دخول: "+tr(d)],
+[/^Conflit de (\d\d:\d\d) à (\d\d:\d\d) : (.+?)\.?$/,(_,a,b,r)=>"تعارض من "+a+" إلى "+b+": "+tr(r)+"."],
+[/^Occupée (.+)$/,(_,h)=>"مشغولة "+h],
+[/^La salle (.+) n'est pas disponible pour cette faculté\.$/,"القاعة $1 غير متاحة لهذه الكلية."]
 ];
 window.SAYTU_AR={exact,pats,mo};
 })();

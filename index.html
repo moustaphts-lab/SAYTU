@@ -615,6 +615,8 @@ const VOCFR=(()=>{const R={};for(const [k,o] of Object.entries(VOCW)){const m=o.
   [vre("([Aa])ucune faculté"),(_,a)=>a+(m?"ucun ":"ucune ")+o.w],
   [vre("([Cc])ette faculté"),(_,c)=>c+(m?"et ":"ette ")+o.w],
   [vre("([Tt])oute la faculté"),(_,t)=>t+(m?"out l'":"oute l'")+o.w],
+  [vre("([Uu])ne autre faculté"),(_,u)=>u+(m?"n autre ":"ne autre ")+o.w],
+  [vre("([Tt])outes les facultés"),(_,t)=>t+(m?"ous les ":"outes les ")+o.p],
   [vre("([Ll])a faculté"),(_,l)=>l+"'"+o.w],
   [vre("([Ss])a faculté"),(_,x)=>x+"on "+o.w],
   [vre("([Dd])e facultés"),(_,d)=>d+"'"+o.p],
@@ -625,7 +627,7 @@ const VOCFR=(()=>{const R={};for(const [k,o] of Object.entries(VOCW)){const m=o.
   [vre("Doyens"),()=>"Directeurs"],[vre("doyens"),()=>"directeurs"],[vre("Doyen"),()=>"Directeur"],[vre("doyen"),()=>"directeur"]]}return R})();
 const VOCAR={
   ecole:[[/الكليات/g,"المدارس"],[/كليات/g,"مدارس"],[/كليت/g,"مدرست"],[/كلية/g,"مدرسة"],[/العميد/g,"المدير"]],
-  institut:[[/لا توجد كلية/g,"لا يوجد معهد"],[/الكلية الجديدة/g,"المعهد الجديد"],[/كلية جديدة/g,"معهد جديد"],[/تتلقى الكلية/g,"يتلقى المعهد"],
+  institut:[[/كلية أخرى/g,"معهد آخر"],[/هذه الكلية/g,"هذا المعهد"],[/تختارها كل كلية في جداولها/g,"يختارها كل معهد في جداوله"],[/لا توجد كلية/g,"لا يوجد معهد"],[/الكلية الجديدة/g,"المعهد الجديد"],[/كلية جديدة/g,"معهد جديد"],[/تتلقى الكلية/g,"يتلقى المعهد"],
     [/لكل كلية أقسامها وقاعاتها وسداسياتها وتوقيتاتها/g,"لكل معهد أقسامه وقاعاته وسداسياته وتوقيتاته"],[/لكل كلية سداسياتها وتواريخها/g,"لكل معهد سداسياته وتواريخه"],
     [/تضيف كل كلية أيامها/g,"يضيف كل معهد أيامه"],[/لتفاصيل كلية، اخترها/g,"لتفاصيل معهد، اختره"],[/اسم كليتك وشعارها/g,"اسم معهدك وشعاره"],[/ما زالت للكلية/g,"ما زال للمعهد"],
     [/الكليات/g,"المعاهد"],[/كليات/g,"معاهد"],[/كليتك/g,"معهدك"],[/كليتي/g,"معهدي"],[/كلية/g,"معهد"],[/العميد/g,"المدير"]],
@@ -687,7 +689,7 @@ const SAYTU_MARK=(sz,light)=>{const st=light?"#fff":"var(--accent)",cap=light?"#
 const AUTH_ART=`<svg viewBox="0 0 440 300" role="img" aria-label="Un bâtiment universitaire à colonnes, un livre ouvert devant les marches"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 270 H420" stroke-opacity=".45"/><path d="M52 270 V240" stroke-opacity=".7"/><circle cx="52" cy="222" r="20" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M390 270 V246" stroke-opacity=".7"/><circle cx="390" cy="232" r="15" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M96 122 L220 62 L344 122 Z" fill="#fff" fill-opacity=".06"/><rect x="104" y="122" width="232" height="16" rx="2"/><rect x="122" y="144" width="16" height="102" rx="2"/><rect x="168" y="144" width="16" height="102" rx="2"/><rect x="214" y="144" width="16" height="102" rx="2"/><rect x="260" y="144" width="16" height="102" rx="2"/><rect x="306" y="144" width="16" height="102" rx="2"/><path d="M100 246 H340"/><path d="M92 256 H348"/><path d="M84 266 H356"/></g><circle cx="220" cy="100" r="11" fill="#D9A441"/><path d="M220 94 V100 L224 103" fill="none" stroke="#0B5C4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 C 175 250, 205 250, 220 258 C 235 250, 265 250, 290 262 L290 290 C 265 278, 235 278, 220 286 C 205 278, 175 278, 150 290 Z" fill="#0B5C4C" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M220 258 V286" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M162 270 C 178 264, 196 264, 208 268 M162 279 C 178 273, 196 273, 208 277" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M232 268 C 244 264, 262 264, 278 270" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M262 255 V276 L267 271 L272 276 V256" fill="#D9A441" stroke="#D9A441" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights,unit_word").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights,unit_word,shared_rooms").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   setVocab(S.cfg.unit_word);document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   /* administrateur de la plateforme sans établissement : la marque Saytu */
@@ -1527,12 +1529,15 @@ async function viewPlanning(v){
     q(sb.from("slot_conflicts").select("*").eq("week_start",wk)),
     q(sb.from("student_groups").select("id,code,name,size,home_room_id,programs(code,department_id,departments(code,name))").order("code")),
     q(sb.from("teachers").select("id,first_name,last_name,active,phone").order("last_name")),
-    q(sb.from("rooms").select("id,code,name,capacity,room_type").order("code")),
+    q(sb.from("rooms").select("id,code,name,capacity,room_type,faculty_id").order("code")).then(L=>L.filter(r=>r.faculty_id==null||r.faculty_id===S.fac)),
     q(sb.from("teaching_assignments").select("id,semester_id,teacher_id,course_id,group_id,planned_hours,assignment_groups(group_id,student_groups(code)),semesters(label,start_date,end_date),courses(code,name,room_type),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code)").order("id")),
     q(sb.from("semesters").select("id,label,start_date,end_date,faculty_id,academic_years(label)").order("start_date")),
     q(sb.from("teacher_availability").select("teacher_id,day_of_week,start_time,end_time").eq("week_start",avWk)),
     q(sb.from("availability_weeks").select("teacher_id,by_planner").eq("week_start",avWk)),
     q(sb.from("published_weeks").select("published_at").eq("week_start",wk).eq("faculty_id",S.fac).maybeSingle())]);
+  /* salles partagées : créneaux déjà pris par les autres facultés, sans détail */
+  const busyX=rooms.some(r=>r.faculty_id==null)?(await q(sb.rpc("shared_room_busy",{p_week:wk,p_fac:S.fac})).catch(()=>[])||[]):[];
+  const busyAt=(rid,d,a,b)=>busyX.some(x=>x.room_id===rid&&x.day_of_week===d&&toMin(x.start_time)<b&&a<toMin(x.end_time));
   const mins=x=>toMin(x.end_time)-toMin(x.start_time);
   slots.forEach(x=>decorateTA(x.teaching_assignments));assignsAll.forEach(decorateTA);
   const F=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
@@ -1613,13 +1618,15 @@ async function viewPlanning(v){
     <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sm" id="goAsg">Gérer les affectations →</button></div>`;
   const paneSalles=()=>{const stds=dayStarts(toMin(sc.start),toMin(sc.end),sc.len,sc.lunchFrom?toMin(sc.lunchFrom):null,sc.lunchTo?toMin(sc.lunchTo):null);
     const cap=stds.length*sc.len;
-    const occ=(r,d)=>live.filter(s=>s.room_id===r.id&&s.day_of_week===d);
+    const occ=(r,d)=>[...live.filter(s=>s.room_id===r.id&&s.day_of_week===d),...busyX.filter(x=>x.room_id===r.id&&x.day_of_week===d)];
     const freeOf=(r,d)=>stds.filter(t=>!occ(r,d).some(s=>toMin(s.start_time)<t+sc.len&&t<toMin(s.end_time))).map(t=>F(t));
     const rows=rooms.map(r=>{const tot=sc.days.reduce((a,d)=>a+occ(r,d).reduce((x,s)=>x+mins(s),0),0);return{r,tot,pct:Math.round(tot/(cap*sc.days.length||1)*100)}});
     return `<p class="sub" style="margin:0 0 10px">Occupation de chaque salle sur la semaine (cours non annulés) et créneaux encore libres, utiles pour placer un rattrapage.</p>
     <div class="panel ovwrap"><table class="ov"><thead><tr><th>Salle</th>${sc.days.map(d=>`<th>${DAYS[d]} <small>${dayDate(W,d)}</small></th>`).join("")}</tr></thead><tbody>
-    ${rows.map(({r,pct})=>`<tr><th><b>${esc(r.code)}</b><div class="sub">${r.capacity} places · ${pct} %</div><div class="pbar"><i style="width:${Math.min(100,pct)}%"></i></div></th>${sc.days.map(d=>{const m=occ(r,d).reduce((x,s)=>x+mins(s),0),p=Math.round(m/(cap||1)*100),fr=freeOf(r,d);
-      return `<td><div class="sub" style="margin-bottom:4px">${p} % occupée</div>${fr.length?fr.map(t=>`<span class="pill p-ok" style="margin:0 4px 4px 0">${t}</span>`).join(""):'<span class="pill p-mute">complète</span>'}</td>`}).join("")}</tr>`).join("")||`<tr><td><p class="empty">Aucune salle.</p></td></tr>`}</tbody></table></div>
+    ${rows.map(({r,pct})=>`<tr><th><b>${esc(r.code)}</b>${r.faculty_id==null?' <span class="pill p-info">Partagée</span>':""}<div class="sub">${r.capacity} places · ${pct} %</div><div class="pbar"><i style="width:${Math.min(100,pct)}%"></i></div></th>${sc.days.map(d=>{const m=occ(r,d).reduce((x,s)=>x+mins(s),0),p=Math.round(m/(cap||1)*100),fr=freeOf(r,d);
+      const bz=busyX.filter(x=>x.room_id===r.id&&x.day_of_week===d);
+      return `<td><div class="sub" style="margin-bottom:4px">${p} % occupée</div>${bz.map(x=>`<span class="pill p-mute" style="margin:0 4px 4px 0">Occupée ${hm(x.start_time)}–${hm(x.end_time)}</span>`).join("")}${fr.length?fr.map(t=>`<span class="pill p-ok" style="margin:0 4px 4px 0">${t}</span>`).join(""):'<span class="pill p-mute">complète</span>'}</td>`}).join("")}</tr>`).join("")||`<tr><td><p class="empty">Aucune salle.</p></td></tr>`}</tbody></table></div>
+    ${busyX.length?`<p class="sub">Les salles partagées comptent aussi les créneaux pris par les autres facultés.</p>`:""}
     <p class="sub">Les créneaux en vert sont libres dans cette salle. Pour placer un cours, utilisez « Ajouter un cours » ou le glisser-déposer dans la grille.</p>`};
   const PANES={grille:paneGrille,ensemble:paneEnsemble,dispos:paneDispos,salles:paneSalles,avancement:paneAvancement};
 
@@ -1770,7 +1777,7 @@ async function viewPlanning(v){
     {k:"assignment_id",l:"Affectation",t:"select",num:1,opt:assigns.map(a=>[a.id,aLabel(a)+(remaining[a.id]<=0?" (terminée)":"")]),req:1},
     {k:"day_of_week",l:"Jour",t:"select",num:1,opt:sc.days.map(d=>[d,DAYS[d]+" "+dayDate(W,d)]),req:1},
     {k:"start_time",l:"Début",t:"time",req:1},{k:"end_time",l:"Fin",t:"time",req:1},
-    {k:"room_id",l:"Salle",t:"select",num:1,opt:rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"+(r.room_type&&r.room_type!=="standard"?" · "+(ROOM_TYPE[r.room_type]||r.room_type):"")]),req:1}];
+    {k:"room_id",l:"Salle",t:"select",num:1,opt:rooms.map(r=>[r.id,r.code+" · "+r.capacity+" places"+(r.room_type&&r.room_type!=="standard"?" · "+(ROOM_TYPE[r.room_type]||r.room_type):"")+(r.faculty_id==null?" · partagée":"")]),req:1}];
   const slotDialog=(row,report)=>{
     const f=slotFields();
     const vals=row?{...row,start_time:hm(row.start_time),end_time:hm(row.end_time)}:{day_of_week:sc.days[0],start_time:sc.start,end_time:""};
@@ -1790,7 +1797,7 @@ async function viewPlanning(v){
       toast((report?"Cours reporté":row?"Cours modifié":"Cours ajouté")+(off?" · Attention : en dehors des disponibilités du professeur":noAns?" · Ce professeur n'a pas donné ses disponibilités":""),!!(off||noAns));rerender()});
   };
   addSlot.onclick=()=>slotDialog(null);
-  autoGen.onclick=()=>genDialog({week:W,published:!!pub,slots:live,assigns,rooms,groups,avails,remaining,rerender,declared});
+  autoGen.onclick=()=>genDialog({week:W,published:!!pub,slots:live,assigns,rooms,groups,avails,remaining,rerender,declared,busyX});
   const delSlot=sl=>openDialog(`<h3>Supprimer ce cours ?</h3><p style="margin:0">${esc(sl.teaching_assignments.courses.code)}, ${dayLong(sl.day_of_week)} ${hm(sl.start_time)}–${hm(sl.end_time)}.${sl.published?" Il disparaît de l'emploi du temps du professeur sans explication. Pour un empêchement, préférez « Annuler » : le professeur voit le motif.":""}</p>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn danger" value="ok">Supprimer</button></div>`,
     async()=>{const r=await q(sb.from("timetable_slots").delete().eq("id",sl.id).select());if(!r.length)throw new Error("Suppression refusée.");toast("Cours supprimé");rerender()});
@@ -1817,7 +1824,7 @@ async function viewPlanning(v){
   if(S.ttTab==="grille")enableTtDrag(v,{
     check:(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),t=sl.teaching_assignments;
       const o=live.find(x=>x.id!==id&&x.day_of_week===d&&toMin(x.start_time)<b&&a<toMin(x.end_time)&&(x.teaching_assignments.teacher_id===t.teacher_id||x.teaching_assignments._g.some(g=>t._g.includes(g))||x.room_id===sl.room_id));
-      return o?`Conflit avec ${o.teaching_assignments.courses.code}`:""},
+      return o?`Conflit avec ${o.teaching_assignments.courses.code}`:busyAt(sl.room_id,d,a,b)?"Salle occupée par une autre faculté":""},
     onDrop:async(id,d,a,b)=>{const sl=slots.find(x=>x.id===id),tid=sl.teaching_assignments.teacher_id;
       try{await q(sb.from("timetable_slots").update({day_of_week:d,start_time:a,end_time:b}).eq("id",id));
         const off=declared.has(tid)&&!avOf(tid).some(x=>x.day_of_week===d&&hm(x.start_time)<=a&&hm(x.end_time)>=b);
@@ -2304,6 +2311,8 @@ function generateTimetable(o,D){
   const GS=a=>a._g||[a.group_id];
   D.slots.forEach(x=>{const a=x.teaching_assignments;GS(a).forEach(g=>add("g",g,x.day_of_week,T(x.start_time),T(x.end_time)));add("t",a.teacher_id,x.day_of_week,T(x.start_time),T(x.end_time));tday(a.teacher_id).add(x.day_of_week);asl(x.assignment_id,x.day_of_week).push({s:T(x.start_time),e:T(x.end_time)});if(x.room_id)add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time));
     existing[x.assignment_id]=(existing[x.assignment_id]||0)+T(x.end_time)-T(x.start_time)});
+  /* salles partagées déjà prises par les autres facultés */
+  (D.busyX||[]).forEach(x=>add("r",x.room_id,x.day_of_week,T(x.start_time),T(x.end_time)));
   const len=o.len,maxChain=Math.max(1,Math.floor(360/o.len)),start=T(o.start),end=T(o.end),lf=o.lunchFrom?T(o.lunchFrom):null,lt=o.lunchTo?T(o.lunchTo):null;
   const times=dayStarts(start,end,len,lf,lt);
   /* demi-journées sans cours : un créneau qui finit avant la pause (ou avant 13 h sans pause) est « matin », sinon « après-midi » */
@@ -2403,7 +2412,7 @@ function genDialog(ctx){
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
       try{localStorage.setItem("saytu_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
-      const res=generateTimetable(cfg,{week:iso(ctx.week)+"T12:00:00",assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
+      const res=generateTimetable(cfg,{week:iso(ctx.week)+"T12:00:00",assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining,busyX:ctx.busyX});
       preview(res);return "keep"});
     const cells=[...document.querySelectorAll("#gGrid [data-gc]")],isOn=b=>b.getAttribute("aria-pressed")==="true";
     const offTxt=()=>{const L=[];SD.forEach(d=>{const c=cells.filter(b=>b.dataset.gc.startsWith(d+"|")),off=c.filter(b=>!isOn(b));
@@ -2674,8 +2683,9 @@ function refDefs(L){
     filieres:{title:"Filières",one:"filière",head:[1,0],hint:"Une filière appartient à un département (ex. Informatique L1).",table:"programs",select:"*,departments(code)",order:"code",
       cols:[["Code",code],["Filière",r=>esc(r.name)],["Niveau",r=>esc(r.level)],["Département",r=>esc(r.departments?.code)]],
       fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"level",l:"Niveau (L1, L2, M1…)",req:1},{k:"department_id",l:"Département",t:"select",num:1,opt:dep,req:1}]},
-    salles:{title:"Salles",one:"salle",head:[1,0],hint:"Chaque salle appartient à une faculté. La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",defaults:{faculty_id:S.fac},
-      cols:[["Code",code],...FACCOL,["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
+    salles:{title:"Salles",one:"salle",head:[1,0],hint:S.cfg?.shared_rooms?"Les salles de la faculté, et les salles partagées par toutes les facultés (gérées par l'administrateur central). La capacité est comparée à l'effectif des groupes lors du placement des créneaux.":"Chaque salle appartient à une faculté. La capacité est comparée à l'effectif des groupes lors du placement des créneaux.",table:"rooms",order:"code",defaults:{faculty_id:S.fac},
+      ro:r=>r.faculty_id==null,roText:"Gérée par l'administrateur central",
+      cols:[["Code",r=>code(r)+(!multiFac()&&r.faculty_id==null?' <span class="pill p-info">Partagée</span>':"")],...(multiFac()?[["Faculté",r=>r.faculty_id==null?'<span class="pill p-info">Partagée</span>':esc(facCode(r.faculty_id))]]:[]),["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
       fields:[...FACFIELD,{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
         {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]],req:1}]},
     departements:{title:"Départements",one:"département",head:[1,0],hint:"Chaque département appartient à une faculté. Commencez par les départements : filières, matières et enseignants en dépendent.",table:"departments",order:"code",defaults:{faculty_id:S.fac},
@@ -2720,11 +2730,12 @@ function readFields(fields){
 
 const TRASH=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg>`;
 async function renderBlock(def,el){
-  const rows=await q(sb.from(def.table).select(def.select||"*").order(def.order||"id"));
+  let qq=sb.from(def.table).select(def.select||"*");if(def.where)qq=def.where(qq);
+  const rows=await q(qq.order(def.order||"id"));
   const hd=def.head||[0],used=new Set(hd);
   const item=(r,i)=>`<div class="ritem"><div class="rmain"><b>${def.cols[hd[0]][1](r)}</b>${hd[1]!=null?`<span class="sub">${def.cols[hd[1]][1](r)}</span>`:""}</div>
     <div class="rmeta">${def.cols.map((c,k)=>used.has(k)?"":`<span class="rm"><small>${c[0]}</small>${c[1](r)||"—"}</span>`).join("")}</div>
-    <div class="ract"><button class="btn sm" data-e="${i}">Modifier</button><button class="iconbtn" data-d="${i}" aria-label="Supprimer">${TRASH}</button></div></div>`;
+    <div class="ract">${def.ro&&def.ro(r)?`<span class="sub">${esc(def.roText||"")}</span>`:`<button class="btn sm" data-e="${i}">Modifier</button><button class="iconbtn" data-d="${i}" aria-label="Supprimer">${TRASH}</button>`}</div></div>`;
   el.innerHTML=`<div class="sechead"><h2>${esc(def.title)} <span class="cnt">${rows.length}</span></h2><button class="btn sm primary" data-add>+ Ajouter</button></div>
     ${def.hint?`<p class="sub" style="margin:-4px 0 10px">${esc(def.hint)}</p>`:""}
     ${rows.length>6?searchBox("s_"+def.table,"Rechercher dans "+def.title.toLowerCase()+"…"):""}
@@ -3088,9 +3099,12 @@ async function viewEtab(v){
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Facultés</h2><button class="btn sm primary" id="fNew">Nouvelle faculté</button></div>
       <p class="sub" style="margin:6px 0 10px">Chaque faculté a ses départements, ses salles, ses semestres, ses horaires et ses jours sans cours. Son nom et son logo figureront avec ceux de l'université sur ses documents.</p>
       <div class="row" style="align-items:flex-end;gap:10px;margin:0 0 12px"><label style="max-width:320px">Nom donné aux facultés dans Saytu<select id="eW" data-notr>${VOCOPT.map(([k,f,a])=>`<option value="${k}" ${(cfg.unit_word||"faculte")===k?"selected":""}>${LANG==="ar"?a:f}</option>`).join("")}</select></label>
+        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);align-self:center"><input type="checkbox" id="eSR" ${cfg.shared_rooms?"checked":""}> Salles et amphithéâtres partagés entre les facultés</label>
         <button type="button" class="btn sm" id="eWs">Enregistrer</button></div>
       <div class="rl">${facs.map(f=>{const nd=depsAll.filter(d=>d.faculty_id===f.id).length;return `<div class="rlrow" style="align-items:center"><div style="display:flex;gap:10px;align-items:center;flex:1">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)} · ${nd} département(s) · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-fe="${f.id}">Modifier</button>${nd||facs.length<2?"":`<button class="btn sm danger" data-fd="${f.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
+
+    ${cfg.shared_rooms?`<section class="adsec panel" style="padding:16px 18px" id="sharedRooms"></section>`:""}
 
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Postes</h2><button class="btn sm primary" id="pNew">Nouveau poste</button></div>
       <p class="sub" style="margin:6px 0 10px">Un poste est un nom (Trésorier, Scolarité, Adjoint…) posé sur des droits. Renommez-les comme dans votre établissement. Le nom apparaît dans la barre latérale, les comptes et la signature des messages.</p>
@@ -3126,9 +3140,17 @@ async function viewEtab(v){
     try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
+  /* salles partagées : gérées ici par l'administrateur central, réservées par toutes les facultés */
+  const shEl=document.getElementById("sharedRooms");
+  if(shEl)renderBlock({title:"Salles partagées",one:"salle",head:[0,1],table:"rooms",order:"code",where:x=>x.is("faculty_id",null),defaults:{faculty_id:null},
+    hint:"Salles et amphithéâtres communs à toutes les facultés. Chaque faculté les choisit dans ses emplois du temps ; quand une salle est prise par une autre faculté, elle voit seulement « Occupée ».",
+    cols:[["Code",r=>esc(r.code)],["Nom",r=>esc(r.name)],["Capacité",r=>`<span class="num">${r.capacity}</span>`],["Type",r=>esc(ROOM_TYPE[r.room_type]||r.room_type)]],
+    fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
+      {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]],req:1}],
+    normalize:o=>({...o,faculty_id:null})},shEl);
   /* vocabulaire : faculté, UFR, école ou institut, partout dans l'application */
-  eWs.onclick=async()=>{try{const r=await q(sb.from("app_settings").update({unit_word:eW.value,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
-    if(!r.length)throw new Error("Enregistrement refusé.");toast("Vocabulaire enregistré");setTimeout(()=>location.reload(),600)}catch(e){toast(errMsg(e),true)}};
+  eWs.onclick=async()=>{try{const r=await q(sb.from("app_settings").update({unit_word:eW.value,shared_rooms:eSR.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
+    if(!r.length)throw new Error("Enregistrement refusé.");toast("Organisation enregistrée");setTimeout(()=>location.reload(),600)}catch(e){toast(errMsg(e),true)}};
   /* facultés */
   const facDlg=f=>facultyDialog(f);
   fNew.onclick=()=>facDlg(null);
