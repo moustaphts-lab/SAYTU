@@ -26,8 +26,10 @@ function visual(s){
 const clean=s=>String(s).replace(/[⁦-⁩‎‏]/g,"").replace(/⁠/g,"").replace(/\u202f/g,"\u00a0").replace(/\u2248/g,"~").replace(/\u2713\s?/g,"").replace(/(\d)\s*–\s*(\d)/g,"$1-$2");
 function arLine(doc,s){
   s=clean(typeof tr==="function"?tr(String(s)):String(s));
+  s=s.replace(/(^|\s)(virement|espèces|chèque)(?=\s|$)/g,(_,p,w)=>p+({virement:"تحويل بنكي","espèces":"نقدًا","chèque":"شيك"})[w]);
   s=s.replace(/\b(\d+) h (\d{2})\b/g,"$1 س $2 د").replace(/\b(\d+) h\b/g,"$1 س");
   if(!AR.test(s))return s;
+  s=s.replace(/[\u064B-\u065F\u0670]/g,"");
   const shaped=doc.processArabic?doc.processArabic(s):s;
   return visual(shaped)}
 
@@ -67,6 +69,9 @@ function arabize(doc){
 
 /* en arabe, chaque « new jsPDF(...) » de l'application rend un document déjà arabisé */
 function hook(){const J=window.jspdf;if(!J||J.__arHook)return;J.__arHook=true;const Orig=J.jsPDF;
+  /* la mise en forme arabe est faite ici, avant le calcul de l'ordre d'affichage : celle de jsPDF, appliquée ensuite
+     au texte déjà retourné, formerait de fausses ligatures (lam-alif) ; on la retire */
+  const pa=Orig.API.processArabic;if(pa&&Array.isArray(Orig.API.events)){for(let i=Orig.API.events.length-1;i>=0;i--){const e=Orig.API.events[i];if(e&&e[0]==="preProcessText"&&e[1]===pa)Orig.API.events.splice(i,1)}}
   const Wrapped=function(...a){const d=new Orig(...a);return (typeof LANG!=="undefined"&&LANG==="ar")?(fontData?arabize(d):(()=>{throw new Error("جارٍ تحميل الخط العربي، أعد المحاولة بعد لحظة.")})()):d};
   Wrapped.API=Orig.API;Wrapped.version=Orig.version;Object.setPrototypeOf(Wrapped,Orig);J.jsPDF=Wrapped}
 window.SAYTU_PDF={hook,loadFonts,arabize,visual,
