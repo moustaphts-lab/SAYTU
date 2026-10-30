@@ -3577,10 +3577,13 @@ async function periodDetail(el,p){
       const past=ss.filter(x=>sEnd(x)<=now);ctl={fut:ss.length-past.length,sub:past.filter(x=>x.attendance_records?.status==="soumis").length,cor:past.filter(x=>x.attendance_records?.status==="correction_demandee").length,non:past.filter(x=>!x.attendance_records).length}}catch(e){}
     const ready=ctl&&!ctl.fut&&!ctl.sub&&!ctl.cor&&!ctl.non;
     const VC=items.length?await payChecks(p,items,by,tot):[];
+    /* heures validées (ou tarif ajouté) après le dernier calcul : on invite à recalculer */
+    let late=null;if(p.status==="en_verification"){try{late=await q(sb.rpc("payroll_not_included",{p_period:p.id}))}catch(e){late=null}}
     el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)}</div></div>${ppill(PER,p.status)}</div>
       ${canPay()?`<div class="ph-act"><button class="btn ${p.status==="ouverte"?"primary":""}" id="calc">${p.status==="ouverte"?"Calculer la paie":"Recalculer"}</button>
         ${p.status==="en_verification"&&items.length?`<button class="btn primary" id="appr">Approuver et générer les bulletins</button>`:""}
         ${p.status==="ouverte"?`<button class="btn danger" id="delP">Supprimer</button>`:""}</div>`:""}
+      ${late&&late.seances?`<div class="gpwarn" style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>${late.seances} séance(s) validée(s) (${hrs(late.minutes)}) ne ${late.seances>1?"sont":"est"} pas encore dans le calcul.</b> Elles ont été validées, ou leur tarif ajouté, après le dernier calcul.${late.sans_tarif?` <b>${late.sans_tarif}</b> n'${late.sans_tarif>1?"ont":"a"} toujours pas de tarif : ajoutez-le dans « Tarifs », puis recalculez.`:""}</div>${canPay()?`<button class="btn primary sm" type="button" id="calcLate">Recalculer</button>`:""}</div>`:""}
       ${items.length?`<div class="ph-x">${xbar("pX")}</div>`:""}</div>
       ${ctl?`<div class="panel hcard" style="margin-bottom:12px;border-color:${ready?"var(--ok)":"var(--warn)"}"><b style="color:${ready?"var(--ok)":"var(--warn)"}">${ready?"✓ Contrôle terminé : la période peut être calculée.":"Le contrôle des émargements n'est pas terminé"}</b>
         ${ready?"":`<ul class="chk" style="margin-top:8px">${ctl.fut?`<li class="info"><i>i</i><span>${ctl.fut} séance(s) de la période sont encore à venir.</span></li>`:""}${ctl.sub?`<li class="warn"><i>!</i><span>${ctl.sub} émargement(s) en attente de contrôle.</span></li>`:""}${ctl.cor?`<li class="warn"><i>!</i><span>${ctl.cor} correction(s) demandée(s), sans réponse du professeur.</span></li>`:""}${ctl.non?`<li class="bad"><i>✕</i><span>${ctl.non} séance(s) passée(s) non émargée(s).</span></li>`:""}</ul>
@@ -3592,6 +3595,7 @@ async function periodDetail(el,p){
     if(canPay()){
       calc.onclick=async()=>{try{const r=await q(sb.rpc("calculate_payroll",{p_period:p.id}));
         toast(`${r.lignes} séance(s) payable(s) · ${fcfa(r.total_fcfa)}`+(r.sans_tarif?` · ${r.sans_tarif} sans tarif défini`:""),r.sans_tarif>0);rerender()}catch(e){toast(errMsg(e),true)}};
+      const cl=document.getElementById("calcLate");if(cl)cl.onclick=()=>calc.click();
       document.getElementById("appr")&&(appr.onclick=()=>openDialog(`<h3>Approuver la période ?</h3>
         ${VC.some(x=>x.k==="warn"||x.k==="bad")?`<div class="gpwarn">${VC.filter(x=>x.k==="warn"||x.k==="bad").length} point(s) signalé(s) dans les vérifications : relisez-les avant d'approuver.</div>`:""}
         <p style="margin:0">${by.length} bulletin(s) pour un total de <b>${fcfa(tot)}</b> vont être générés. Après approbation, les montants sont figés et ces séances ne pourront plus être payées dans une autre période.</p>
