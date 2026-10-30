@@ -1,6 +1,6 @@
 /* Saytu — PDF en arabe.
    Quand l'interface est en arabe, chaque document PDF est produit en arabe :
-   - police arabe intégrée (DejaVu Sans réduite au latin et à l'arabe, licence libre), chargée seulement à ce moment-là ;
+   - police arabe intégrée (IBM Plex Sans Arabic, la même qu'à l'écran, réduite au latin et à l'arabe, licence OFL), chargée seulement à ce moment-là ;
    - textes traduits avec le même dictionnaire que l'écran ;
    - mise en page en miroir (la page se lit de droite à gauche, tableaux compris) ;
    - lettres arabes liées (formes contextuelles) et ordre d'affichage calculé ici, nombres et mots latins gardés de gauche à droite. */
@@ -23,7 +23,7 @@ function visual(s){
   const runs=[];T.forEach(x=>{const r=runs[runs.length-1];if(r&&r.d===x.d)r.items.push(x);else runs.push({d:x.d,items:[x]})});
   return runs.reverse().map(r=>r.d==="L"?r.items.map(x=>x.t).join(""):r.items.slice().reverse().map(x=>x.k==="R"?[...x.t].reverse().join(""):(MIRROR[x.t]||x.t)).join("")).join("")}
 
-const clean=s=>String(s).replace(/[⁦-⁩‎‏]/g,"").replace(/⁠/g,"").replace(/(\d)\s*–\s*(\d)/g,"$1-$2");
+const clean=s=>String(s).replace(/[⁦-⁩‎‏]/g,"").replace(/⁠/g,"").replace(/\u202f/g,"\u00a0").replace(/(\d)\s*–\s*(\d)/g,"$1-$2");
 function arLine(doc,s){
   s=clean(typeof tr==="function"?tr(String(s)):String(s));
   s=s.replace(/\b(\d+) h (\d{2})\b/g,"$1 س $2 د").replace(/\b(\d+) h\b/g,"$1 س");
