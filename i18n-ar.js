@@ -185,6 +185,8 @@ const pats=[
 [/^Dernière connexion : (.+)$/,(_,d)=>"آخر دخول: "+tr(d)],
 [/^Conflit de (\d\d:\d\d) à (\d\d:\d\d) : (.+?)\.?$/,(_,a,b,r)=>"تعارض من "+a+" إلى "+b+": "+tr(r)+"."],
 [/^Occupée (.+)$/,(_,h)=>"مشغولة "+h],
+[/^Le code saisi ne correspond pas : tapez (.+) pour confirmer\.$/,"الرمز المكتوب غير مطابق: اكتب $1 للتأكيد."],
+[/^Supprimer définitivement « (.+) » \?$/,"حذف «$1» نهائيًا؟"],
 [/^La salle (.+) n'est pas disponible pour cette faculté\.$/,"القاعة $1 غير متاحة لهذه الكلية."]
 ];
 window.SAYTU_AR={exact,pats,mo};

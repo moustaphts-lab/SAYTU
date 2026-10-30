@@ -71,6 +71,21 @@ Deno.serve(async (req: Request) => {
     return json({ temp_password: password });
   }
 
+  // 0 ter. Administrateur de la plateforme : suppression définitive d'un établissement vide (essai, erreur)
+  if (action === "platform_remove_establishment") {
+    const { data: users, error: eR } = await caller.rpc("platform_remove_establishment", {
+      p_id: Number(body.establishment_id), p_code: String(body.code ?? ""),
+    });
+    if (eR) return json({ error: eR.message }, 400);
+    // comptes qui n'existaient que pour cet établissement
+    let failed = 0;
+    for (const id of (users ?? []) as string[]) {
+      const { error } = await admin.auth.admin.deleteUser(id);
+      if (error) failed++;
+    }
+    return json({ ok: true, accounts: (users ?? []).length, failed });
+  }
+
   const { data: isAdmin, error: roleErr } = await caller.rpc("has_role", { r: "admin" });
   if (roleErr || isAdmin !== true) return json({ error: "Réservé à l'administrateur." }, 403);
   const { data: me } = await caller.auth.getUser();

@@ -3031,7 +3031,7 @@ async function viewPlatform(v){
       <div class="hlist">${A.length?A.map(a=>`<div class="hrow"><div><b data-notr>${esc(a.full_name||a.email)}</b><div class="sub"><span data-notr>${esc(a.email)}</span> · <span>Dernière connexion : ${dt(a.last_sign_in_at)}</span></div></div>
         <button type="button" class="btn sm" style="white-space:nowrap;flex:none" data-pfr="${a.user_id}">Nouveau mot de passe</button></div>`).join(""):`<p class="sub">Aucun administrateur central.</p>`}</div>
       <div class="row" style="justify-content:space-between;margin-top:12px;gap:8px">
-        <button type="button" class="btn ${e.active?"danger":""}" id="pfAct">${e.active?"Désactiver l'établissement":"Réactiver l'établissement"}</button>
+        <div class="row" style="gap:8px"><button type="button" class="btn ${e.active?"danger":""}" id="pfAct">${e.active?"Désactiver l'établissement":"Réactiver l'établissement"}</button><button type="button" class="btn danger" id="pfDel">Supprimer définitivement</button></div>
         <div class="row" style="gap:8px"><button type="button" class="btn" id="pfAdd">+ Administrateur central</button><button class="btn" value="cancel" formnovalidate>Fermer</button></div></div>`,async()=>{});
     document.querySelectorAll("[data-pfr]").forEach(b=>b.onclick=async()=>{b.disabled=true;
       try{const r=await callUsers({action:"platform_reset_admin",establishment_id:id,user_id:b.dataset.pfr});const a=A.find(x=>x.user_id===b.dataset.pfr);
@@ -3039,6 +3039,13 @@ async function viewPlatform(v){
     pfAdd.onclick=()=>openDialog(`<h2>Ajouter un administrateur central</h2><p class="sub" style="margin:0">Par exemple si l'établissement a perdu l'accès à son administrateur.</p>${adminForm()}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Ajouter</button></div>`,
       async()=>{await createAdmin(id);return "keep"});
+    /* suppression définitive : seulement un établissement vide (essai, erreur de création) */
+    pfDel.onclick=()=>openDialog(`<h3>Supprimer définitivement « ${esc(e.name)} » ?</h3>
+      <p style="margin:0">Possible seulement pour un établissement vide (essai, erreur de création) : sans départements, enseignants, salles ni année, et sans autres comptes que ses administrateurs centraux. Ses administrateurs sont supprimés avec lui, sauf ceux qui appartiennent aussi à un autre établissement. Un établissement qui a servi se désactive.</p>
+      <label>Pour confirmer, tapez son code : <b data-notr>${esc(e.code)}</b><input id="pfDc" required autocomplete="off"></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Supprimer définitivement</button></div>`,
+      async()=>{const r=await callUsers({action:"platform_remove_establishment",establishment_id:id,code:pfDc.value});
+        toast(r.failed?"Établissement supprimé ; un compte n'a pas pu être supprimé.":"Établissement supprimé définitivement");rerender()});
     pfAct.onclick=()=>{if(!e.active){q(sb.rpc("platform_set_active",{p_id:id,p_active:true})).then(()=>{toast("Établissement réactivé");document.getElementById("dlg").close();rerender()}).catch(err=>toast(errMsg(err),true));return}
       openDialog(`<h3>Désactiver cet établissement ?</h3><p style="margin:0">Plus aucun de ses membres ne pourra y accéder. Ses données sont conservées et l'établissement peut être réactivé.</p>
         <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Désactiver</button></div>`,
