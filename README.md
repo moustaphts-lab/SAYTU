@@ -1,6 +1,6 @@
-# UCAB Touba – Enseignements
+# Saytu
 
-Application web de gestion universitaire : emplois du temps hebdomadaires, émargement des professeurs, contrôle des heures, paie à l'heure, bulletins et suivi par la direction.
+*Saytu* (« surveiller, veiller sur » en wolof) : emplois du temps, émargement des professeurs, contrôle des heures et paie pour une université de plusieurs facultés. Le nom et le logo de l'établissement se règlent dans Établissement › Identité ; ceux de chaque faculté dans Ma faculté.
 
 - Interface : `index.html`, un fichier unique, sans étape de compilation.
 - Données et sécurité : Supabase. Toutes les permissions sont vérifiées côté serveur (règles d'accès et fonctions de la base).

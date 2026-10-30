@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>UCAB Touba · Enseignements</title>
+<title>Saytu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -473,7 +473,7 @@ function makePayslipPdf(jsPDF, slip, payments, detailed){
   const foot=["Montant = heures retenues × tarif horaire en vigueur à la date de chaque séance. * Tarif individuel.",
     "Aucune retenue ni cotisation n'est appliquée selon les règles actuelles de l'établissement.",
     "Bulletin approuvé par "+(sn.approuve_par||"le service financier")+". Ce document ne vaut pas preuve de paiement.",
-    "Édité le "+new Date().toLocaleDateString("fr-FR")+" · "+slip.number];
+    "Édité le "+new Date().toLocaleDateString("fr-FR")+" avec "+PRODUCT+" · "+slip.number];
   foot.forEach((t,i)=>doc.text(t,L,282+i*3.6-(foot.length-1)*3.6));
   return doc;
 }
@@ -483,13 +483,13 @@ function makePayslipPdf(jsPDF, slip, payments, detailed){
 const SUPABASE_URL = "https://fkfuviwquoacpehmctsn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_R98wA_kmIeqPt2YTmCRLQQ_69QKmx4s";
 /* Un compte de niveau université (rectorat, contrôle, financier central) consulte une faculté à la fois :
-   la faculté choisie part dans l'en-tête x-ucab-fac, et la base ne lui montre que celle-ci.
+   la faculté choisie part dans l'en-tête x-saytu-fac, et la base ne lui montre que celle-ci.
    Exceptions : la liste des facultés (pour le sélecteur), la comparaison et la lecture de ses propres droits. */
 const FAC_FREE=/\/rest\/v1\/(faculties|rpc\/(compare_faculties|my_scope|my_roles))(\?|$)/;
 function facFetch(input,init){
   try{const url=typeof input==="string"?input:input.url;
     if(typeof S!=="undefined"&&S.fac&&/\/rest\/v1\//.test(url)&&!FAC_FREE.test(url)&&typeof isCentralReader==="function"&&isCentralReader()&&!isCentral()){
-      init={...(init||{})};const h=new Headers(init.headers||(typeof input!=="string"?input.headers:undefined));h.set("x-ucab-fac",String(S.fac));init.headers=h}}catch(e){}
+      init={...(init||{})};const h=new Headers(init.headers||(typeof input!=="string"?input.headers:undefined));h.set("x-saytu-fac",String(S.fac));init.headers=h}}catch(e){}
   return fetch(input,init)}
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {global:{fetch:facFetch}});
 
@@ -508,10 +508,12 @@ const ATT = {
 
 const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()), filter:"soumis", planView:"group", planId:null};
 /* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
-const CFG_DEFAULT={name:"UCAB Touba",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
+/* Saytu : le nom du logiciel. Le nom de l'établissement se règle dans Établissement › Identité. */
+const PRODUCT="Saytu";
+const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
 async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
-  document.title=APPN()+" · "+(S.cfg.subtitle||"Enseignements");return S.cfg}
+  document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
 /* logo et lignes d'en-tête / de pied de page dans les PDF */
@@ -519,7 +521,7 @@ function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
 const pdfFac=()=>S._pdfUniv?null:(facById(S.fac)||null);
 function pdfHead(){const f=pdfFac();return [f&&f.name,(f&&f.pdf_header)||(S.cfg&&S.cfg.pdf_header)].filter(Boolean).join(" · ")}
 function pdfLogo(doc,x,y,size){const l=(pdfFac()&&pdfFac().logo)||(S.cfg&&S.cfg.logo);if(!l)return false;try{doc.addImage(l,/^data:image\/jpe?g/.test(l)?"JPEG":"PNG",x,y,size,size);return true}catch(e){return false}}
-function pdfFooterText(){return (S.cfg&&S.cfg.pdf_footer)||""}
+function pdfFooterText(){const f=(S.cfg&&S.cfg.pdf_footer)||"";return (f?f+"  ·  ":"")+"Édité avec "+PRODUCT}
 const $app = document.getElementById("app");
 
 /* ---------- utilitaires ---------- */
@@ -573,6 +575,7 @@ function renderLogin(msg){
       ${msg?`<div class="err">${esc(msg)}</div>`:""}
       <button class="btn primary" type="submit">Se connecter</button>
     </form>
+    <p class="sub powered" style="text-align:center;margin:14px 0 0">Propulsé par <b style="color:var(--accent)">${PRODUCT}</b> · emplois du temps, émargement et paie</p>
     ${S.cfg?.show_demo?`<details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
       ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
     </details>`:""}</div></div>`;
@@ -610,7 +613,7 @@ const ROOM_TYPE={standard:"Standard",labo:"Laboratoire",amphi:"Amphithéâtre",i
 const hmin=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
 /* ---------- facultés ---------- */
 async function loadFacs(){try{S.facs=await q(sb.from("faculties").select("id,code,name,short_name,logo,pdf_header,timetable_mode,payroll_visa,sort").order("sort").order("name"))}catch(e){S.facs=S.facs||[]}
-  let saved=null;try{saved=Number(localStorage.getItem("ucab_fac"))}catch(e){}
+  let saved=null;try{saved=Number(localStorage.getItem("saytu_fac"))}catch(e){}
   if(!S.facs.some(f=>f.id===S.fac))S.fac=(S.facs.find(f=>f.id===saved)||S.facs[0])?.id||null;return S.facs}
 const facById=id=>(S.facs||[]).find(f=>f.id===id);
 /* portée : un droit sans faculté vaut pour toute l'université */
@@ -628,7 +631,7 @@ async function semesterWeek(fac,from){const d=iso(from||new Date());
   try{const ss=(await q(sb.from("semesters").select("label,start_date,end_date,faculty_id").gte("end_date",d).order("start_date"))).filter(x=>x.faculty_id===fac);
     const sm=ss[0];return sm?{sem:sm,week:mondayOf(new Date(sm.start_date+"T12:00:00"))}:null}catch(e){return null}}
 /* choix de la faculté de travail (référentiel, horaires, calendrier) */
-async function setFac(id){S.fac=id;try{localStorage.setItem("ucab_fac",String(id))}catch(e){}await loadSchedule();}
+async function setFac(id){S.fac=id;try{localStorage.setItem("saytu_fac",String(id))}catch(e){}await loadSchedule();}
 const facSelect=(id,label)=>multiFac()?`<label style="max-width:360px">${label||"Faculté"}<select id="${id}">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code+" · "+f.name)}</option>`).join("")}</select></label>`:"";
 async function loadSchedule(){
   try{const r=await q(sb.from("school_schedule").select("*").eq("faculty_id",S.fac).maybeSingle());
@@ -749,13 +752,13 @@ function renderShell(){
 async function loadAnnonces(){const t=iso(new Date());
   try{S.annonces=(await q(sb.from("announcements").select("*").lte("starts_on",t).order("created_at",{ascending:false}))).filter(a=>!a.ends_on||a.ends_on>=t)}catch(e){S.annonces=[]}}
 function showAnnonces(el){const v=el||document.getElementById("view");if(!v||!S.annonces)return;
-  let hid=[];try{hid=JSON.parse(sessionStorage.getItem("ucab_ann_hid")||"[]")}catch(e){}
+  let hid=[];try{hid=JSON.parse(sessionStorage.getItem("saytu_ann_hid")||"[]")}catch(e){}
   const L=S.annonces.filter(a=>(a.audience==="tous"||isProf())&&!hid.includes(a.id));
   if(!L.length)return;
   const box=document.createElement("div");box.className="annbar";
   box.innerHTML=L.map(a=>`<div class="ann"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6M19 6a7 7 0 0 1 0 12"/></svg><div><b>Annonce</b><p>${esc(a.message)}</p>${a.ends_on?`<small>Jusqu'au ${fdl(a.ends_on)}</small>`:""}</div><button type="button" class="btn sm" data-annhide="${a.id}" aria-label="Masquer l'annonce">Masquer</button></div>`).join("");
   v.prepend(box);
-  box.querySelectorAll("[data-annhide]").forEach(b=>b.onclick=()=>{hid.push(Number(b.dataset.annhide));try{sessionStorage.setItem("ucab_ann_hid",JSON.stringify(hid))}catch(e){}b.closest(".ann").remove();if(!box.children.length)box.remove()});
+  box.querySelectorAll("[data-annhide]").forEach(b=>b.onclick=()=>{hid.push(Number(b.dataset.annhide));try{sessionStorage.setItem("saytu_ann_hid",JSON.stringify(hid))}catch(e){}b.closest(".ann").remove();if(!box.children.length)box.remove()});
 }
 /* gestion des annonces (directeur des études, secrétaire, administrateur) */
 async function annonceDialog(){
@@ -2144,7 +2147,7 @@ function generateTimetable(o,D){
 }
 function genDialog(ctx){
   let cfg={...GEN_DEFAULT,...(S.sched||SCHED_DEFAULT)};
-  try{const sv=JSON.parse(localStorage.getItem("ucab_gen")||"{}");["maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
+  try{const sv=JSON.parse(localStorage.getItem("saytu_gen")||"{}");["maxDays","compact","useAvail"].forEach(k=>{if(sv[k]!=null)cfg[k]=sv[k]})}catch(e){}
   cfg.maxGroup=(S.sched||SCHED_DEFAULT).groupMax||8;cfg.maxTeacher=(S.sched||SCHED_DEFAULT).teacherMax||6;
   cfg.off=[];
   /* jours et créneaux de la semaine type (Référentiel > Jours et horaires) */
@@ -2184,7 +2187,7 @@ function genDialog(ctx){
       cfg={...cfg,days:SD.filter(d=>!ST.every(t=>offL.includes(d+"|"+t))),off:offL,
         maxDays:Math.max(0,Math.floor(Number(gMaxD.value)||0)),compact:gCp.checked,useAvail:gAv.checked,replace:cfg.replace};
       if(!cfg.days.length)throw new Error("Tous les créneaux sont marqués sans cours : il n'y a rien à générer.");
-      try{localStorage.setItem("ucab_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
+      try{localStorage.setItem("saytu_gen",JSON.stringify({maxGroup:cfg.maxGroup,maxTeacher:cfg.maxTeacher,maxDays:cfg.maxDays,compact:cfg.compact,useAvail:cfg.useAvail}))}catch(e){}
       const B=base();
       const res=generateTimetable(cfg,{week:iso(ctx.week)+"T12:00:00",assigns:ctx.assigns,slots:B.slots,rooms:ctx.rooms,groups:ctx.groups,avails:ctx.avails,declared:ctx.declared,remaining:B.remaining});
       preview(res);return "keep"});
@@ -2791,7 +2794,7 @@ async function viewEtabFac(v){
 }
 
 /* ---------- administrateur : établissement (identité, année universitaire, sauvegarde) ---------- */
-const BACKUP_KEY="ucab_last_backup";
+const BACKUP_KEY="saytu_last_backup";
 const lastBackup=()=>{try{return localStorage.getItem(BACKUP_KEY)}catch(e){return null}};
 async function viewEtab(v){
   const [cfg,years,sems,,pcount,facs,depsAll]=await Promise.all([loadSettings(),q(sb.from("academic_years").select("*").order("start_date")),q(sb.from("semesters").select("*").order("start_date")),loadPostes(),q(sb.from("profiles").select("poste_id,active")),loadFacs(),q(sb.from("departments").select("id,faculty_id"))]);
