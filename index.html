@@ -61,6 +61,7 @@ nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--
 nav.tabs button{display:flex;align-items:center;gap:12px}
 nav.tabs button svg{flex:none;opacity:.8}
 .navsig{display:none}
+.navfac{display:block;margin-top:4px;color:var(--accent);font-weight:600;line-height:1.35}
 @media (min-width:721px){.navsig{display:flex;align-items:center;gap:8px;margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line);font:600 15px "Outfit",var(--f-body);color:var(--accent);letter-spacing:-.01em}}
 .yr{display:none}
 .hdrfac{margin-left:auto;margin-right:10px}.hdrfac select{padding:6px 28px 6px 10px;font:600 13px var(--f-body);border-radius:10px;min-height:0;height:auto}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -74,7 +75,9 @@ nav.tabs button svg{flex:none;opacity:.8}
   nav.tabs button{width:100%;text-align:left;border-radius:12px;padding:11px 12px;font-size:14.5px;white-space:normal;position:relative}
   nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:-12px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:var(--sand)}
   header.top .bar>.brand{display:none}
-  .yr{display:block;font-size:13.5px;color:var(--muted)}
+  .yr{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);min-width:0}
+  .yrfac{display:flex;align-items:center;gap:8px;min-width:0}.yrfac b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .yrfac img{width:24px;height:24px;object-fit:contain;border-radius:6px;background:#fff;flex:none}.yrsep{opacity:.6}
   header.top .bar{min-height:56px}
   header.top .wrap:last-child{padding:0;height:0}
   main.wrap{padding-inline:max(24px,env(safe-area-inset-right,0px)) 24px}
@@ -394,6 +397,7 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
   h1{font-size:23px}
   .menu .nm{display:none}.menu summary{padding:3px}
   .brand small{display:none}
+  header.top .bar>.brand{min-width:0}header.top .bar>.brand small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56vw}
   .burger{display:grid}
   nav.tabs{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);flex-direction:column;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);padding:calc(18px + env(safe-area-inset-top,0px)) 12px 24px;gap:4px;transform:translateX(-102%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;z-index:30;box-shadow:0 0 40px rgba(8,16,12,.25)}
   body.nav-open nav.tabs{transform:none;visibility:visible;transition:transform .22s ease}
@@ -779,15 +783,19 @@ function renderShell(){
   const tabs=availableTabs();
   const name=S.user.user_metadata?.full_name||S.user.email;
   const myFac=[...new Set((S.roles||[]).filter(r=>r.role!=="professeur"||S.roles.length===1).map(r=>r.faculty_id))];
-  const roles=(posteById(S.myPoste)?posteLabelU({poste_id:S.myPoste},S.roles):[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · "))+(S.facs&&S.facs.length?(myFac.length===1&&myFac[0]!=null?" · "+facCode(myFac[0]):myFac.includes(null)&&!(S.roles||[]).every(r=>r.role==="professeur")?" · Université":""):"");
+  const roles=(posteById(S.myPoste)?posteLabelU({poste_id:S.myPoste},S.roles):[...new Set(S.roles.map(r=>ROLE_LABEL[r.role]))].join(" · "));
+  /* rattachement de la personne, en toutes lettres : sa faculté, ou l'université */
+  const myFacName=S.facs&&S.facs.length?(myFac.length===1&&myFac[0]!=null?(facById(myFac[0])?.name||facCode(myFac[0])):myFac.includes(null)&&!(S.roles||[]).every(r=>r.role==="professeur")?"Université":""):"";
+  /* faculté affichée en haut : celle en cours */
+  const curFac=facById(S.fac),yr="Année universitaire "+(S.year||"");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      ${brandHtml("Année universitaire "+(S.year||""))}
-      <span class="yr">Année universitaire ${esc(S.year||"")}</span>
+      ${brandHtml(curFac?(curFac.short_name||curFac.code)+" · "+(S.year||""):yr)}
+      <span class="yr">${curFac?`<span class="yrfac">${curFac.logo?`<img src="${esc(curFac.logo)}" alt="">`:""}<b>${esc(curFac.name)}</b></span><span class="yrsep">·</span>`:""}${esc(yr)}</span>
       ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
-        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
+        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}${myFacName?`<span class="navfac">${esc(myFacName)}</span>`:""}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
