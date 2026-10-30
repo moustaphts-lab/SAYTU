@@ -43,7 +43,7 @@ const exact={
 "Administrateur central":"المهندس العام","Administrateur de faculté":"مهندس الكلية","Administrateur":"مهندس النظام","Consultation":"اطلاع",
 "Vacataire":"أستاذ متعاقد","Permanent":"أستاذ دائم","Maître-assistant":"أستاذ مساعد","Maître de conférences":"أستاذ محاضر","Professeur titulaire":"أستاذ التعليم العالي",
 /* boutons et mots courants */
-"Enregistrer":"حفظ","Annuler":"إلغاء","Modifier":"تعديل","Supprimer":"حذف","Ajouter":"إضافة","Fermer":"إغلاق","Ouvrir":"فتح","Rechercher":"بحث",
+"Enregistrer":"حفظ","Langue":"اللغة","Langue :":"اللغة:","Langue de l'interface":"لغة الواجهة","Annuler":"إلغاء","Modifier":"تعديل","Supprimer":"حذف","Ajouter":"إضافة","Fermer":"إغلاق","Ouvrir":"فتح","Rechercher":"بحث",
 "Revenir":"رجوع","Valider":"اعتماد","Confirmer":"تأكيد","Copier":"نسخ","Envoyer":"إرسال","Retirer":"سحب","Exporter":"تصدير","Excel":"Excel","PDF":"PDF",
 "Télécharger le fichier":"تحميل الملف","Plus tard":"لاحقًا","Oui":"نعم","Non":"لا","non":"لا","oui":"نعم","Tous":"الكل","Toutes":"الكل","Aucun":"لا شيء",
 "Prévenir par WhatsApp / SMS":"إبلاغ عبر واتساب / رسالة نصية","Voulez-vous prévenir les personnes concernées ?":"هل تريد إبلاغ المعنيين؟",
