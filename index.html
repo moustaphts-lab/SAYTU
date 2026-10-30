@@ -61,7 +61,6 @@ nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--
 nav.tabs button{display:flex;align-items:center;gap:12px}
 nav.tabs button svg{flex:none;opacity:.8}
 .navsig{display:none}
-.navfac{display:block;margin-top:4px;color:var(--accent);font-weight:600;line-height:1.35}
 @media (min-width:721px){.navsig{display:flex;align-items:center;gap:8px;margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line);font:600 15px "Outfit",var(--f-body);color:var(--accent);letter-spacing:-.01em}}
 .yr{display:none}
 .hdrfac{margin-left:auto;margin-right:10px}.hdrfac select{padding:6px 28px 6px 10px;font:600 13px var(--f-body);border-radius:10px;min-height:0;height:auto}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -158,8 +157,9 @@ tr:last-child td{border-bottom:0}
 .okburst circle{transform-origin:42px 42px;animation:okpop .35s cubic-bezier(.2,1.4,.4,1)}
 .okburst path{stroke-dasharray:60;stroke-dashoffset:60;animation:okdraw .4s .18s ease-out forwards}
 .okburst.out{opacity:0;transition:opacity .35s}
+@keyframes mq{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(var(--mqd,0))}}
 @keyframes okin{from{opacity:0}to{opacity:1}}@keyframes okpop{from{transform:scale(.4)}to{transform:scale(1)}}@keyframes okdraw{to{stroke-dashoffset:0}}
-@media (prefers-reduced-motion:reduce){.okburst,.okburst circle{animation:none}.okburst path{animation:none;stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){header.top .bar>.brand small .mq{animation:none!important}.okburst,.okburst circle{animation:none}.okburst path{animation:none;stroke-dashoffset:0}}
 .p-bad{background:var(--bad-soft);color:var(--bad)} .p-info{background:var(--accent-soft);color:var(--accent)}
 .p-mute{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .gap{color:var(--ochre);font-weight:600}
@@ -397,7 +397,10 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
   h1{font-size:23px}
   .menu .nm{display:none}.menu summary{padding:3px}
   .brand small{display:none}
-  header.top .bar>.brand{min-width:0}header.top .bar>.brand small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56vw}
+  header.top .bar>.brand{min-width:0}header.top .bar>.brand>div{min-width:0}header.top .bar>.brand small{display:block;white-space:nowrap;overflow:hidden;max-width:56vw}
+  header.top .bar>.brand small .mq{display:inline-block}
+  header.top .bar>.brand small.mqon{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  header.top .bar>.brand small.mqon .mq{animation:mq var(--mqt,8s) ease-in-out 1s infinite alternate}
   .burger{display:grid}
   nav.tabs{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);flex-direction:column;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);padding:calc(18px + env(safe-area-inset-top,0px)) 12px 24px;gap:4px;transform:translateX(-102%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;z-index:30;box-shadow:0 0 40px rgba(8,16,12,.25)}
   body.nav-open nav.tabs{transform:none;visibility:visible;transition:transform .22s ease}
@@ -790,17 +793,20 @@ function renderShell(){
   const curFac=facById(S.fac),yr="Année universitaire "+(S.year||"");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      ${brandHtml(curFac?(curFac.short_name||curFac.code)+" · "+(S.year||""):yr)}
+      ${brandHtml(curFac?curFac.name+" · "+(S.year||""):yr)}
       <span class="yr">${curFac?`<span class="yrfac">${curFac.logo?`<img src="${esc(curFac.logo)}" alt="">`:""}<b>${esc(curFac.name)}</b></span><span class="yrsep">·</span>`:""}${esc(yr)}</span>
       ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
-    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}${myFacName?`<span class="navfac">${esc(myFacName)}</span>`:""}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
+    <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
   const setNav=o=>{document.body.classList.toggle("nav-open",o);burger.setAttribute("aria-expanded",o);burger.setAttribute("aria-label",o?"Fermer le menu":"Ouvrir le menu")};
   document.body.classList.remove("nav-open");
+  /* téléphone : si le nom de la faculté est trop long, il défile comme un bandeau */
+  try{const sm=$app.querySelector("header.top .bar>.brand small");if(sm){sm.innerHTML=`<span class="mq">${sm.innerHTML}</span>`;
+    requestAnimationFrame(()=>{const m=sm.firstChild,d=m.scrollWidth-sm.clientWidth;if(sm.clientWidth&&d>4){sm.classList.add("mqon");sm.style.setProperty("--mqd",-(d+12)+"px");sm.style.setProperty("--mqt",Math.max(6,(d+12)/22)+"s")}})}}catch(e){}
   burger.onclick=()=>setNav(!document.body.classList.contains("nav-open"));
   scrim.onclick=()=>setNav(false);
   const acct=$app.querySelector("details.menu");
