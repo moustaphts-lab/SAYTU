@@ -47,7 +47,8 @@ header.top .bar{display:flex;align-items:center;gap:12px;padding-block:10px;min-
 .brand small{display:block;font:400 12px var(--f-body);color:var(--muted);letter-spacing:0}
 .burger{display:none;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer;flex:0 0 auto;padding:0}
 .scrim,nav.tabs .drawer-top{display:none}
-.menu{margin-left:auto;position:relative}
+.menu{position:relative}.hdrend{margin-left:auto;display:flex;align-items:stretch;gap:8px}
+.langtop{display:inline-flex;align-items:center;gap:5px;padding:0 11px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--muted);font:600 13px var(--f-body),"IBM Plex Sans Arabic";cursor:pointer}.langtop:hover{color:var(--accent);border-color:var(--accent)}.langtop svg{width:17px;height:17px}
 .menu summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 5px;border-radius:99px;border:1px solid var(--line)}
 .menu summary::-webkit-details-marker{display:none}
 .menu .av{width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font:600 13px var(--f-body)}
@@ -878,8 +879,9 @@ function renderShell(){
       ${brandHtml(curFac?curFac.name+" · "+(S.year||""):yr)}
       <span class="yr">${curFac?`<span class="yrfac">${curFac.logo?`<img src="${esc(curFac.logo)}" alt="">`:""}<b>${esc(curFac.name)}</b></span><span class="yrsep">·</span>`:""}${esc(yr)}</span>
       ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
+      <div class="hdrend"><button type="button" class="langtop" id="langBtn" aria-label="Langue" title="Langue">${GLOBE}<span data-notr>${LANG==="ar"?"ع":"FR"}</span></button>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
-        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn langbtn" id="langBtn"><span class="lgico">${GLOBE}</span>Langue :<span data-notr>${LANG_NAME[LANG]}</span></button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
+        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div></div>
     <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
