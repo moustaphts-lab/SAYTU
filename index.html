@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#0B5C4C">
 <meta name="apple-mobile-web-app-title" content="Saytu">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=Outfit:wght@600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -20,17 +20,18 @@
 :root{
   --bg:#f2f5f3; --surface:#ffffff; --line:#e1e7e4; --ink:#14201b; --muted:#5f6e67;
   --accent:#0b6e5b; --accent-ink:#ffffff; --accent-soft:#dff1ec; --ochre:#b06a00;
+  --brand:#0b5c4c; --sand:#d9a441; --sand-soft:#fbf1dc; --sand-ink:#7a560f;
   --ok:#1b7a47; --ok-soft:#e1f3e8; --warn:#92580a; --warn-soft:#fbefd9; --bad:#b3261e; --bad-soft:#fbe7e4;
   --r:14px; --shadow:0 1px 2px rgba(20,32,27,.05),0 4px 14px rgba(20,32,27,.04);
   --f-display:"Bricolage Grotesque", system-ui, sans-serif; --f-body:"Instrument Sans", system-ui, sans-serif; --f-mono:"Instrument Sans", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0d1512; --surface:#151f1b; --line:#25332d; --ink:#e7efeb; --muted:#9bada5;
-  --accent:#4fd1b0; --accent-ink:#06231c; --accent-soft:#143229; --ochre:#e3a94f;
+  --accent:#4fd1b0; --accent-ink:#06231c; --accent-soft:#143229; --ochre:#e3a94f; --sand-soft:#3a2c12; --sand-ink:#f0c46e;
   --ok:#5cc58c; --ok-soft:#163324; --warn:#e7b04f; --warn-soft:#3a2c12; --bad:#f0857c; --bad-soft:#3d1a18; --shadow:none; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0d1512; --surface:#151f1b; --line:#25332d; --ink:#e7efeb; --muted:#9bada5;
-  --accent:#4fd1b0; --accent-ink:#06231c; --accent-soft:#143229; --ochre:#e3a94f;
+  --accent:#4fd1b0; --accent-ink:#06231c; --accent-soft:#143229; --ochre:#e3a94f; --sand-soft:#3a2c12; --sand-ink:#f0c46e;
   --ok:#5cc58c; --ok-soft:#163324; --warn:#e7b04f; --warn-soft:#3a2c12; --bad:#f0857c; --bad-soft:#3d1a18; --shadow:none; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -59,6 +60,8 @@ nav.tabs button:hover{background:var(--bg)}
 nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 nav.tabs button{display:flex;align-items:center;gap:12px}
 nav.tabs button svg{flex:none;opacity:.8}
+.navsig{display:none}
+@media (min-width:721px){.navsig{display:flex;align-items:center;gap:8px;margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line);font:600 15px "Outfit",var(--f-body);color:var(--accent);letter-spacing:-.01em}}
 .yr{display:none}
 .hdrfac{margin-left:auto;margin-right:10px}.hdrfac select{padding:6px 28px 6px 10px;font:600 13px var(--f-body);border-radius:10px;min-height:0;height:auto}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (min-width:721px){
@@ -69,7 +72,7 @@ nav.tabs button svg{flex:none;opacity:.8}
   nav.tabs .drawer-top .brand{font-size:17px}
   nav.tabs .drawer-top p{margin:12px 0 0;font-size:12.5px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
   nav.tabs button{width:100%;text-align:left;border-radius:12px;padding:11px 12px;font-size:14.5px;white-space:normal;position:relative}
-  nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:-12px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:var(--accent)}
+  nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:-12px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:var(--sand)}
   header.top .bar>.brand{display:none}
   .yr{display:block;font-size:13.5px;color:var(--muted)}
   header.top .bar{min-height:56px}
@@ -138,7 +141,22 @@ tr:last-child td{border-bottom:0}
 .num,.mono{font-variant-numeric:tabular-nums}
 .sub{color:var(--muted);font-size:13px}
 .pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12.5px;font-weight:600;white-space:nowrap}
-.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)} .p-sand{background:var(--sand-soft);color:var(--sand-ink)}
+.cdot{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--c);margin-right:8px;vertical-align:1px}
+.hrow.hc{border-left:4px solid var(--c);padding-left:12px;margin-left:-2px}
+.hhero{background:var(--brand)!important;color:#fff;border-color:transparent!important;position:relative;overflow:hidden}
+.hhero .sub,.hhero small{color:#cfe3dc!important}.hhero .hn-t span{color:#cfe3dc!important}.hhero b{color:#fff}
+.hhero .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}.hhero .btn:hover{background:rgba(255,255,255,.1)}
+.hhero .pill{background:rgba(255,255,255,.15);color:#fff}
+.hhero::after{content:"";position:absolute;right:-30px;bottom:-26px;width:190px;height:120px;opacity:.12;pointer-events:none;background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 190'%3E%3Cg fill='none' stroke='white' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M30 168 C 75 150, 125 150, 150 162 C 175 150, 225 150, 270 168 L270 84 C 225 66, 175 66, 150 78 C 125 66, 75 66, 30 84 Z'/%3E%3Cpath d='M150 78 V162'/%3E%3C/g%3E%3Cpath d='M110 26 L160 8 L210 26 L160 44 Z' fill='white'/%3E%3C/svg%3E")}
+.okburst{position:fixed;inset:0;display:grid;place-items:center;z-index:80;pointer-events:none;background:rgba(8,16,12,.18);animation:okin .18s ease-out}
+.okburst>div{display:flex;flex-direction:column;align-items:center;gap:12px;background:var(--surface);padding:26px 34px;border-radius:22px;box-shadow:0 20px 50px rgba(8,16,12,.25)}
+.okburst b{font:600 16px var(--f-body);color:var(--ink)}
+.okburst circle{transform-origin:42px 42px;animation:okpop .35s cubic-bezier(.2,1.4,.4,1)}
+.okburst path{stroke-dasharray:60;stroke-dashoffset:60;animation:okdraw .4s .18s ease-out forwards}
+.okburst.out{opacity:0;transition:opacity .35s}
+@keyframes okin{from{opacity:0}to{opacity:1}}@keyframes okpop{from{transform:scale(.4)}to{transform:scale(1)}}@keyframes okdraw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.okburst,.okburst circle{animation:none}.okburst path{animation:none;stroke-dashoffset:0}}
 .p-bad{background:var(--bad-soft);color:var(--bad)} .p-info{background:var(--accent-soft);color:var(--accent)}
 .p-mute{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .gap{color:var(--ochre);font-weight:600}
@@ -159,6 +177,26 @@ select{height:42px}
 textarea{min-height:76px;resize:vertical}
 input[type=checkbox]{min-height:0;width:18px;height:18px;padding:0;accent-color:var(--accent)}
 .loginpage{min-height:100dvh;display:grid;place-items:center;padding-block:32px}
+/* écran de connexion : panneau vert (bâtiment, livre) et formulaire */
+.authpage{min-height:100dvh;display:grid;grid-template-columns:minmax(380px,44%) 1fr;background:var(--bg)}
+.authside{background-color:#0b5c4c;background-image:radial-gradient(circle at 50% 46%,rgba(255,255,255,.09) 0,rgba(255,255,255,0) 50%);color:#fff;padding:48px clamp(28px,4.5vw,56px) 44px;display:flex;flex-direction:column;justify-content:space-between;gap:28px;min-height:100dvh;position:sticky;top:0}
+.authlogo{display:flex;align-items:center;gap:12px;font:600 34px/1 "Outfit",var(--f-body);letter-spacing:-.02em}
+.authart{display:flex;justify-content:center}.authart svg{width:min(440px,100%);height:auto}
+.authtxt h2{margin:0 0 14px;font:700 clamp(30px,3.2vw,40px)/1.08 var(--f-display);letter-spacing:-.01em;color:#fff}
+.authtxt p{margin:0;font-size:16px;line-height:1.5;color:#cfe3dc;max-width:440px}.authtxt .wolof{margin-top:16px;font-size:13px;color:#a9ccc1}
+.authmain{display:grid;place-items:center;padding:32px 24px}
+.authmain .login{max-width:400px;text-align:left}.authmain .login .brand{margin:0 0 22px;justify-content:flex-start}
+.authmain .login h1{font-size:36px}
+.powered{display:flex;align-items:center;justify-content:center;gap:6px;margin:16px 0 0}
+@media (max-width:860px){
+  .authpage{grid-template-columns:1fr;align-content:start}
+  .authside{min-height:0;position:static;padding:26px 22px 22px;gap:10px;border-radius:0 0 28px 28px}
+  .authlogo{font-size:26px}.authlogo svg{width:38px;height:38px}
+  .authart svg{width:min(300px,82vw)}
+  .authtxt h2{font-size:23px;line-height:1.15;margin:0}.authtxt p{display:none}
+  .authmain{place-items:start center;padding:22px 20px 28px}
+  .authmain .login .brand{margin-bottom:14px}.authmain .login h1{font-size:26px}.authmain .login .lead{display:none}
+}
 .login{width:100%;max-width:420px;margin:0 auto;text-align:center}
 .login .brand{margin:0 auto 22px;justify-content:center;text-align:left}
 .login h1{margin:0 0 6px}.login .lead{margin:0 0 22px}
@@ -516,7 +554,9 @@ const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()
 /* Saytu : le nom du logiciel. Le nom de l'établissement se règle dans Établissement › Identité. */
 const PRODUCT="Saytu";
 /* symbole Saytu : un œil qui veille, la pupille est une coche */
-const SAYTU_MARK=(sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><path d="M7 50 C 23 23, 77 23, 93 50 C 77 77, 23 77, 7 50 Z" fill="none" style="stroke:var(--accent)" stroke-width="8" stroke-linejoin="round"/><circle cx="50" cy="50" r="17" fill="#D9A441"/><path d="M42 50.5 L48 56.5 L59 44" fill="none" stroke="#0B5C4C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const SAYTU_MARK=(sz,light)=>{const st=light?"#fff":"var(--accent)",cap=light?"#fff":"var(--accent)";return `<svg width="${sz}" height="${sz}" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><g transform="translate(0 9)"><path d="M7 50 C 23 23, 77 23, 93 50 C 77 77, 23 77, 7 50 Z" fill="none" style="stroke:${st}" stroke-width="${sz<30?9:7}" stroke-linejoin="round"/><circle cx="50" cy="50" r="15" fill="#D9A441"/>${sz<24?"":`<path d="M43 50.5 L48 55.5 L57.5 45" fill="none" stroke="#0B5C4C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`}</g><path d="M38 22 V31 C 38 36, 62 36, 62 31 V22" style="fill:${cap}"/><path d="M26 18 L50 8 L74 18 L50 28 Z" style="fill:${cap};stroke:${cap}" stroke-width="2" stroke-linejoin="round"/>${sz<24?"":`<path d="M74 18 V31" stroke="#D9A441" stroke-width="3" stroke-linecap="round"/><circle cx="74" cy="33" r="3.4" fill="#D9A441"/>`}</svg>`};
+/* illustration de l'écran de connexion : bâtiment universitaire, livre ouvert */
+const AUTH_ART=`<svg viewBox="0 0 440 300" role="img" aria-label="Un bâtiment universitaire à colonnes, un livre ouvert devant les marches"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 270 H420" stroke-opacity=".45"/><path d="M52 270 V240" stroke-opacity=".7"/><circle cx="52" cy="222" r="20" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M390 270 V246" stroke-opacity=".7"/><circle cx="390" cy="232" r="15" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M96 122 L220 62 L344 122 Z" fill="#fff" fill-opacity=".06"/><rect x="104" y="122" width="232" height="16" rx="2"/><rect x="122" y="144" width="16" height="102" rx="2"/><rect x="168" y="144" width="16" height="102" rx="2"/><rect x="214" y="144" width="16" height="102" rx="2"/><rect x="260" y="144" width="16" height="102" rx="2"/><rect x="306" y="144" width="16" height="102" rx="2"/><path d="M100 246 H340"/><path d="M92 256 H348"/><path d="M84 266 H356"/></g><circle cx="220" cy="100" r="11" fill="#D9A441"/><path d="M220 94 V100 L224 103" fill="none" stroke="#0B5C4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 C 175 250, 205 250, 220 258 C 235 250, 265 250, 290 262 L290 290 C 265 278, 235 278, 220 286 C 205 278, 175 278, 150 290 Z" fill="#0B5C4C" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M220 258 V286" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M162 270 C 178 264, 196 264, 208 268 M162 279 C 178 273, 196 273, 208 277" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M232 268 C 244 264, 262 264, 278 270" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M262 255 V276 L267 271 L272 276 V256" fill="#D9A441" stroke="#D9A441" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
 async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
@@ -548,6 +588,10 @@ function offerNotify(fn,label){document.querySelectorAll(".offer").forEach(x=>x.
   o.innerHTML=`<span>${esc(label||"Voulez-vous prévenir les personnes concernées ?")}</span><button type="button" class="btn sm primary">Prévenir par WhatsApp / SMS</button><button type="button" class="x" aria-label="Fermer">×</button>`;
   document.body.appendChild(o);const t=setTimeout(()=>o.remove(),15000);
   o.querySelector(".btn").onclick=()=>{clearTimeout(t);o.remove();fn()};o.querySelector(".x").onclick=()=>{clearTimeout(t);o.remove()}}
+/* émargement réussi : la coche s'anime, comme la pupille du logo */
+function okBurst(msg){try{const o=document.createElement("div");o.className="okburst";o.setAttribute("role","status");
+  o.innerHTML=`<div><svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="38" fill="var(--accent)"/><path d="M25 43 L37 55 L60 30" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${esc(msg)}</b></div>`;
+  document.body.appendChild(o);setTimeout(()=>o.classList.add("out"),900);setTimeout(()=>o.remove(),1300)}catch(e){}}
 function toast(msg,bad){const t=document.createElement("div");t.className="toast"+(bad?" bad":"");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),bad?6000:3000)}
 const CONS={departments_code_key:"Ce code de département existe déjà.",programs_code_key:"Ce code de filière existe déjà.",student_groups_code_key:"Ce code de groupe existe déjà.",courses_code_key:"Ce code de matière existe déjà.",rooms_code_key:"Ce code de salle existe déjà.",rooms_faculty_code_key:"Ce code de salle existe déjà dans cette faculté.",faculties_code_key:"Ce code de faculté existe déjà.",semesters_year_faculty_label_key:"Ce semestre existe déjà pour cette année dans cette faculté.",
   academic_years_label_key:"Cette année universitaire existe déjà.",semesters_academic_year_id_label_key:"Ce semestre existe déjà pour cette année.",semesters_check:"La date de fin doit être après la date de début.",academic_years_check:"La date de fin doit être après la date de début.",
@@ -572,20 +616,30 @@ function sessionLabel(s){const c=s.teaching_assignments?.courses;return `${esc(c
 /* ---------- connexion ---------- */
 function renderLogin(msg){
   $app.classList.remove("hasnav");
-  $app.innerHTML=`<div class="wrap loginpage"><div class="login">
-    ${brandHtml(S.cfg?.subtitle||"Enseignements")}
-    <h1>Connexion</h1>
-    <p class="lead">Emplois du temps, émargement et paie des enseignants.</p>
-    <form class="panel" id="loginForm">
-      <label>Adresse e-mail<input id="lEmail" type="email" required autocomplete="username"></label>
-      <label>Mot de passe<input id="lPass" type="password" required autocomplete="current-password"></label>
-      ${msg?`<div class="err">${esc(msg)}</div>`:""}
-      <button class="btn primary" type="submit">Se connecter</button>
-    </form>
-    <p class="sub powered" style="display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0">${SAYTU_MARK(18)}<span>Propulsé par <b style="color:var(--accent)">${PRODUCT}</b> · emplois du temps, émargement et paie</span></p>
-    ${S.cfg?.show_demo?`<details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
-      ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
-    </details>`:""}</div></div>`;
+  const hr=new Date().getHours(),hello=hr>=18||hr<4?"Bonsoir":"Bonjour";
+  $app.innerHTML=`<div class="authpage">
+    <aside class="authside">
+      <div class="authlogo">${SAYTU_MARK(52,true)}<span>saytu</span></div>
+      <div class="authart">${AUTH_ART}</div>
+      <div class="authtxt"><h2>Les cours, les heures, la paie : tout est suivi.</h2>
+        <p>La gestion des enseignements de l'université : emplois du temps, émargement des professeurs, contrôle des heures et paie, faculté par faculté.</p>
+        <p class="wolof">Saytu : « veiller sur », en wolof.</p></div>
+    </aside>
+    <main class="authmain"><div class="login">
+      ${brandHtml(S.cfg?.subtitle||"Enseignements")}
+      <h1>${hello}</h1>
+      <p class="lead">Connectez-vous pour retrouver vos cours et vos heures.</p>
+      <form class="panel" id="loginForm">
+        <label>Adresse e-mail<input id="lEmail" type="email" required autocomplete="username"></label>
+        <label>Mot de passe<input id="lPass" type="password" required autocomplete="current-password"></label>
+        ${msg?`<div class="err">${esc(msg)}</div>`:""}
+        <button class="btn primary" type="submit">Se connecter</button>
+        <p class="sub" style="margin:0;text-align:center;font-size:13px">Mot de passe oublié ? Demandez-en un nouveau à l'administrateur.</p>
+      </form>
+      <p class="sub powered">${SAYTU_MARK(18)}<span>Propulsé par <b style="color:var(--accent)">${PRODUCT}</b></span></p>
+      ${S.cfg?.show_demo?`<details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
+        ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
+      </details>`:""}</div></main></div>`;
   document.getElementById("loginForm").onsubmit=async ev=>{ev.preventDefault();
     const {error}=await sb.auth.signInWithPassword({email:lEmail.value.trim(),password:lPass.value});
     if(error)renderLogin(errMsg(error)); else boot()};
@@ -735,7 +789,7 @@ function renderShell(){
         <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
     <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
-        return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}</nav></div>
+        return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
   </header><main class="wrap" id="view"><p class="empty">Chargement…</p></main>`;
   const setNav=o=>{document.body.classList.toggle("nav-open",o);burger.setAttribute("aria-expanded",o);burger.setAttribute("aria-label",o?"Fermer le menu":"Ouvrir le menu")};
   document.body.classList.remove("nav-open");
@@ -901,7 +955,7 @@ function emargeDialog(s){
     if(decl<=0)throw new Error("L'heure de fin doit être après l'heure de début.");
     if(decl!==planned&&!com)throw new Error("La durée déclarée diffère de la durée prévue : ajoutez un commentaire.");
     await q(sb.rpc("submit_attendance",{p_session_id:s.id,p_start:st,p_end:en,p_comment:com||null}));
-    toast("Émargement soumis");rerender();
+    okBurst("Émargement envoyé");rerender();
   });
 }
 function toMin(t){const [h,m]=t.split(":").map(Number);return h*60+m}
@@ -914,7 +968,8 @@ const dayWord=d=>{const t=iso(new Date()),tm=iso(addDays(new Date(),1));if(d===t
 /* « J'ai fait ce cours » : émargement aux horaires prévus, en un geste */
 async function quickEmarge(list){let ok=0;const errs=[];
   for(const s of list){try{await q(sb.rpc("submit_attendance",{p_session_id:s.id,p_start:hm(s.start_time),p_end:hm(s.end_time),p_comment:null}));ok++}catch(e){errs.push(errMsg(e))}}
-  toast(ok?(ok>1?`${ok} séances émargées`:"Séance émargée")+(errs.length?` · ${errs.length} refusée(s) : ${errs[0]}`:""):errs[0]||"Rien à émarger",errs.length>0);rerender()}
+  if(ok&&!errs.length)okBurst(ok>1?`${ok} séances émargées`:"Séance émargée");
+  else toast(ok?(ok>1?`${ok} séances émargées`:"Séance émargée")+(errs.length?` · ${errs.length} refusée(s) : ${errs[0]}`:""):errs[0]||"Rien à émarger",errs.length>0);rerender()}
 function bulkEmargeDialog(list){
   openDialog(`<h3>Émarger ${list.length} séances</h3>
     <p style="margin:0">Chaque séance sera déclarée aux horaires prévus. Si une séance s'est déroulée autrement, émargez-la seule avec « Autre horaire ».</p>
@@ -951,18 +1006,18 @@ async function viewHome(v){
   const upcoming=sess.filter(s=>sStart(s)>now).slice(0,12);
   const recent=reqs.filter(r=>r.status==="en_attente"||(r.decided_at&&(now-new Date(r.decided_at))/864e5<=21));
   const big=(s,label)=>`<div class="hnext"><small class="sub">${label}</small><div class="hn-t">${hm(s.start_time)}<span>–${hm(s.end_time)}</span></div>
-    <b>${sessionLabel(s)}</b><div class="sub">${esc(dayWord(s.session_date))} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · salle ${esc(s.rooms?.code||"?")}</div>
+    <b><i class="cdot" style="--c:${ttColor(s.teaching_assignments?.courses?.code)}"></i>${sessionLabel(s)}</b><div class="sub">${esc(dayWord(s.session_date))} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))} · salle ${esc(s.rooms?.code||"?")}</div>
     ${s.note?`<div class="sub" style="margin-top:4px">${esc(s.note)}</div>`:""}
     ${label!=="En ce moment"?(reqOf(s.id)?`<div style="margin-top:8px"><span class="pill p-warn">Demande d'absence envoyée</span></div>`:`<div class="row" style="margin-top:10px"><button class="btn sm" data-abs="${s.id}">Prévenir d'une absence</button></div>`):""}</div>`;
   const first=(T.first_name||"").trim();
   const dl=now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
   v.innerHTML=`<h1>Bonjour${first?" "+esc(first):""}</h1><p class="lead">${dl.charAt(0).toUpperCase()+dl.slice(1)}</p>
     <div class="hgrid">
-      <section class="panel hcard">${cur?big(cur,"En ce moment"):next?big(next,"Prochain cours"):`<p class="empty" style="padding:8px 0">Aucun cours programmé dans les deux prochaines semaines.</p>`}
+      <section class="panel hcard ${cur||next?"hhero":""}">${cur?big(cur,"En ce moment"):next?big(next,"Prochain cours"):`<p class="empty" style="padding:8px 0">Aucun cours programmé dans les deux prochaines semaines.</p>`}
         ${cur&&next?`<p class="sub" style="margin:10px 0 0">Ensuite : ${esc(dayWord(next.session_date))} à ${hm(next.start_time)} · ${esc(next.teaching_assignments?.courses?.code||"")}</p>`:""}</section>
 
-      <section class="panel hcard"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">À émarger</h2>${toDo.length?`<span class="pill p-warn">${toDo.length}</span>`:""}</div>
-        ${toDo.length?`<div class="hlist">${toDo.slice(0,8).map(s=>`<div class="hrow"><div><b>${fdate(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</b><div class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))}</div></div>
+      <section class="panel hcard"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">À émarger</h2>${toDo.length?`<span class="pill p-sand">${toDo.length} à faire</span>`:""}</div>
+        ${toDo.length?`<div class="hlist">${toDo.slice(0,8).map(s=>`<div class="hrow hc" style="--c:${ttColor(s.teaching_assignments?.courses?.code)}"><div><b>${fdate(s.session_date)} · ${hm(s.start_time)}–${hm(s.end_time)}</b><div class="sub">${sessionLabel(s)} · ${esc(grpLabel(s.teaching_assignments,s.student_groups?.code))}</div></div>
             <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-em="${s.id}">Autre horaire</button><button class="btn sm primary" data-qe="${s.id}">J'ai fait ce cours</button></div></div>`).join("")}</div>
           ${toDo.length>8?`<p class="sub" style="margin:6px 0 0">… et ${toDo.length-8} autre(s).</p>`:""}
           ${toDo.length>1?`<div class="row" style="margin-top:10px"><button class="btn primary" id="hAll">Tout émarger aux horaires prévus (${toDo.length})</button></div>`:""}`
@@ -972,7 +1027,7 @@ async function viewHome(v){
       <section class="panel hcard"><h2 style="margin:0 0 6px">${FIXED?"Disponibilités du semestre"+(semL?" "+esc(semL):""):"Disponibilités · semaine du "+weekRange(nextW)}</h2>
         ${pubN?`<p style="margin:0">L'emploi du temps ${FIXED?"du semestre":"de cette semaine"} est publié.</p><div class="row" style="margin-top:10px"><button class="btn" id="hTt">Voir mon emploi du temps</button></div>`
           :ans?`<p style="margin:0">✓ Vous avez donné vos disponibilités. Vous pouvez les modifier jusqu'à la publication de l'emploi du temps.</p><div class="row" style="margin-top:10px"><button class="btn" id="hAv">Modifier</button></div>`
-          :`<p style="margin:0"><b style="color:var(--warn)">Pas encore données.</b> Indiquez vos créneaux avant que la direction publie l'emploi du temps : sans réponse, elle décide sans vous.</p><div class="row" style="margin-top:10px"><button class="btn primary" id="hAv">Donner mes disponibilités</button></div>`}</section>
+          :`<p style="margin:0"><span class="pill p-sand">À donner</span>  Indiquez vos créneaux avant que la direction publie l'emploi du temps : sans réponse, elle décide sans vous.</p><div class="row" style="margin-top:10px"><button class="btn primary" id="hAv">Donner mes disponibilités</button></div>`}</section>
 
       ${recent.length?`<section class="panel hcard"><h2 style="margin:0 0 6px">Mes demandes d'absence</h2><div class="hlist">${recent.map(r=>{const s=sess.find(x=>x.id===r.session_id);const[l,c]=ABS_ST[r.status];
         return `<div class="hrow"><div><b>${s?fdate(s.session_date)+" · "+hm(s.start_time)+" · "+(s.teaching_assignments?.courses?.code||""):"Séance"}</b><div class="sub">${esc(r.reason)}${r.proposal?" · proposition : "+esc(r.proposal):""}</div>${r.answer&&r.status!=="en_attente"?`<div class="sub">Réponse : ${esc(r.answer)}</div>`:""}</div>
@@ -2045,7 +2100,7 @@ function enableTtDrag(root,opt){
 
 /* ---------- grille hebdomadaire : jours en colonnes, heures en lignes ---------- */
 function ttColor(code){let h=0;for(const c of String(code))h=(h*31+c.charCodeAt(0))>>>0;return TT_COLORS[h%TT_COLORS.length]}
-const TT_COLORS=["#0b6e5b","#2563a8","#b06a00","#7a4fa3","#b23a5a","#3f7f2a","#0e7490","#9a5b2e"];
+const TT_COLORS=["#4c79c0","#3f9a73","#c99232","#8566c2","#b65a7a","#2e8c9a","#7c8f3a","#b7663e"];
 function timetableGrid(o){
   const T=t=>{const [h,m]=String(t).slice(0,5).split(":").map(Number);return h*60+m};
   const sc=S.sched||SCHED_DEFAULT;
