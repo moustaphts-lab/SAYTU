@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Saytu</title>
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0B5C4C">
+<meta name="apple-mobile-web-app-title" content="Saytu">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -510,6 +515,8 @@ const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()
 /* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
 /* Saytu : le nom du logiciel. Le nom de l'établissement se règle dans Établissement › Identité. */
 const PRODUCT="Saytu";
+/* symbole Saytu : un œil qui veille, la pupille est une coche */
+const SAYTU_MARK=(sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><path d="M7 50 C 23 23, 77 23, 93 50 C 77 77, 23 77, 7 50 Z" fill="none" style="stroke:var(--accent)" stroke-width="8" stroke-linejoin="round"/><circle cx="50" cy="50" r="17" fill="#D9A441"/><path d="M42 50.5 L48 56.5 L59 44" fill="none" stroke="#0B5C4C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
 async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
@@ -575,7 +582,7 @@ function renderLogin(msg){
       ${msg?`<div class="err">${esc(msg)}</div>`:""}
       <button class="btn primary" type="submit">Se connecter</button>
     </form>
-    <p class="sub powered" style="text-align:center;margin:14px 0 0">Propulsé par <b style="color:var(--accent)">${PRODUCT}</b> · emplois du temps, émargement et paie</p>
+    <p class="sub powered" style="display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0">${SAYTU_MARK(18)}<span>Propulsé par <b style="color:var(--accent)">${PRODUCT}</b> · emplois du temps, émargement et paie</span></p>
     ${S.cfg?.show_demo?`<details class="demo"><summary>Comptes de démonstration (mot de passe : Demo-2026!)</summary>
       ${DEMO.map(([e,l])=>`<button type="button" data-email="${e}">${e}<span>${l}</span></button>`).join("")}
     </details>`:""}</div></div>`;

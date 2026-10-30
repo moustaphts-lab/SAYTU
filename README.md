@@ -3,6 +3,7 @@
 *Saytu* (« surveiller, veiller sur » en wolof) : emplois du temps, émargement des professeurs, contrôle des heures et paie pour une université de plusieurs facultés. Le nom et le logo de l'établissement se règlent dans Établissement › Identité ; ceux de chaque faculté dans Ma faculté.
 
 - Interface : `index.html`, un fichier unique, sans étape de compilation.
+- Identité : logo « l'œil qui veille » (pupille en forme de coche), vert profond #0B5C4C et sable #D9A441 ; fichiers dans `icons/` (logo.svg, favicon.svg, icônes d'application) et `manifest.webmanifest` (ajout à l'écran d'accueil).
 - Données et sécurité : Supabase. Toutes les permissions sont vérifiées côté serveur (règles d'accès et fonctions de la base).
 - Comptes : la fonction `manage-users` (dossier `supabase/functions`) crée les comptes et réinitialise les mots de passe. Elle est réservée à l'administrateur.
 
