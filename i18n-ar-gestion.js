@@ -598,7 +598,7 @@ const X={
 "Prévenir les professeurs payés ?": "إبلاغ الأساتذة الذين دُفع لهم؟",
 "Prévues": "المقررة",
 "Prêt pour la paie": "جاهز للرواتب",
-"Publication retirée : la semaine est de nouveau en brouillon": "سُحب النشر: عاد الأسبوع مسودة",
+"Publication retirée : la semaine est de nouveau en brouillon": "تم التراجع عن النشر: عاد الأسبوع مسودة",
 "Publier": "نشر",
 "Publier l'annonce": "نشر الإعلان",
 "Publier la semaine": "نشر الأسبوع",
@@ -651,7 +651,7 @@ const X={
 "Reste dû sur les paies approuvées": "المتبقي المستحق من الرواتب المصادق عليها",
 "Reste dû sur les paies approuvées (FCFA)": "المتبقي المستحق من الرواتب المصادق عليها (FCFA)",
 "Reste prévu": "المتبقي المقرر",
-"Retirer la publication": "سحب النشر",
+"Retirer la publication": "التراجع عن النشر",
 "Retirer le logo": "إزالة الشعار",
 "Retrait impossible": "السحب غير ممكن",
 "Rien pour l'instant.": "لا شيء حاليًا.",
@@ -1126,7 +1126,7 @@ const P=[
 ],
 [
 "^(.*?) séance\\(s\\) de cette semaine ont déjà été émargées\\. Pour ne pas toucher aux heures déclarées, la publication ne peut plus être retirée\\. Annulez ou reportez plutôt les autres cours un par un\\.$",
-"سُجّل الحضور في §1 حصة من هذا الأسبوع. حفاظًا على الساعات المصرّح بها، لم يعد ممكنًا سحب النشر. ألغِ الدروس الأخرى أو أجّلها واحدًا واحدًا."
+"سُجّل الحضور في §1 حصة من هذا الأسبوع. حفاظًا على الساعات المصرّح بها، لم يعد ممكنًا التراجع عن النشر. ألغِ الدروس الأخرى أو أجّلها واحدًا واحدًا."
 ],
 [
 "^Un fichier Excel avec toutes les données : comptes, référentiel, affectations, emplois du temps, émargements(.*?) et journal\\. Gardez\\-en une copie dans l'établissement, par exemple chaque mois\\.$",
@@ -1442,7 +1442,7 @@ const P=[
 ],
 [
 "^Retirer la publication de la semaine du (.*?) \\?$",
-"سحب نشر أسبوع §1؟"
+"التراجع عن نشر أسبوع §1؟"
 ],
 [
 "^· il manquerait environ (.*?) en fin de semestre$",
@@ -1538,7 +1538,7 @@ const P=[
 ],
 [
 "^a retiré la publication de la semaine (.*?)$",
-"سحب نشر أسبوع §1"
+"تراجع عن نشر أسبوع §1"
 ],
 [
 "^(.*?) conflit\\(s\\) à corriger \\(bloquant\\)$",
@@ -1621,6 +1621,10 @@ const P=[
 "يستبدل §1 درس في المسودة"
 ],
 [
+"^— pas encore commencée, (.*?) à faire$",
+"— لم تبدأ بعد، §1 للإنجاز"
+],
+[
 "^(.*?) bulletin\\(s\\) pour un total de$",
 "§1 كشف بمجموع"
 ],
@@ -1675,6 +1679,10 @@ const P=[
 [
 "^émargé (.*?) jours après la séance$",
 "سُجّل بعد §1 يومًا من الحصة"
+],
+[
+"^(.*?) / semaine · (.*?) sem\\. restantes$",
+"§1 في الأسبوع · §2 أسابيع متبقية"
 ],
 [
 "^(.*?) : à valider par un collègue$",
@@ -1805,6 +1813,10 @@ const P=[
 "المبالغ المتبقية المستحقة في §1"
 ],
 [
+"^— il manquerait environ (.*?)$",
+"— سينقص نحو §1"
+],
+[
 "^(.*?) paiement\\(s\\) · total (.*?)$",
 "§1 دفعة · المجموع §2"
 ],
@@ -1915,6 +1927,10 @@ const P=[
 [
 "^Ordre de paiement : (.*?)$",
 "أمر بالدفع: §1"
+],
+[
+"^il faut (.*?) par semaine$",
+"يلزم §1 في الأسبوع"
 ],
 [
 "^(.*?) cours en brouillon$",
@@ -2247,6 +2263,10 @@ const P=[
 [
 "^Ajouter : (.*?)$",
 "إضافة: §1"
+],
+[
+"^(.*?) en retard$",
+"§1 متأخرة"
 ],
 [
 "^En retard(.*?)$",

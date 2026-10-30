@@ -50,7 +50,7 @@ const exact={
 "WhatsApp":"واتساب","SMS":"رسالة نصية","Prévenir le professeur":"إبلاغ الأستاذ","Prévenir le professeur ?":"إبلاغ الأستاذ؟",
 "Semaine précédente":"الأسبوع السابق","Semaine suivante":"الأسبوع التالي","Cette semaine":"هذا الأسبوع","Semaine prochaine":"الأسبوع القادم","Semaine du":"أسبوع",
 "Mois précédent":"الشهر السابق","Mois suivant":"الشهر التالي","Ce mois":"هذا الشهر","Mois de":"شهر",
-"Grille":"الشبكة","Liste et émargement":"القائمة وتسجيل الحضور","Pause":"استراحة","Annulée":"ملغاة","Annulé":"ملغى","Publiée":"منشور","publiée":"منشور",
+"Grille":"الجدول","Liste et émargement":"القائمة وتسجيل الحضور","Pause":"استراحة","Annulée":"ملغاة","Annulé":"ملغى","Publiée":"منشور","publiée":"منشور",
 /* aujourd'hui */
 "En ce moment":"الآن","Prochain cours":"الدرس القادم","Aucun cours programmé dans les deux prochaines semaines.":"لا توجد دروس مبرمجة خلال الأسبوعين القادمين.",
 "À émarger":"في انتظار تسجيل الحضور","Autre horaire":"توقيت آخر","J'ai fait ce cours":"قدّمتُ هذا الدرس","Émarger":"تسجيل الحضور",
