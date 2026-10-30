@@ -1105,7 +1105,8 @@ const X={
 "Changer d'établissement": "تغيير المؤسسة",
 "Un compte existe déjà avec cette adresse dans votre établissement.": "يوجد حساب بهذا البريد في مؤسستك مسبقًا.",
 "Ce compte sert aussi dans un autre établissement : la personne gère elle-même son mot de passe.": "يُستعمل هذا الحساب في مؤسسة أخرى أيضًا: يدير صاحبه كلمة مروره بنفسه.",
-"Compte ajouté à votre établissement. La personne se connecte avec son mot de passe habituel.": "أُضيف الحساب إلى مؤسستك. يدخل صاحبه بكلمة مروره المعتادة."
+"Compte ajouté à votre établissement. La personne se connecte avec son mot de passe habituel.": "أُضيف الحساب إلى مؤسستك. يدخل صاحبه بكلمة مروره المعتادة.",
+"l'accès d'un compte": "صلاحية دخول حساب"
 };
 const P=[
 [
