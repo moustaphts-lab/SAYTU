@@ -307,7 +307,8 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
 .avg{display:grid;grid-template-columns:54px repeat(var(--n,6),minmax(0,1fr));user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .avg-c0{border-bottom:1px solid var(--line)}
 .avg-h{height:44px;border:0;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 13.5px var(--f-body);cursor:pointer}.avg-h:hover{color:var(--accent);background:var(--accent-soft)}
-.avg-h .abbr{display:none}
+.avg-h .abbr{display:none}.sm-only{display:none}
+@media (max-width:600px){.lg-only{display:none}.sm-only{display:inline}}
 .avg-r{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--muted);font:500 11.5px var(--f-body);text-align:right;padding:0 8px 0 0;height:42px;cursor:pointer;display:flex;align-items:flex-start;justify-content:flex-end;padding-top:4px}.avg-r:hover{color:var(--accent)}
 .avg-c{height:42px;border:0;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:0;cursor:pointer;position:relative;font:inherit}
 .avg-c.on{background:color-mix(in srgb,var(--ok) 20%,var(--surface))}.avg-c.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:var(--ok);font-weight:700;font-size:15px}
@@ -2544,7 +2545,7 @@ async function viewRef(v,mode){
     ${counts?`<div class="panel setup"><div class="su-top"><div><b>Mise en place</b><div class="sub">${doneN===SETUP_STEPS.length?"Tout est renseigné.":"Suivez l'ordre : chaque étape dépend de la précédente."}</div></div><span class="su-n">${doneN}/${SETUP_STEPS.length}</span></div>
       <div class="hbar" style="width:100%;height:8px;margin:12px 0 ${doneN===SETUP_STEPS.length?0:12}px"><i style="width:${Math.round(doneN/SETUP_STEPS.length*100)}%"></i></div>
       ${doneN===SETUP_STEPS.length?"":`<div class="su-steps">${SETUP_STEPS.map(([l,,sc],i)=>`<button type="button" class="su ${counts[i]?"done":""} ${i===nextIdx?"next":""}" data-su="${sc}"><span class="su-i">${counts[i]?"✓":i+1}</span><span class="su-l">${l}</span><span class="su-c">${counts[i]||""}</span></button>`).join("")}</div>`}</div>`:""}
-    <div class="chips secnav">${allowed.length>1?allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join(""):""}</div>
+    ${allowed.length>1?`<div class="chips secnav">${allowed.map(k=>`<button data-sec="${k}" aria-pressed="${k===sec}">${SEC_LABEL[k]}</button>`).join("")}</div>`:""}
     <div id="refBody"></div>`;
   v.querySelectorAll("[data-su]").forEach(b=>b.onclick=()=>{S[key]=b.dataset.su;rerender()});
   v.querySelectorAll("[data-sec]").forEach(b=>b.onclick=()=>{S[key]=b.dataset.sec;rerender()});
@@ -3221,11 +3222,12 @@ async function viewAccounts(el){
   const etat=u=>u.active===false?'<span class="pill p-bad">Désactivé</span>':u.must_change_password?'<span class="pill p-warn">Provisoire</span>':'<span class="pill p-ok">Actif</span>';
   const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div>${(S.facs||[]).length>1||u.faculty_id==null?`<div class="sub">${u.faculty_id==null?"Université":esc(facCode(u.faculty_id))}</div>`:""}</td>`;
   const posteCell=(u,rs)=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>(RIGHTS[r.role]||r.role)+(["responsable","chef_departement"].includes(r.role)?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabelU(u,rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
-  el.innerHTML=`<div class="row" style="justify-content:flex-end"><div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
-    <div class="seg" role="tablist" aria-label="Groupe" style="margin-bottom:12px">
-      <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}">Personnel administratif (${staff.length})</button>
+  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div class="seg" role="tablist" aria-label="Groupe" style="margin:0;flex:1 1 420px;max-width:660px;min-width:0">
+      <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}"><span class="lg-only">Personnel administratif</span><span class="sm-only">Personnel</span> (${staff.length})</button>
       <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button>
       <button type="button" role="tab" data-acct="all" aria-pressed="${ALL}">Tous (${profiles.length})</button></div>
+    <div class="row" style="gap:8px">${P?`<button class="btn sm" id="bulkAcc" ${tNoAcc.length?"":"disabled"}>Créer les comptes des ${tNoAcc.length} enseignant(s) sans compte</button>`:""}<button class="btn sm primary" id="addAcc">${P?"Créer un compte professeur":"Créer un compte"}</button></div></div>
     <div class="row" style="margin-bottom:10px;align-items:flex-end">
       <label style="flex:1;min-width:200px">Rechercher<input id="accQ" placeholder="Nom ou adresse…" value="${esc(S.accQ)}"></label>
       ${P?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);padding-bottom:10px"><input type="checkbox" id="accWS" ${S.accWithStaff?"checked":""}> Inclure le personnel qui enseigne</label>`
