@@ -3207,7 +3207,7 @@ async function viewAccounts(el){
   const pending=profiles.filter(u=>u.active!==false&&u.must_change_password);
   const actives=profiles.filter(u=>u.active!==false).length;
   S.accQ=S.accQ||"";S.accRole=S.accRole||"";if(S.accRole&&!["custom","_none",...(S.postes||[]).map(p=>"p"+p.id)].includes(S.accRole))S.accRole="";S.accState=S.accState||"";
-  const ROLEF=[["","Tous les postes"],...visiblePostes().filter(p=>!isProfPoste(p)||S.accTab==="all").map(p=>["p"+p.id,p.name]),["custom","Sans poste enregistré"],["_none","Aucun droit"]];
+  const ROLEF=[["","Tous les postes"],...visiblePostes().filter(p=>(!isProfPoste(p)||S.accTab==="all")&&(isCentral()||p.scope!=="universite")).map(p=>["p"+p.id,p.name]),["custom","Sans poste enregistré"],["_none","Aucun droit"]];
   const pkeyU=(u,rs)=>!rs.length?"_none":posteById(u.poste_id)?"p"+u.poste_id:"custom";
   /* deux groupes : personnel administratif (tout poste autre que Professeur, ou sans poste) et professeurs */
   const isProfOnly=u=>{const p=posteById(u.poste_id);if(p)return isProfPoste(p);const rs=rolesOf(u.id);return rs.length>0&&rs.every(r=>r.role==="professeur")};
