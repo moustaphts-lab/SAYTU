@@ -179,7 +179,10 @@ const pats=[
 [/^Du (\d\d\/\d\d\/\d{4}) au (\d\d\/\d\d\/\d{4})$/,"من $1 إلى $2"],
 [/^(\d+(?:[   ]\d{3})*) FCFA$/,"$1 FCFA"],
 [/^(\d+) séance\(s\) passée\(s\)$/,"$1 حصة ماضية"],
-[/^Disponibilités de (.+)$/,"الأوقات المتاحة لـ $1"]
+[/^Disponibilités de (.+)$/,"الأوقات المتاحة لـ $1"],
+[/^(\d+) comptes? actifs?$/,"الحسابات النشطة: $1"],[/^(\d+) facultés?$/,"الكليات: $1"],[/^(\d+) administrateurs?$/,"المهندسون العامون: $1"],
+[/^Créé le (.+)$/,(_,d)=>"أُنشئ في "+tr(d)],
+[/^Dernière connexion : (.+)$/,(_,d)=>"آخر دخول: "+tr(d)]
 ];
 window.SAYTU_AR={exact,pats,mo};
 })();

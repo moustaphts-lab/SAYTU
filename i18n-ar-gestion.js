@@ -29,6 +29,7 @@ const X={
 "Actifs": "النشطون",
 "Action": "الإجراء",
 "Activité récente": "النشاط الأخير",
+"Activité": "النشاط",
 "Administrateur (comptes)": "مهندس النظام (الحسابات)",
 "Administration des comptes": "إدارة الحسابات",
 "Adresse": "العنوان",

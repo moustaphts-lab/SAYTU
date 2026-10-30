@@ -2957,11 +2957,12 @@ async function viewPlatform(v){
   const dt=x=>x?new Date(x).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}):"—";
   v.innerHTML=`<h1>Établissements</h1><p class="lead">Les établissements qui utilisent Saytu. Vous voyez leur fiche et leur activité, jamais leurs données : chacun se gère lui-même avec son administrateur central.</p>
     <div class="row" style="margin-bottom:12px"><button class="btn primary" id="pfNew">+ Nouvel établissement</button></div>
-    <div class="tbl"><table><thead><tr><th>Établissement</th><th>Code</th><th class="num">Comptes actifs</th><th class="num">Facultés</th><th class="num">Administrateurs</th><th>Dernière connexion</th><th>Créé le</th><th>État</th><th></th></tr></thead><tbody>
-    ${L.map(e=>`<tr><td data-label="Établissement"><b data-notr>${esc(e.name)}</b></td><td data-label="Code" class="mono">${esc(e.code)}</td><td data-label="Comptes actifs" class="num">${e.comptes}</td><td data-label="Facultés" class="num">${e.facultes}</td><td data-label="Administrateurs" class="num">${e.administrateurs}</td>
-      <td data-label="Dernière connexion" style="white-space:nowrap">${dt(e.derniere_connexion)}</td><td data-label="Créé le" style="white-space:nowrap">${dt(e.created_at)}</td>
+    <div class="tbl"><table><thead><tr><th>Établissement</th><th>Activité</th><th>Dernière connexion</th><th>État</th><th></th></tr></thead><tbody>
+    ${L.map(e=>`<tr><td data-label="Établissement" style="min-width:220px"><span class="cv"><b data-notr>${esc(e.name)}</b><span class="sub mono" style="display:block">${esc(e.code)}</span></span></td>
+      <td data-label="Activité"><span class="cv">${[`${e.comptes} ${e.comptes>1?"comptes actifs":"compte actif"}`,`${e.facultes} ${e.facultes>1?"facultés":"faculté"}`,`${e.administrateurs} ${e.administrateurs>1?"administrateurs":"administrateur"}`].map(x=>`<span style="white-space:nowrap">${x}</span>`).join(" · ")}</span></td>
+      <td data-label="Dernière connexion" style="white-space:nowrap">${dt(e.derniere_connexion)}</td>
       <td data-label="État">${e.active?`<span class="pill p-ok">Actif</span>`:`<span class="pill p-bad">Désactivé</span>`}</td>
-      <td style="text-align:end"><button class="btn sm" data-pfg="${e.id}">Gérer</button></td></tr>`).join("")}
+      <td style="text-align:end;white-space:nowrap"><button class="btn sm" data-pfg="${e.id}">Gérer</button></td></tr>`).join("")}
     </tbody></table></div>`;
   const adminForm=()=>`<label>Nom complet de l'administrateur central<input id="pfAN" required></label><label>Son adresse e-mail<input id="pfAE" type="email" required></label>`;
   const createAdmin=async(etab)=>{const r=await callUsers({action:"platform_create_admin",establishment_id:etab,email:pfAE.value,full_name:pfAN.value});
@@ -2977,10 +2978,10 @@ async function viewPlatform(v){
     async()=>{const id=await q(sb.rpc("platform_create_establishment",{p_code:pfC.value,p_name:pfN.value,p_model:pfM.value}));await createAdmin(id);return "keep"});
   /* gérer un établissement : ses administrateurs centraux (nouveau mot de passe, ajout) et son état */
   const manage=async id=>{const e=L.find(x=>x.id===id);const A=await q(sb.rpc("platform_establishment_admins",{p_etab:id}))||[];
-    openDialog(`<h2 data-notr>${esc(e.name)}</h2><p class="sub" style="margin:0 0 4px">${esc(e.code)} · ${e.active?"Actif":"Désactivé"}</p>
+    openDialog(`<h2 data-notr>${esc(e.name)}</h2><p class="sub" style="margin:0 0 4px">${esc(e.code)} · ${e.active?"Actif":"Désactivé"} · Créé le ${dt(e.created_at)}</p>
       <h3 style="margin:10px 0 6px">Administrateurs centraux</h3>
-      <div class="hlist">${A.length?A.map(a=>`<div class="hrow"><div><b data-notr>${esc(a.full_name||a.email)}</b><div class="sub"><span data-notr>${esc(a.email)}</span> · Dernière connexion : ${dt(a.last_sign_in_at)}</div></div>
-        <button type="button" class="btn sm" data-pfr="${a.user_id}">Nouveau mot de passe</button></div>`).join(""):`<p class="sub">Aucun administrateur central.</p>`}</div>
+      <div class="hlist">${A.length?A.map(a=>`<div class="hrow"><div><b data-notr>${esc(a.full_name||a.email)}</b><div class="sub"><span data-notr>${esc(a.email)}</span> · <span>Dernière connexion : ${dt(a.last_sign_in_at)}</span></div></div>
+        <button type="button" class="btn sm" style="white-space:nowrap;flex:none" data-pfr="${a.user_id}">Nouveau mot de passe</button></div>`).join(""):`<p class="sub">Aucun administrateur central.</p>`}</div>
       <div class="row" style="justify-content:space-between;margin-top:12px;gap:8px">
         <button type="button" class="btn ${e.active?"danger":""}" id="pfAct">${e.active?"Désactiver l'établissement":"Réactiver l'établissement"}</button>
         <div class="row" style="gap:8px"><button type="button" class="btn" id="pfAdd">+ Administrateur central</button><button class="btn" value="cancel" formnovalidate>Fermer</button></div></div>`,async()=>{});
