@@ -102,7 +102,7 @@ const exact={
 "Votre faculté a un emploi du temps fixe : indiquez une fois, pour tout le semestre, les créneaux où vous êtes disponible chaque semaine. Touchez un créneau, un jour (en haut) ou une heure (à gauche).":"جدول كليتك ثابت: حدّد مرة واحدة، للسداسي كله، الحصص التي تكون فيها متاحًا كل أسبوع. المس حصة أو يومًا (في الأعلى) أو ساعة (على الجانب).",
 "Indiquez chaque semaine quand vous êtes disponible, avant la publication de l'emploi du temps. Touchez un créneau, un jour (en haut) ou une heure (à gauche).":"حدّد كل أسبوع متى تكون متاحًا، قبل نشر الجدول. المس حصة أو يومًا (في الأعلى) أو ساعة (على الجانب).",
 "disponible chaque semaine":"متاح كل أسبوع","disponible cette semaine":"متاح هذا الأسبوع",
-"L'emploi du temps de cette semaine est publié.":"جدول هذا الأسبوع منشور.","L'emploi du temps du semestre est publié.":"جدول السداسي منشور.",
+"L'emploi du temps de cette semaine est publié.":"جدول هذا الأسبوع منشور.","Vos disponibilités ne sont plus modifiables ici. Pour un changement, contactez le directeur des études.":"لم يعد بالإمكان تعديل أوقاتك المتاحة هنا. لأي تغيير، تواصل مع مدير الدراسات.","L'emploi du temps du semestre est publié.":"جدول السداسي منشور.",
 /* heures et paiements */
 "Mes heures et paiements":"ساعاتي ومدفوعاتي","Vos heures du mois, ce qui a été payé et vos bulletins. Les montants viennent uniquement des bulletins approuvés par le service financier.":"ساعاتك لهذا الشهر وما دُفع وكشوف رواتبك. المبالغ مأخوذة فقط من الكشوف التي صادقت عليها المصلحة المالية.",
 "Heures validées ce mois":"الساعات المعتمدة هذا الشهر","À émarger ou à corriger":"للتسجيل أو التصحيح","Reçu ce mois":"المقبوض هذا الشهر","Depuis le début":"منذ البداية",
@@ -159,6 +159,7 @@ const pats=[
 [/^(\d+) séances émargées$/,"تم تسجيل الحضور في $1 حصص"],
 [/^Ensuite : (.+)$/,(_,r)=>"بعد ذلك: "+mo(r.replace(" à "," الساعة "))],
 [/^(\S+) : tout changer$/,"$1: تغيير الكل"],
+[/^(.+), disponible$/,"$1، متاح"],[/^(.+), indisponible$/,"$1، غير متاح"],[/^(.+), pause$/,"$1، استراحة"],
 [/^(\S+) (\u2066?\d\d:\d\d[–-]\d\d:\d\d\u2069?), (pause|disponible|indisponible)$/,(_,d,t,st)=>d+" "+t+"، "+({pause:"استراحة",disponible:"متاح",indisponible:"غير متاح"})[st]],
 [/^Aucun cours ne sera placé (pour vous|pour ce professeur) la semaine du (.+)\.$/,(_,w,d)=>"لن يُبرمج أي درس "+(w==="pour vous"?"لك":"لهذا الأستاذ")+" في أسبوع "+mo(d.replace(" au "," إلى "))+"."],
 [/^Semaine du (.+)$/i,(_,d)=>"أسبوع "+mo(d.replace(" au "," إلى "))],
