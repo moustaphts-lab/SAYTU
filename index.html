@@ -385,6 +385,19 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
   dialog .row>.btn{width:100%}
   .row{align-items:stretch}
 }
+/* iPad en vertical (barre latérale visible, zone étroite) : tableaux en cartes, comme sur téléphone */
+@media (min-width:721px) and (max-width:900px){
+  .tbl{overflow:visible;background:none;border:0;box-shadow:none}
+  .tbl table,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl thead{display:none}
+  .tbl tr{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:10px;padding:6px 14px}
+  .tbl td{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line);text-align:right}
+  .tbl td .cv{text-align:right;min-width:0;overflow-wrap:anywhere}
+  .tbl td::before{content:attr(data-label);color:var(--muted);font-size:13px;text-align:left;flex:0 0 auto;max-width:42%}
+  .tbl td:not([data-label])::before{display:none}
+  .tbl td:not([data-label]){justify-content:flex-end;flex-wrap:wrap}
+  .tbl tr td:last-child{border-bottom:0}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -3228,7 +3241,7 @@ async function viewAccounts(el){
   const nomCell=u=>`<td><button class="lnk" data-det="${u.id}" style="text-align:left">${esc(u.full_name)}</button><div class="sub mono">${esc(u.email)}</div>${(S.facs||[]).length>1||u.faculty_id==null?`<div class="sub">${u.faculty_id==null?"Université":esc(facCode(u.faculty_id))}</div>`:""}</td>`;
   const posteCell=(u,rs)=>`<td><div class="chips">${rs.length?`<span class="pill p-info" title="${esc(rs.map(r=>(RIGHTS[r.role]||r.role)+(["responsable","chef_departement"].includes(r.role)?" · "+(r.department_id?dcode(r.department_id):"tous"):"")).join(", "))}">${esc(posteLabelU(u,rs))}</span>`:'<span class="pill p-warn">Aucun poste</span>'}</div></td>`;
   el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-    <div class="seg" role="tablist" aria-label="Groupe" style="margin:0;flex:1 1 420px;max-width:660px;min-width:0">
+    <div class="seg" role="tablist" aria-label="Groupe" style="margin:0">
       <button type="button" role="tab" data-acct="staff" aria-pressed="${!P&&!ALL}"><span class="lg-only">Personnel administratif</span><span class="sm-only">Personnel</span> (${staff.length})</button>
       <button type="button" role="tab" data-acct="prof" aria-pressed="${P}">Professeurs (${profs.length})</button>
       <button type="button" role="tab" data-acct="all" aria-pressed="${ALL}">Tous (${profiles.length})</button></div>
