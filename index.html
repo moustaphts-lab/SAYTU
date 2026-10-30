@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="i18n-ar.js"></script>
 <style>
 /* Design : sobre, vert profond, grandes zones tactiles. Sur téléphone : navigation en bas, tableaux en cartes, fenêtres en feuille basse. */
 :root{
@@ -73,6 +74,9 @@ nav.tabs button svg{flex:none;opacity:.8}
   nav.tabs .drawer-top p{margin:12px 0 0;font-size:12.5px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
   nav.tabs button{width:100%;text-align:left;border-radius:12px;padding:11px 12px;font-size:14.5px;white-space:normal;position:relative}
   nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:-12px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:var(--sand)}
+  html[dir=rtl] #app.hasnav{padding-left:0;padding-right:var(--sbw)}
+  html[dir=rtl] nav.tabs{left:auto;right:0;border-right:0;border-left:1px solid var(--line)}
+  html[dir=rtl] nav.tabs button[aria-selected="true"]::before{left:auto;right:-12px;border-radius:4px 0 0 4px}
   header.top .bar>.brand{display:none}
   .yr{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);min-width:0}
   .yrfac{display:flex;align-items:center;gap:8px;min-width:0}.yrfac b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -180,6 +184,18 @@ select{height:42px}
 textarea{min-height:76px;resize:vertical}
 input[type=checkbox]{min-height:0;width:18px;height:18px;padding:0;accent-color:var(--accent)}
 .loginpage{min-height:100dvh;display:grid;place-items:center;padding-block:32px}
+/* arabe : police arabe et lecture de droite à gauche */
+body.ar{--f-body:"IBM Plex Sans Arabic","Instrument Sans",system-ui,sans-serif;--f-display:"IBM Plex Sans Arabic","Bricolage Grotesque",system-ui,sans-serif}
+body.ar h1,body.ar h2,body.ar h3{letter-spacing:0}
+html[dir=rtl] th,html[dir=rtl] nav.tabs button,html[dir=rtl] .tt-ev,html[dir=rtl] .ovc,html[dir=rtl] .pcard,html[dir=rtl] button.stat,html[dir=rtl] .demo button,html[dir=rtl] .login .panel,html[dir=rtl] .authmain .login,html[dir=rtl] .login .brand{text-align:right}
+html[dir=rtl] .wbtn svg,html[dir=rtl] .navsig svg{transform:scaleX(-1)}
+html[dir=rtl] .tt-ev{border-left:0;border-right:4px solid var(--c);padding:6px 10px 6px 8px}
+html[dir=rtl] .hrow.hc{border-left:0;border-right:4px solid var(--c);padding-left:0;padding-right:12px;margin-left:0;margin-right:-2px}
+html[dir=rtl] .cdot{margin-right:0;margin-left:8px}
+html[dir=rtl] .hhero::after{right:auto;left:-30px;transform:scaleX(-1)}
+.authlang{position:absolute;top:16px;inset-inline-end:18px}.authmain{position:relative}
+.langbtn{font-family:"IBM Plex Sans Arabic",var(--f-body)}
+body.ar .avg-c.pause::after{content:"استراحة"}body.ar .gc[aria-pressed="false"]::after{content:"بدون دروس"}
 /* écran de connexion : panneau vert (bâtiment, livre) et formulaire */
 .authpage{min-height:100dvh;display:grid;grid-template-columns:minmax(380px,44%) 1fr;background:var(--bg)}
 .authside{background-color:#0b5c4c;background-image:radial-gradient(circle at 50% 46%,rgba(255,255,255,.09) 0,rgba(255,255,255,0) 50%);color:#fff;padding:48px clamp(28px,4.5vw,56px) 44px;display:flex;flex-direction:column;justify-content:space-between;gap:28px;min-height:100dvh;position:sticky;top:0}
@@ -403,6 +419,8 @@ button.stat{font:inherit;color:inherit;text-align:left;cursor:pointer}button.sta
   header.top .bar>.brand small.mqon .mq{animation:mq var(--mqt,8s) ease-in-out 1s infinite alternate}
   .burger{display:grid}
   nav.tabs{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);flex-direction:column;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);padding:calc(18px + env(safe-area-inset-top,0px)) 12px 24px;gap:4px;transform:translateX(-102%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;z-index:30;box-shadow:0 0 40px rgba(8,16,12,.25)}
+  html[dir=rtl] nav.tabs{left:auto;right:0;border-right:0;border-left:1px solid var(--line);transform:translateX(102%)}
+  html[dir=rtl] body.nav-open nav.tabs,body.nav-open html[dir=rtl] nav.tabs{transform:none}
   body.nav-open nav.tabs{transform:none;visibility:visible;transition:transform .22s ease}
   body.nav-open{overflow:hidden}
   nav.tabs .drawer-top{display:block;padding:4px 8px 16px;margin-bottom:8px;border-bottom:1px solid var(--line)}
@@ -557,6 +575,50 @@ const ATT = {
   soumis:["En attente","p-warn"], valide:["Validé","p-ok"], rejete:["Rejeté","p-bad"], correction_demandee:["Correction demandée","p-info"]};
 
 const S = {user:null, roles:[], teacher:null, tab:null, week:mondayOf(new Date()), filter:"soumis", planView:"group", planId:null};
+
+/* ---------- langue de l'interface : français ou arabe (de droite à gauche) ----------
+   Chaque utilisateur choisit sa langue (menu du compte, ou écran de connexion) ; elle est gardée dans son profil.
+   La traduction s'applique aux textes affichés : dictionnaire exact (i18n-ar.js) puis formules à trous. */
+const LANG_KEY="saytu_lang";
+let LANG=(()=>{try{return localStorage.getItem(LANG_KEY)==="ar"?"ar":"fr"}catch(e){return "fr"}})();
+const AR=window.SAYTU_AR||{exact:{},pats:[]};
+const TRX=new Map(Object.entries(AR.exact||{}));
+function tr(s){if(LANG!=="ar"||s==null)return s;s=String(s);
+  /* plages horaires 08:00–10:00 : gardées de gauche à droite dans le texte arabe */
+  if(!s.includes("\u2066")&&/\d:\d\d\s*[–-]\s*\d|\d{4}-\d{4}/.test(s))s=s.replace(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/g,"\u2066$1\u2060–\u2060$2\u2069").replace(/\b(\d{4})-(\d{4})\b/g,"\u2066$1-$2\u2069");
+  const m=s.match(/^(\s*)([\s\S]*?)(\s*)$/),core=m[2];if(!core||!/[A-Za-zÀ-ÿ]/.test(core))return s;
+  let r=TRX.get(core);
+  /* texte composé « a · b · c » : chaque morceau est traduit séparément */
+  if(r==null&&core.includes(" · ")){const parts=core.split(" · "),t=parts.map(x=>trCore(x.trim())??x);if(t.some((x,i)=>x!==parts[i]))r=t.join(" · ")}
+  if(r==null)r=trCore(core);
+  return r==null?s:m[1]+r+m[3]}
+function trCore(core){let r=TRX.get(core);if(r==null)for(const [re,f] of (AR.pats||[])){const mm=core.match(re);if(mm){r=typeof f==="function"?f(...mm):core.replace(re,f);break}}return r}
+function trTree(root){if(LANG!=="ar"||!root)return;
+  if(root.nodeType===3){const v=tr(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v;return}
+  if(root.nodeType!==1&&root.nodeType!==11)return;
+  if(root.nodeType===1&&(root.closest&&root.closest("script,style,textarea,[data-notr]")))return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement&&n.parentElement.closest("script,style,textarea,[data-notr]")?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+  const L=[];while(w.nextNode())L.push(w.currentNode);
+  L.forEach(n=>{const v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  const els=root.nodeType===1?[root,...root.querySelectorAll("[placeholder],[title],[aria-label],input[type=button],input[type=submit]")]:[...root.querySelectorAll("[placeholder],[title],[aria-label]")];
+  els.forEach(e=>{["placeholder","title","aria-label"].forEach(a=>{const v=e.getAttribute&&e.getAttribute(a);if(v){const t=tr(v);if(t!==v)e.setAttribute(a,t)}})})}
+function startLang(){
+  document.documentElement.lang=LANG;document.documentElement.dir=LANG==="ar"?"rtl":"ltr";
+  if(LANG!=="ar")return;
+  document.body.classList.add("ar");
+  try{const l=document.createElement("link");l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap";document.head.appendChild(l)}catch(e){}
+  /* dates en arabe avec les chiffres 0-9, heures sur 24 h */
+  const fix=l=>(!l||l==="fr-FR"||l==="fr")?"ar-u-nu-latn":l;
+  ["toLocaleDateString","toLocaleString","toLocaleTimeString"].forEach(k=>{const o=Date.prototype[k];Date.prototype[k]=function(l,opt){const op=opt&&(opt.timeStyle||opt.hour)?{...opt,hourCycle:"h23"}:opt;return o.call(this,fix(l),op)}});
+  ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"].forEach((d,i)=>{DAYS[i+1]=d});
+  let busy=false;
+  new MutationObserver(ms=>{if(busy)return;busy=true;try{ms.forEach(m=>{if(m.type==="characterData")trTree(m.target);else m.addedNodes.forEach(trTree)})}finally{busy=false}})
+    .observe(document.body,{childList:true,subtree:true,characterData:true});
+  trTree(document.body)}
+async function setLang(l,save){LANG=l;try{localStorage.setItem(LANG_KEY,l)}catch(e){}
+  if(save){try{await q(sb.rpc("set_my_lang",{p_lang:l}))}catch(e){}}
+  location.reload()}
+const langBtn=()=>`<button type="button" class="btn sm langbtn" data-lang="${LANG==="ar"?"fr":"ar"}">${LANG==="ar"?"Français":"العربية"}</button>`;
 /* ---------- identité de l'établissement (Administrateur > Établissement) ---------- */
 /* Saytu : le nom du logiciel. Le nom de l'établissement se règle dans Établissement › Identité. */
 const PRODUCT="Saytu";
@@ -632,7 +694,7 @@ function renderLogin(msg){
         <p>La gestion des enseignements de l'université : emplois du temps, émargement des professeurs, contrôle des heures et paie, faculté par faculté.</p>
         <p class="wolof">Saytu : « veiller sur », en wolof.</p></div>
     </aside>
-    <main class="authmain"><div class="login">
+    <main class="authmain"><div class="authlang">${langBtn()}</div><div class="login">
       ${brandHtml(S.cfg?.subtitle||"Enseignements")}
       <h1>${hello}</h1>
       <p class="lead">Connectez-vous pour retrouver vos cours et vos heures.</p>
@@ -651,13 +713,17 @@ function renderLogin(msg){
     const {error}=await sb.auth.signInWithPassword({email:lEmail.value.trim(),password:lPass.value});
     if(error)renderLogin(errMsg(error)); else boot()};
   $app.querySelectorAll(".demo button").forEach(b=>b.onclick=()=>{lEmail.value=b.dataset.email;lPass.value="Demo-2026!";lPass.focus()});
+  $app.querySelectorAll("[data-lang]").forEach(b=>b.onclick=()=>setLang(b.dataset.lang,false));
 }
 
 async function boot(){
+  if(!boot._lang){boot._lang=1;startLang()}
   await loadSettings();
   const {data:{session}}=await sb.auth.getSession();
   if(!session){renderLogin();return}
   S.user=session.user;
+  /* la langue suit le profil de l'utilisateur, sur tous ses appareils */
+  try{const pl=await q(sb.rpc("my_lang"));if(pl&&pl!==LANG){try{localStorage.setItem(LANG_KEY,pl)}catch(e){}location.reload();return}}catch(e){}
   try{
     try{S.roles=await q(sb.rpc("my_scope"))}catch(e){S.roles=await q(sb.rpc("my_roles"))}
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
@@ -797,7 +863,7 @@ function renderShell(){
       <span class="yr">${curFac?`<span class="yrfac">${curFac.logo?`<img src="${esc(curFac.logo)}" alt="">`:""}<b>${esc(curFac.name)}</b></span><span class="yrsep">·</span>`:""}${esc(yr)}</span>
       ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
-        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
+        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="langBtn" data-lang="${LANG==="ar"?"fr":"ar"}">${LANG==="ar"?"Français":"العربية"}</button><button class="btn" id="logout">Se déconnecter</button></div></details></div>
     <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
@@ -816,6 +882,7 @@ function renderShell(){
   pwBtn.onclick=()=>{closeAcct();passwordDialog()};
   const hf=document.getElementById("hdrFac");if(hf)hf.onchange=async()=>{await setFac(Number(hf.value));renderShell()};
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
+  langBtn.onclick=()=>setLang(langBtn.dataset.lang,true);
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
   /* si l'on change d'écran avant la fin du chargement, l'ancien écran est abandonné sans afficher d'erreur */
@@ -1264,7 +1331,7 @@ const nextMonday=()=>addDays(mondayOf(new Date()),7);
 const planDefaultWeek=()=>{const d=new Date().getDay();return d===6||d===0?nextMonday():mondayOf(new Date())};
 function weekRange(w){const sc=S.sched||SCHED_DEFAULT;const last=addDays(w,Math.max(...sc.days)-1);
   const o={day:"numeric",month:"long"};const a=w.toLocaleDateString("fr-FR",w.getMonth()===last.getMonth()?{day:"numeric"}:o);
-  return `${a} au ${last.toLocaleDateString("fr-FR",o)}`}
+  return `${a} ${LANG==="ar"?"إلى":"au"} ${last.toLocaleDateString("fr-FR",o)}`}
 function weekNavHtml(w,extra){
   const cur=mondayOf(new Date()),nx=nextMonday();
   const tag=iso(w)===iso(cur)?"Cette semaine":iso(w)===iso(nx)?"Semaine prochaine":"";
