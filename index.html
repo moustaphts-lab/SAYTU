@@ -1167,10 +1167,10 @@ async function absenceCard(el){
       <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" value="cancel" formnovalidate>Plus tard</button><button class="btn danger" value="refuse" formnovalidate>Refuser</button><button class="btn" value="report" formnovalidate>Reporter…</button><button class="btn primary" value="annul" formnovalidate>Annuler la séance</button></div>`,
     async(act)=>{const a=abA.value.trim();
       if(act==="refuse"){await q(sb.rpc("refuse_absence",{p_id:r.id,p_answer:a||null}));toast("Demande refusée");rerender();
-        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?");return}
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Il voit la réponse dans l'application. Vous pouvez aussi la lui envoyer.",items:[{t,msg:MAR()?`${salut(t)} تعذّر قبول طلب غيابك عن الدرس ${lbl}${a?": "+a:""}. الدرس قائم في موعده. ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, votre demande d'absence pour le cours ${lbl} n'a pas pu être acceptée${a?" : "+a:""}. Le cours est maintenu. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?");return}
       if(act==="report"){S.ttWeek=mondayOf(new Date(s.session_date+"T12:00:00"));S.ttTab="grille";S.planView="teacher";S.planId=r.teacher_id;S.tab="planning";try{history.replaceState(null,"","#planning")}catch(e){}renderShell();setTimeout(()=>toast("Touchez le cours, puis « Reporter »."),500);return}
       if(act==="annul"){await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+(a||"absence du professeur ("+r.reason+")")}).eq("id",s.id));toast("Séance annulée");rerender();
-        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")}})});
+        offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"La séance apparaît annulée dans son emploi du temps. Vous pouvez aussi le lui confirmer.",items:[{t,msg:MAR()?`${salut(t)} بناءً على طلبك، أُلغي الدرس ${lbl}${a?": "+a:""}. ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, suite à votre demande, le cours ${lbl} est annulé${a?" : "+a:""}. Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")}})});
 }
 
 /* ---------- responsable ---------- */
@@ -1233,7 +1233,7 @@ async function viewReview(v){
     ${blocked.length?`<section class="panel hcard" style="margin-bottom:14px"><h2 style="margin:0 0 4px">À faire valider par un collègue · ${blocked.length}</h2><div class="sub">Vous ne pouvez pas valider vos propres heures ni celles que vous avez saisies.</div>${grouped(blocked,"blocked")}</section>`:""}
     ${corr.length?`<section class="panel hcard"><h2 style="margin:0 0 4px">Corrections demandées · ${corr.length}</h2><div class="sub">En attente de la réponse du professeur.</div>${grouped(corr,"corr")}</section>`:""}`;
   if(S.rvTab==="non"){const G=byT(nonEm);
-    const msgOf=(t,L)=>`Bonjour ${t.first_name} ${t.last_name}, il vous reste ${L.length} séance(s) à émarger : ${L.slice(0,8).map(x=>fdl(x.session_date)+" "+hm(x.start_time)+" "+(x.teaching_assignments?.courses?.code||"")).join(", ")}${L.length>8?"…":""}. Merci de les émarger dans l'application (${appUrl()}) : « J'ai fait ce cours ». Cordialement.`;
+    const msgOf=(t,L)=>MAR()?`${salut(t)} لديك ${L.length} حصة لم تسجّل حضورك فيها بعد: ${L.slice(0,8).map(x=>fdl(x.session_date)+" "+hm(x.start_time)+" "+(x.teaching_assignments?.courses?.code||"")).join("، ")}${L.length>8?"…":""}. يُرجى تسجيلها في التطبيق (${appUrl()}): «قدّمتُ هذا الدرس». ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, il vous reste ${L.length} séance(s) à émarger : ${L.slice(0,8).map(x=>fdl(x.session_date)+" "+hm(x.start_time)+" "+(x.teaching_assignments?.courses?.code||"")).join(", ")}${L.length>8?"…":""}. Merci de les émarger dans l'application (${appUrl()}) : « J'ai fait ce cours ». Cordialement.`;
     body=`<section class="panel hcard"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">Séances passées non émargées · ${nonEm.length}</h2><div class="sub">Du ${fdl(S.rvFrom)} à aujourd'hui, ${G.length} professeur(s).</div></div>
       ${G.length?`<div class="row" style="gap:8px"><button class="btn" id="rvDeleg">Émarger pour un professeur</button><button class="btn primary" id="rvRelAll">${G.length>1?`Relancer les ${G.length} professeurs`:"Relancer le professeur"}</button></div>`:""}</div>
       ${G.length?`<div class="hlist" style="margin-top:6px">${G.map(([tid,L])=>`<div class="hrow"><div><b>${esc(tname(tid))}</b> <span class="pill p-warn">${L.length}</span><div class="sub">${L.slice(0,6).map(x=>fdate(x.session_date)+" "+hm(x.start_time)+" "+esc(x.teaching_assignments?.courses?.code||"")).join(" · ")}${L.length>6?" …":""}</div></div>
@@ -1654,10 +1654,10 @@ async function viewPlanning(v){
   function announce(){
     const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=[]).push(x)});
     const items=Object.entries(byT).map(([tid,L])=>{const t=teachers.find(y=>y.id==tid);if(!t)return null;
-      const lines=L.sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time)).map(x=>`- ${DAYS[x.day_of_week]} ${dayDate(W,x.day_of_week)} · ${hm(x.start_time)}–${hm(x.end_time)} · ${x.teaching_assignments.courses.code} · ${x.teaching_assignments.student_groups.code} · salle ${x.rooms.code}`).join("\n");
-      return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre emploi du temps de la semaine du ${weekRange(W)} est publié :\n${lines}\nDétails et émargement dans l'application : ${appUrl()}\nCordialement, ${sig()}.`}}).filter(Boolean);
+      const lines=L.sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time)).map(x=>`- ${DAYS[x.day_of_week]} ${dayDate(W,x.day_of_week)} · ${hm(x.start_time)}-${hm(x.end_time)} · ${x.teaching_assignments.courses.code} · ${x.teaching_assignments.student_groups.code} · ${MAR()?"القاعة":"salle"} ${x.rooms.code}`).join("\n");
+      return{t,msg:MAR()?`${salut(t)} نُشر جدولك لأسبوع ${weekRange(W)}:\n${lines}\nالتفاصيل وتسجيل الحضور في التطبيق: ${appUrl()}\n${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, votre emploi du temps de la semaine du ${weekRange(W)} est publié :\n${lines}\nDétails et émargement dans l'application : ${appUrl()}\nCordialement, ${sig()}.`}}).filter(Boolean);
     notifyDialog({title:"Prévenir les professeurs",intro:`L'emploi du temps de la semaine du ${weekRange(W)} est publié. Envoyez à chaque professeur la liste de ses cours.`,
-      common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, ${sig()}.`,items})}
+      common:MAR()?`${salut()} نُشر جدول أسبوع ${weekRange(W)}. اطّلعوا على دروسكم في التطبيق: ${appUrl()} (قسم «جدولي»). ${signe()}`:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} est publié. Consultez vos cours dans l'application des enseignements : ${appUrl()} (rubrique « Mon emploi du temps »). Cordialement, ${sig()}.`,items})}
   const anb=document.getElementById("annBtn");if(anb)anb.onclick=announce;
   /* retirer la publication (refusé par le serveur si une séance de la semaine est déjà émargée) */
   const upb=document.getElementById("unpubBtn");
@@ -1670,8 +1670,8 @@ async function viewPlanning(v){
     async()=>{try{await q(sb.rpc("unpublish_week",{p_week:wk,p_fac:S.fac}))}catch(e){if(/Could not find the function|PGRST202/.test(e.message||""))throw new Error("La base n'est pas à jour : le script « retirer_publication.sql » doit être exécuté dans Supabase.");throw e}
       toast("Publication retirée : la semaine est de nouveau en brouillon");rerender();
       const byT={};live.forEach(x=>{(byT[x.teaching_assignments.teacher_id]??=1)});
-      const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`}));
-      offerNotify(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`,items}),"Prévenir les professeurs ?")})};
+      const items=Object.keys(byT).map(tid=>teachers.find(y=>y.id==tid)).filter(Boolean).map(t=>({t,msg:MAR()?`${salut(t)} سُحب جدول أسبوع ${weekRange(W)} لمراجعته. ستصلك نسخة جديدة. ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`}));
+      offerNotify(()=>notifyDialog({title:"Prévenir les professeurs",intro:"La semaine n'est plus visible dans leur emploi du temps. Vous pouvez les en informer.",common:MAR()?`${salut()} سُحب جدول أسبوع ${weekRange(W)} لمراجعته. ستصلكم نسخة جديدة. ${signe()}`:`Bonjour, l'emploi du temps de la semaine du ${weekRange(W)} a été retiré pour être révisé. Une nouvelle version vous sera communiquée. Cordialement, ${sig()}.`,items}),"Prévenir les professeurs ?")})};
 
   /* ----- reprendre la semaine précédente : on recopie ce qui est encore possible, et on dit pourquoi le reste ne l'est pas ----- */
   copyPrev.onclick=async()=>{
@@ -1733,7 +1733,7 @@ async function viewPlanning(v){
       if(row)await q(sb.from("timetable_slots").update(o).eq("id",row.id));else await q(sb.from("timetable_slots").insert({...o,week_start:wk,published:false}));
       if(report){const s=sessOf[row.id];const why=document.getElementById("rpWhy").value.trim();
         if(s)await q(sb.from("schedule_sessions").update({status:"planifiee",note:`Reporté (prévu ${DAYS[row.day_of_week].toLowerCase()} ${dayDate(W,row.day_of_week)} à ${hm(row.start_time)}) : ${why}`}).eq("id",s.id));
-        tellTeacher(row,`votre cours ${row.teaching_assignments.courses.code} (${row.teaching_assignments.student_groups.code}) prévu le ${dayLong(row.day_of_week).toLowerCase()} à ${hm(row.start_time)} est reporté au ${dayLong(o.day_of_week).toLowerCase()} de ${o.start_time} à ${o.end_time}${rooms.find(r=>r.id===o.room_id)?", salle "+rooms.find(r=>r.id===o.room_id).code:""}. Motif : ${why}.`)}
+        tellTeacher(row,MAR()?`درسك ${row.teaching_assignments.courses.code} (${row.teaching_assignments.student_groups.code}) المقرر يوم ${dayLong(row.day_of_week)} الساعة ${hm(row.start_time)} أُجِّل إلى يوم ${dayLong(o.day_of_week)} من ${o.start_time} إلى ${o.end_time}${rooms.find(r=>r.id===o.room_id)?"، القاعة "+rooms.find(r=>r.id===o.room_id).code:""}. السبب: ${why}.`:`votre cours ${row.teaching_assignments.courses.code} (${row.teaching_assignments.student_groups.code}) prévu le ${dayLong(row.day_of_week).toLowerCase()} à ${hm(row.start_time)} est reporté au ${dayLong(o.day_of_week).toLowerCase()} de ${o.start_time} à ${o.end_time}${rooms.find(r=>r.id===o.room_id)?", salle "+rooms.find(r=>r.id===o.room_id).code:""}. Motif : ${why}.`)}
       const a=assigns.find(x=>x.id===o.assignment_id),av=a?avOf(a.teacher_id):[];
       const off=a&&declared.has(a.teacher_id)&&!av.some(x=>x.day_of_week===o.day_of_week&&hm(x.start_time)<=o.start_time&&hm(x.end_time)>=o.end_time);
       const noAns=a&&!declared.has(a.teacher_id);
@@ -1749,9 +1749,9 @@ async function viewPlanning(v){
       <label>Motif (visible par le professeur)<input id="cWhy" required placeholder="ex. jour férié, professeur malade"></label>
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Revenir</button><button class="btn danger" value="ok">Annuler le cours</button></div>`,
     async()=>{const why=document.getElementById("cWhy").value.trim();await q(sb.from("schedule_sessions").update({status:"annulee",note:"Annulé : "+why}).eq("id",s.id));toast("Cours annulé");rerender();
-      tellTeacher(sl,`votre cours ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) du ${dayLong(sl.day_of_week).toLowerCase()} de ${hm(sl.start_time)} à ${hm(sl.end_time)} est annulé. Motif : ${why}.`)})};
+      tellTeacher(sl,MAR()?`أُلغي درسك ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) يوم ${dayLong(sl.day_of_week)} من ${hm(sl.start_time)} إلى ${hm(sl.end_time)}. السبب: ${why}.`:`votre cours ${sl.teaching_assignments.courses.code} (${sl.teaching_assignments.student_groups.code}) du ${dayLong(sl.day_of_week).toLowerCase()} de ${hm(sl.start_time)} à ${hm(sl.end_time)} est annulé. Motif : ${why}.`)})};
   const tellTeacher=(sl,txt)=>{const t=teachers.find(y=>y.id===sl.teaching_assignments.teacher_id);if(!t)return;
-    offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")};
+    offerNotify(()=>notifyDialog({title:"Prévenir le professeur",intro:"Le changement est déjà visible dans son emploi du temps. Vous pouvez aussi le lui envoyer.",items:[{t,msg:MAR()?`${salut(t)} ${txt} ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, ${txt} Cordialement, ${sig()}.`}]}),"Prévenir le professeur ?")};
   const restoreSlot=async sl=>{try{await q(sb.from("schedule_sessions").update({status:"planifiee",note:null}).eq("id",sessOf[sl.id].id));toast("Cours rétabli");rerender()}
     catch(e){toast(/overlap|exclu/i.test(e.message||"")?"Impossible de rétablir : l'horaire a été repris par un autre cours.":errMsg(e),true)}};
   v.querySelectorAll("[data-sl]").forEach(b=>b.onclick=()=>{if(b.dataset.dragged)return;const sl=slots.find(x=>x.id==b.dataset.sl),t=sl.teaching_assignments,s=sessOf[sl.id];
@@ -1888,7 +1888,7 @@ function notifyDialog(o){ /* o = {title, intro, common, items:[{t:{id,first_name
 }
 const appUrl=()=>location.origin+location.pathname;
 function relanceDialog(W,list){
-  const msg=t=>`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${appUrl()}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, ${sig()}.`;
+  const msg=t=>MAR()?`${salut(t)} يُرجى تحديد أوقاتك المتاحة لأسبوع ${weekRange(W)} في التطبيق (${appUrl()})، قسم «أوقاتي المتاحة»، قبل نشر الجدول. ${signe()}`:`Bonjour${t?" "+t.first_name+" "+t.last_name:""}, merci d'indiquer vos disponibilités pour la semaine du ${weekRange(W)} dans l'application des enseignements (${appUrl()}), rubrique « Mes disponibilités », avant la publication de l'emploi du temps. Cordialement, ${sig()}.`;
   notifyDialog({title:`Relancer ${list.length} professeur${list.length>1?"s":""} sans réponse`,intro:`Semaine du ${weekRange(W)}. Envoyez le message par WhatsApp ou SMS (le téléphone s'ouvre avec le texte prêt), ou copiez-le pour un groupe WhatsApp.`,
     common:msg(null),items:list.map(t=>({t,msg:msg(t)}))});
 }
@@ -2850,8 +2850,8 @@ async function viewClosures(el){
     let T=[];try{if(P.length)T=await q(sb.from("teachers").select("id,first_name,last_name,phone").in("id",P.map(p=>p.teacher_id)))}catch(e){}
     const fd=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
     const items=P.map(p=>{const t=T.find(x=>x.id===p.teacher_id);if(!t)return null;
-      const L=p.cours.map(k=>`${fd(k.date)} de ${k.debut} à ${k.fin} (${k.cours}, ${k.groupe})`);
-      return {t,msg:`Bonjour ${t.first_name} ${t.last_name}, en raison de « ${r.motif} », ${L.length>1?"vos cours suivants sont annulés : "+L.join(" ; "):"votre cours du "+L[0]+" est annulé"}. Cordialement, ${sig()}.`}}).filter(Boolean);
+      const L=p.cours.map(k=>MAR()?`${fd(k.date)} من ${k.debut} إلى ${k.fin} (${k.cours}، ${k.groupe})`:`${fd(k.date)} de ${k.debut} à ${k.fin} (${k.cours}, ${k.groupe})`);
+      return {t,msg:MAR()?`${salut(t)} بسبب «${r.motif}»، ${L.length>1?"أُلغيت دروسك التالية: "+L.join("؛ "):"أُلغي درسك يوم "+L[0]}. ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, en raison de « ${r.motif} », ${L.length>1?"vos cours suivants sont annulés : "+L.join(" ; "):"votre cours du "+L[0]+" est annulé"}. Cordialement, ${sig()}.`}}).filter(Boolean);
     openDialog(`<h3>Cours annulés · ${esc(r.motif)}</h3>
       <p style="margin:0"><b>${r.annules}</b> cours annulé(s)${r.retires?`, <b>${r.retires}</b> brouillon(s) retiré(s)`:""}. Les professeurs les voient barrés avec le motif ; ils ne comptent ni dans l'émargement ni dans la paie.</p>
       ${E.length?`<div><div class="sub" style="margin-bottom:6px">${E.length} séance(s) déjà émargée(s), non touchée(s) :</div><div class="rl">${E.map(x=>`<div class="rlrow"><b class="mono">${fdate(x.date)} ${x.heure}</b><span>${esc(x.cours+" · "+x.prof+" · "+x.groupe)}</span></div>`).join("")}</div></div>`:""}
@@ -2882,7 +2882,13 @@ const OPT_DESC={chef_departement:"Voit l'emploi du temps et l'avancement des mat
   lecteur:"Voit la synthèse, le suivi, le budget, la paie et le journal, sans rien pouvoir modifier (contrôleur, auditeur, conseil)."};
 const rightsOn=()=>S.cfg?.enabled_rights||[];
 /* signature des messages WhatsApp / SMS : le nom et le poste de la personne qui envoie */
-function sig(){const n=(S.user?.user_metadata?.full_name||"").trim(),p=posteById(S.myPoste);const pn=p&&!isProfPoste(p)?p.name:"";return [n,pn].filter(Boolean).join(", ")||"l'administration"}
+/* messages WhatsApp / SMS : rédigés dans la langue de la personne qui les envoie */
+const MAR=()=>LANG==="ar";
+const nm=t=>((t&&t.first_name||"")+" "+(t&&t.last_name||"")).trim();
+const hrsAr=s=>String(s).replace(/(\d+) h (\d+)/g,"$1 س $2 د").replace(/(\d+) h\b/g,"$1 س");
+const salut=t=>MAR()?`السلام عليكم ${t?nm(t):""}`.trim()+"،":`Bonjour${t?" "+nm(t):""},`;
+const signe=()=>MAR()?`مع التحية، ${sig()}.`:`Cordialement, ${sig()}.`;
+function sig(){const n=(S.user?.user_metadata?.full_name||"").trim(),p=posteById(S.myPoste);const pn=p&&!isProfPoste(p)?p.name:"";return [n,pn].filter(Boolean).join(MAR()?"، ":", ")||(MAR()?"الإدارة":"l'administration")}
 async function loadPostes(){try{S.postes=await q(sb.from("postes").select("id,name,roles,sort,scope").order("sort").order("name"))}catch(e){S.postes=S.postes||[]}return S.postes}
 const posteById=id=>(S.postes||[]).find(p=>p.id===id);
 const posteUsable=p=>p.roles.every(r=>!OPT_RIGHTS.includes(r)||rightsOn().includes(r));
@@ -3472,7 +3478,7 @@ async function viewAccounts(el){
   setTimeout(()=>{if(S.accOpen){const b=el.querySelector(`[data-det="${S.accOpen}"]`);S.accOpen=null;if(b)b.click()}
     if(S.accBulk){S.accBulk=false;const b=document.getElementById("bulkAcc");if(b&&!b.disabled)b.click()}},0);
 
-  const credMsg=(name,email,pwd)=>`Bonjour ${name}, voici vos accès à l'application des enseignements : ${appUrl()}\nAdresse : ${email}\nMot de passe provisoire : ${pwd}\nVous choisirez votre propre mot de passe à la première connexion.`;
+  const credMsg=(name,email,pwd)=>MAR()?`السلام عليكم ${name}، هذه بيانات دخولك إلى تطبيق التدريس: ${appUrl()}\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${pwd}\nستختار كلمة مرورك الخاصة عند أول دخول.`:`Bonjour ${name}, voici vos accès à l'application des enseignements : ${appUrl()}\nAdresse : ${email}\nMot de passe provisoire : ${pwd}\nVous choisirez votre propre mot de passe à la première connexion.`;
 
   addAcc.onclick=()=>{
     const free=teachers.filter(t=>!t.profile_id);
@@ -3769,12 +3775,12 @@ async function periodDetail(el,p){
 const PAY_METHODS=["virement","Wave","Orange Money","chèque","espèces"];
 async function payTeachers(slips){const ids=[...new Set(slips.map(x=>x.teacher_id))];if(!ids.length)return[];
   return q(sb.from("teachers").select("id,first_name,last_name,phone,pay_method,pay_number").in("id",ids))}
-function payMsg(t,amt,d,m,p){return `Bonjour ${t.first_name} ${t.last_name}, un paiement de ${fcfa(amt)} vous a été fait le ${fdl(d)} par ${m}, au titre de ${p.name}. Le détail est dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}
+function payMsg(t,amt,d,m,p){const MM={virement:"تحويل بنكي","espèces":"نقدًا","chèque":"شيك"};if(MAR())return `${salut(t)} دُفع لك مبلغ ${fcfa(amt)} بتاريخ ${fdl(d)} عن طريق ${MM[m]||m}، عن ${p.name}. التفاصيل في فضائك «الساعات والمدفوعات»: ${appUrl()}. ${signe()}`;return `Bonjour ${t.first_name} ${t.last_name}, un paiement de ${fcfa(amt)} vous a été fait le ${fdl(d)} par ${m}, au titre de ${p.name}. Le détail est dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}
 async function slipNotify(p){
   const slips=await q(sb.from("payslips").select("id,teacher_id,net_fcfa,total_minutes,number").eq("pay_period_id",p.id));if(!slips.length)return;
   const ts=await payTeachers(slips);
   notifyDialog({title:"Bulletins disponibles",intro:"Chaque professeur peut télécharger son bulletin dans « Heures et paiements ». Vous pouvez le lui annoncer.",
-    items:slips.map(sl=>{const t=ts.find(x=>x.id===sl.teacher_id)||{first_name:"",last_name:"",phone:null};return{t,msg:`Bonjour ${t.first_name} ${t.last_name}, votre bulletin de rémunération de ${p.name} est disponible : ${hrs(sl.total_minutes)}, net ${fcfa(sl.net_fcfa)} (bulletin ${sl.number}). Téléchargez-le dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}})})}
+    items:slips.map(sl=>{const t=ts.find(x=>x.id===sl.teacher_id)||{first_name:"",last_name:"",phone:null};return{t,msg:MAR()?`${salut(t)} كشف راتبك عن ${p.name} متاح: ${hrsAr(hrs(sl.total_minutes))}، الصافي ${fcfa(sl.net_fcfa)} (الكشف ${sl.number}). حمّله من فضائك «الساعات والمدفوعات»: ${appUrl()}. ${signe()}`:`Bonjour ${t.first_name} ${t.last_name}, votre bulletin de rémunération de ${p.name} est disponible : ${hrs(sl.total_minutes)}, net ${fcfa(sl.net_fcfa)} (bulletin ${sl.number}). Téléchargez-le dans votre espace « Heures et paiements » : ${appUrl()}. Cordialement, ${sig()}.`}})})}
 function bulkPayDialog(p,slips,paid,ts){
   const due=slips.map(s=>({s,t:ts.find(x=>x.id===s.teacher_id)||{},du:s.net_fcfa-paid(s.id)})).filter(x=>x.du>0).sort((a,b)=>(a.t.last_name||"").localeCompare(b.t.last_name||""));
   openDialog(`<h3>Payer en lot · ${esc(p.name)}</h3>
