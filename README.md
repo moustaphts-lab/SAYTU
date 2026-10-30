@@ -9,7 +9,7 @@
 ## Hébergement sur Cloudflare Pages
 
 1. Cloudflare > Workers & Pages > Create > Pages > Connect to Git.
-2. Choisir le dépôt `moustaphts-lab/UCAB`, branche `main`.
+2. Choisir le dépôt `moustaphts-lab/saytu`, branche `main`, nom du projet `saytu`.
 3. Framework preset : **None**. Build command : *(vide)*. Build output directory : `/`.
 4. Chaque modification poussée sur `main` est publiée automatiquement.
 
