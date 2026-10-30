@@ -57,6 +57,20 @@ Deno.serve(async (req: Request) => {
     return password ? json({ user_id: userId, email, temp_password: password }) : json({ user_id: userId, email, existing: true });
   }
 
+  // 0 bis. Administrateur de la plateforme : nouveau mot de passe provisoire pour un administrateur central
+  if (action === "platform_reset_admin") {
+    const etabId = Number(body.establishment_id);
+    const userId = String(body.user_id ?? "");
+    const { data: ok } = await caller.rpc("platform_can_reset", { p_etab: etabId, p_user: userId });
+    if (ok !== true) return json({ error: "Réservé à l'administrateur de la plateforme, pour un administrateur central." }, 403);
+    const password = tempPassword();
+    const { error } = await admin.auth.admin.updateUserById(userId, { password, ban_duration: "none" });
+    if (error) return json({ error: error.message }, 400);
+    await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
+    await admin.from("memberships").update({ active: true }).eq("user_id", userId).eq("establishment_id", etabId);
+    return json({ temp_password: password });
+  }
+
   const { data: isAdmin, error: roleErr } = await caller.rpc("has_role", { r: "admin" });
   if (roleErr || isAdmin !== true) return json({ error: "Réservé à l'administrateur." }, 403);
   const { data: me } = await caller.auth.getUser();

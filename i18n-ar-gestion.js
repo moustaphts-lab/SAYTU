@@ -512,7 +512,7 @@ const X={
 "Non émargés": "غير مسجّلة",
 "Note": "ملاحظة",
 "Notez ou transmettez ces identifiants maintenant : les mots de passe provisoires ne seront plus affichés.": "دوِّن بيانات الدخول هذه أو أرسلها الآن: لن تُعرض كلمات المرور المؤقتة مجددًا.",
-"Nouveau mot de passe": "كلمة المرور الجديدة",
+"Nouveau mot de passe": "كلمة مرور جديدة",
 "Nouveau poste": "منصب جديد",
 "Nouveau tarif": "أجر جديد",
 "Nouveau tarif horaire": "أجر ساعة جديد",
@@ -1138,7 +1138,14 @@ const X={
 "Ex. Université de Thiès": "مثال: جامعة تييس",
 "Ex. UT": "مثال: UT",
 "Ajouter": "إضافة",
-"Plateforme": "المنصة"
+"Plateforme": "المنصة",
+"Gérer": "تسيير",
+"Administrateurs centraux": "المهندسون العامون",
+"Aucun administrateur central.": "لا يوجد مهندس عام.",
+"Désactiver l'établissement": "تعطيل المؤسسة",
+"Réactiver l'établissement": "إعادة تفعيل المؤسسة",
+"+ Administrateur central": "+ مهندس عام",
+"Réservé à l'administrateur de la plateforme, pour un administrateur central.": "مخصص لمهندس المنصة، لمهندس عام."
 };
 const P=[
 [
@@ -1854,6 +1861,10 @@ const P=[
 "— سينقص نحو §1"
 ],
 [
+"^(.*?) · Dernière connexion : (.*?)$",
+"§1 · آخر دخول: §2"
+],
+[
 "^(.*?) paiement\\(s\\) · total (.*?)$",
 "§1 دفعة · المجموع §2"
 ],
@@ -1932,6 +1943,10 @@ const P=[
 [
 "^Enseignements du (.*?) au (.*?)$",
 "التدريس من §1 إلى §2"
+],
+[
+"^Dernière connexion : (.*?)$",
+"آخر دخول: §1"
 ],
 [
 "^(.*?) séance(.*?) émargée(.*?) sur (.*?)$",

@@ -654,7 +654,7 @@ async function loadSettings(){try{const r=await q(sb.from("app_settings").select
   document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   /* administrateur de la plateforme sans établissement : la marque Saytu */
-  if(S.platform&&!S.etab)return `<div class="brand"><i style="background:none">${SAYTU_MARK(30)}</i><div>Saytu<small>${esc(small)}</small></div></div>`;
+  if(S.platform&&!S.etab)return `<div class="brand"><i style="background:none">${SAYTU_MARK(30)}</i><div>Saytu<small>Plateforme</small></div></div>`;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
 /* logo et lignes d'en-tête / de pied de page dans les PDF */
 /* faculté des documents : celle en cours ; son logo remplace celui de l'université s'il existe */
@@ -2958,9 +2958,10 @@ async function viewPlatform(v){
   v.innerHTML=`<h1>Établissements</h1><p class="lead">Les établissements qui utilisent Saytu. Vous voyez leur fiche et leur activité, jamais leurs données : chacun se gère lui-même avec son administrateur central.</p>
     <div class="row" style="margin-bottom:12px"><button class="btn primary" id="pfNew">+ Nouvel établissement</button></div>
     <div class="tbl"><table><thead><tr><th>Établissement</th><th>Code</th><th class="num">Comptes actifs</th><th class="num">Facultés</th><th class="num">Administrateurs</th><th>Dernière connexion</th><th>Créé le</th><th>État</th><th></th></tr></thead><tbody>
-    ${L.map(e=>`<tr><td data-label="Établissement"><b data-notr>${esc(e.name)}</b></td><td data-label="Code" class="mono">${esc(e.code)}</td><td data-label="Comptes actifs" class="num">${e.comptes}</td><td data-label="Facultés" class="num">${e.facultes}</td><td data-label="Administrateurs" class="num">${e.administrateurs}</td><td data-label="Dernière connexion">${dt(e.derniere_connexion)}</td><td data-label="Créé le">${dt(e.created_at)}</td>
+    ${L.map(e=>`<tr><td data-label="Établissement"><b data-notr>${esc(e.name)}</b></td><td data-label="Code" class="mono">${esc(e.code)}</td><td data-label="Comptes actifs" class="num">${e.comptes}</td><td data-label="Facultés" class="num">${e.facultes}</td><td data-label="Administrateurs" class="num">${e.administrateurs}</td>
+      <td data-label="Dernière connexion" style="white-space:nowrap">${dt(e.derniere_connexion)}</td><td data-label="Créé le" style="white-space:nowrap">${dt(e.created_at)}</td>
       <td data-label="État">${e.active?`<span class="pill p-ok">Actif</span>`:`<span class="pill p-bad">Désactivé</span>`}</td>
-      <td><div class="row" style="gap:6px"><button class="btn sm" data-pfadm="${e.id}">+ Administrateur</button><button class="btn sm" data-pfact="${e.id}" data-on="${e.active?0:1}">${e.active?"Désactiver":"Réactiver"}</button></div></td></tr>`).join("")}
+      <td style="text-align:end"><button class="btn sm" data-pfg="${e.id}">Gérer</button></td></tr>`).join("")}
     </tbody></table></div>`;
   const adminForm=()=>`<label>Nom complet de l'administrateur central<input id="pfAN" required></label><label>Son adresse e-mail<input id="pfAE" type="email" required></label>`;
   const createAdmin=async(etab)=>{const r=await callUsers({action:"platform_create_admin",establishment_id:etab,email:pfAE.value,full_name:pfAN.value});
@@ -2974,16 +2975,26 @@ async function viewPlatform(v){
     ${adminForm()}
     <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer l'établissement</button></div>`,
     async()=>{const id=await q(sb.rpc("platform_create_establishment",{p_code:pfC.value,p_name:pfN.value,p_model:pfM.value}));await createAdmin(id);return "keep"});
-  v.querySelectorAll("[data-pfadm]").forEach(b=>b.onclick=()=>openDialog(`<h2>Ajouter un administrateur central</h2>
-    <p class="sub" style="margin:0">Par exemple si l'établissement a perdu l'accès à son administrateur.</p>${adminForm()}
-    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Ajouter</button></div>`,
-    async()=>{await createAdmin(Number(b.dataset.pfadm));return "keep"}));
-  const setAct=async(id,on)=>{await q(sb.rpc("platform_set_active",{p_id:id,p_active:on}));toast(on?"Établissement réactivé":"Établissement désactivé");rerender()};
-  v.querySelectorAll("[data-pfact]").forEach(b=>b.onclick=()=>{const on=b.dataset.on==="1",id=Number(b.dataset.pfact);
-    if(on){setAct(id,true).catch(e=>toast(errMsg(e),true));return}
-    openDialog(`<h3>Désactiver cet établissement ?</h3><p style="margin:0">Plus aucun de ses membres ne pourra y accéder. Ses données sont conservées et l'établissement peut être réactivé.</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Désactiver</button></div>`,
-      async()=>{await setAct(id,false)})});
+  /* gérer un établissement : ses administrateurs centraux (nouveau mot de passe, ajout) et son état */
+  const manage=async id=>{const e=L.find(x=>x.id===id);const A=await q(sb.rpc("platform_establishment_admins",{p_etab:id}))||[];
+    openDialog(`<h2 data-notr>${esc(e.name)}</h2><p class="sub" style="margin:0 0 4px">${esc(e.code)} · ${e.active?"Actif":"Désactivé"}</p>
+      <h3 style="margin:10px 0 6px">Administrateurs centraux</h3>
+      <div class="hlist">${A.length?A.map(a=>`<div class="hrow"><div><b data-notr>${esc(a.full_name||a.email)}</b><div class="sub"><span data-notr>${esc(a.email)}</span> · Dernière connexion : ${dt(a.last_sign_in_at)}</div></div>
+        <button type="button" class="btn sm" data-pfr="${a.user_id}">Nouveau mot de passe</button></div>`).join(""):`<p class="sub">Aucun administrateur central.</p>`}</div>
+      <div class="row" style="justify-content:space-between;margin-top:12px;gap:8px">
+        <button type="button" class="btn ${e.active?"danger":""}" id="pfAct">${e.active?"Désactiver l'établissement":"Réactiver l'établissement"}</button>
+        <div class="row" style="gap:8px"><button type="button" class="btn" id="pfAdd">+ Administrateur central</button><button class="btn" value="cancel" formnovalidate>Fermer</button></div></div>`,async()=>{});
+    document.querySelectorAll("[data-pfr]").forEach(b=>b.onclick=async()=>{b.disabled=true;
+      try{const r=await callUsers({action:"platform_reset_admin",establishment_id:id,user_id:b.dataset.pfr});const a=A.find(x=>x.user_id===b.dataset.pfr);
+        showCredentials("Nouveau mot de passe",a?a.email:"",r.temp_password)}catch(err){toast(errMsg(err),true);b.disabled=false}});
+    pfAdd.onclick=()=>openDialog(`<h2>Ajouter un administrateur central</h2><p class="sub" style="margin:0">Par exemple si l'établissement a perdu l'accès à son administrateur.</p>${adminForm()}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Ajouter</button></div>`,
+      async()=>{await createAdmin(id);return "keep"});
+    pfAct.onclick=()=>{if(!e.active){q(sb.rpc("platform_set_active",{p_id:id,p_active:true})).then(()=>{toast("Établissement réactivé");document.getElementById("dlg").close();rerender()}).catch(err=>toast(errMsg(err),true));return}
+      openDialog(`<h3>Désactiver cet établissement ?</h3><p style="margin:0">Plus aucun de ses membres ne pourra y accéder. Ses données sont conservées et l'établissement peut être réactivé.</p>
+        <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Désactiver</button></div>`,
+        async()=>{await q(sb.rpc("platform_set_active",{p_id:id,p_active:false}));toast("Établissement désactivé");rerender()})}};
+  v.querySelectorAll("[data-pfg]").forEach(b=>b.onclick=()=>manage(Number(b.dataset.pfg)).catch(err=>toast(errMsg(err),true)));
 }
 
 /* fenêtre de création ou de modification d'une faculté */
