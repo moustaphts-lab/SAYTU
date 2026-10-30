@@ -2648,13 +2648,48 @@ async function viewClosures(el){
     async()=>{if(clT.value<clF.value)throw new Error("La date de fin doit être après la date de début.");
       const cw=document.getElementById("clW");
       const row={label:clL.value.trim(),date_from:clF.value,date_to:clT.value,kind:clK.value,part:clP.value,faculty_id:cw?(cw.value?Number(cw.value):null):(U?null:(c.faculty_id??S.fac))};
-      if(c.id)await q(sb.from("calendar_closures").update(row).eq("id",c.id));else await q(sb.from("calendar_closures").insert(row));
-      await loadClosures();toast("Enregistré");rerender()});
-    const info=async()=>{clInfo.textContent="";if(!clF.value||!clT.value||clT.value<clF.value)return;
-      try{const n=(await q(sb.from("timetable_slots").select("id,week_start,day_of_week").gte("week_start",iso(mondayOf(new Date(clF.value+"T12:00:00")))).lte("week_start",clT.value)))
-          .filter(x=>{const d=iso(addDays(new Date(x.week_start+"T12:00:00"),x.day_of_week-1));return d>=clF.value&&d<=clT.value}).length;
-        if(n)clInfo.innerHTML=`<span style="color:var(--warn)">Attention : ${n} cours sont déjà placés sur ces dates. Ils restent en place : déplacez-les ou annulez-les dans l'emploi du temps.</span>`}catch(e){}};
-    clF.onchange=()=>{if(!clT.value||clT.value<clF.value)clT.value=clF.value;info()};clT.onchange=info;info()};
+      const doCancel=hit.length&&document.getElementById("clCancel")?.checked;
+      const saved=c.id?(await q(sb.from("calendar_closures").update(row).eq("id",c.id).select()))[0]:(await q(sb.from("calendar_closures").insert(row).select()))[0];
+      await loadClosures();
+      if(doCancel&&saved){
+        const r=await q(sb.rpc("cancel_for_closure",{p_closure:saved.id,p_fac:saved.faculty_id?null:(U?null:S.fac)}));
+        rerender();setTimeout(()=>closureResult(r,saved),300);return}
+      toast("Enregistré");rerender()});
+    /* cours déjà placés sur ces dates : on propose de les annuler en une fois */
+    let hit=[];
+    const info=async()=>{clInfo.textContent="";hit=[];if(!clF.value||!clT.value||clT.value<clF.value)return;
+      const cw=document.getElementById("clW"),fac=cw?(cw.value?Number(cw.value):(U?null:S.fac)):(U?null:(c.faculty_id??S.fac));
+      const sch=S.sched||SCHED_DEFAULT,lf=sch.lunchFrom||"13:00",lt=sch.lunchTo||"13:00",part=clP.value;
+      try{let qb=sb.from("timetable_slots").select("id,week_start,day_of_week,start_time,end_time,published,teaching_assignments!inner(courses(code),teachers(first_name,last_name),student_groups!teaching_assignments_group_id_fkey(code),semesters!inner(faculty_id)),schedule_sessions(status,attendance_records(id))")
+          .gte("week_start",iso(mondayOf(new Date(clF.value+"T12:00:00")))).lte("week_start",clT.value);
+        if(fac)qb=qb.eq("teaching_assignments.semesters.faculty_id",fac);
+        const dOf=x=>iso(addDays(new Date(x.week_start+"T12:00:00"),x.day_of_week-1));
+        const done=x=>(x.schedule_sessions||[]).some(z=>z.attendance_records&&(Array.isArray(z.attendance_records)?z.attendance_records.length:z.attendance_records.id));
+        const gone=x=>(x.schedule_sessions||[]).some(z=>z.status==="annulee");
+        hit=(await q(qb)).filter(x=>{const d=dOf(x);return d>=clF.value&&d<=clT.value&&(part==="jour"||(part==="matin"&&hm(x.start_time)<lf)||(part==="apres_midi"&&hm(x.end_time)>lt))})
+          .filter(x=>!gone(x)).sort((a,b)=>(dOf(a)+a.start_time).localeCompare(dOf(b)+b.start_time));
+        if(!hit.length)return;
+        const todo=hit.filter(x=>!done(x)),emg=hit.length-todo.length;
+        const line=x=>`<div class="rlrow"><b class="mono">${fdate(dOf(x))} ${hm(x.start_time)}</b><span>${esc(x.teaching_assignments.courses?.code||"")} · ${esc((x.teaching_assignments.teachers?.first_name||"")+" "+(x.teaching_assignments.teachers?.last_name||""))} · ${esc(x.teaching_assignments.student_groups?.code||"")}${x.published?"":' <span class="pill p-mute">brouillon</span>'}${done(x)?' <span class="pill p-info">émargé</span>':""}</span></div>`;
+        clInfo.innerHTML=`<div class="gpwarn" style="margin:0"><b>${hit.length} cours ${hit.length>1?"sont prévus":"est prévu"} sur ${clF.value===clT.value?"ce jour":"ces dates"}${part==="jour"?"":" ("+CLOSE_PART[part].toLowerCase()+")"}.</b>
+          <div class="rl" style="max-height:180px;overflow:auto;margin:8px 0">${hit.slice(0,40).map(line).join("")}${hit.length>40?`<div class="sub">… et ${hit.length-40} autre(s).</div>`:""}</div>
+          ${todo.length?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="clCancel" checked> Annuler ${todo.length>1?"ces "+todo.length+" cours":"ce cours"} (motif : le libellé ci-dessus)</label>
+          <div class="sub" style="margin-top:4px">Les cours publiés sont annulés avec ce motif, les brouillons sont retirés.${emg?` ${emg} séance(s) déjà émargée(s) ne seront pas touchées.`:""}</div>`:`<div class="sub">Ces séances sont déjà émargées : elles ne seront pas touchées.</div>`}</div>`}catch(e){}};
+    clF.onchange=()=>{if(!clT.value||clT.value<clF.value)clT.value=clF.value;info()};clT.onchange=info;clP.onchange=info;
+    const cwSel=document.getElementById("clW");if(cwSel)cwSel.onchange=info;info()};
+  /* bilan après annulation, puis message à chaque professeur concerné */
+  const closureResult=async(r,cl)=>{
+    const P=r.profs||[],E=r.emarges||[];
+    let T=[];try{if(P.length)T=await q(sb.from("teachers").select("id,first_name,last_name,phone").in("id",P.map(p=>p.teacher_id)))}catch(e){}
+    const fd=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+    const items=P.map(p=>{const t=T.find(x=>x.id===p.teacher_id);if(!t)return null;
+      const L=p.cours.map(k=>`${fd(k.date)} de ${k.debut} à ${k.fin} (${k.cours}, ${k.groupe})`);
+      return {t,msg:`Bonjour ${t.first_name} ${t.last_name}, en raison de « ${r.motif} », ${L.length>1?"vos cours suivants sont annulés : "+L.join(" ; "):"votre cours du "+L[0]+" est annulé"}. Cordialement, ${sig()}.`}}).filter(Boolean);
+    openDialog(`<h3>Cours annulés · ${esc(r.motif)}</h3>
+      <p style="margin:0"><b>${r.annules}</b> cours annulé(s)${r.retires?`, <b>${r.retires}</b> brouillon(s) retiré(s)`:""}. Les professeurs les voient barrés avec le motif ; ils ne comptent ni dans l'émargement ni dans la paie.</p>
+      ${E.length?`<div><div class="sub" style="margin-bottom:6px">${E.length} séance(s) déjà émargée(s), non touchée(s) :</div><div class="rl">${E.map(x=>`<div class="rlrow"><b class="mono">${fdate(x.date)} ${x.heure}</b><span>${esc(x.cours+" · "+x.prof+" · "+x.groupe)}</span></div>`).join("")}</div></div>`:""}
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Fermer</button>${items.length?`<button class="btn primary" value="ok">${items.length>1?"Prévenir les "+items.length+" professeurs":"Prévenir le professeur"}</button>`:""}</div>`,
+      async()=>{setTimeout(()=>notifyDialog({title:"Prévenir les professeurs",intro:"Chaque professeur reçoit la liste de ses cours annulés et le motif.",items}),300)})};
   clAdd.onclick=()=>form();
   el.querySelectorAll("[data-cle]").forEach(b=>b.onclick=()=>form(list.find(c=>c.id==b.dataset.cle)));
   el.querySelectorAll("[data-cld]").forEach(b=>b.onclick=()=>{const c=list.find(x=>x.id==b.dataset.cld);

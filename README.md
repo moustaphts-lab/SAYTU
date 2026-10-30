@@ -43,7 +43,7 @@ Règles constantes : personne ne valide ses propres heures ni un émargement qu'
 ## Fonctionnement d'une semaine
 
 1. Les professeurs déclarent leurs disponibilités de la semaine suivante.
-2. Le directeur des études génère ou reprend la semaine précédente, ajuste par glisser-déposer, vérifie, puis publie. Les jours sans cours du calendrier sont exclus.
+2. Le directeur des études génère ou reprend la semaine précédente, ajuste par glisser-déposer, vérifie, puis publie. Les jours sans cours du calendrier sont exclus. Un événement imprévu se déclare en jour sans cours : l'application propose d'annuler en une fois les cours déjà placés (séances émargées protégées) et de prévenir les professeurs.
 3. Après chaque cours, le professeur émarge (« J'ai fait ce cours »).
 4. L'aide du responsable financier valide les émargements conformes en lot et examine les autres.
 5. En fin de mois, le responsable financier calcule, vérifie, approuve ; la direction vise ; les paiements sont enregistrés et les professeurs prévenus.
