@@ -29,6 +29,9 @@ Deno.serve(async (req: Request) => {
   if (roleErr || isAdmin !== true) return json({ error: "Réservé à l'administrateur." }, 403);
   const { data: me } = await caller.auth.getUser();
   const { data: central } = await caller.rpc("is_central_admin");
+  // établissement de travail de l'administrateur qui appelle
+  const { data: etab } = await caller.rpc("current_establishment");
+  if (!etab) return json({ error: "Établissement introuvable." }, 403);
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   let body: Record<string, unknown>;
@@ -53,6 +56,16 @@ Deno.serve(async (req: Request) => {
         const { data: ok } = await caller.rpc("admin_for", { fac: facultyId });
         if (ok !== true) return json({ error: "Vous ne pouvez créer des comptes que dans votre faculté." }, 403);
       }
+      // un compte par personne : si l'adresse sert déjà dans un autre établissement, on y ajoute seulement l'appartenance
+      const { data: prev } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+      if (prev) {
+        const { data: mem } = await admin.from("memberships").select("user_id").eq("user_id", prev.id).eq("establishment_id", etab).maybeSingle();
+        if (mem) return json({ error: "Un compte existe déjà avec cette adresse dans votre établissement." }, 400);
+        const { error: eM } = await admin.from("memberships").insert({ user_id: prev.id, establishment_id: etab, faculty_id: facultyId });
+        if (eM) return json({ error: eM.message }, 400);
+        await admin.auth.admin.updateUserById(prev.id, { ban_duration: "none" });
+        return json({ user_id: prev.id, email, existing: true });
+      }
       const password = tempPassword();
       const { data, error } = await admin.auth.admin.createUser({
         email, password, email_confirm: true, user_metadata: { full_name: fullName },
@@ -61,7 +74,9 @@ Deno.serve(async (req: Request) => {
         const msg = /already|exists|registered/i.test(error.message) ? "Un compte existe déjà avec cette adresse." : error.message;
         return json({ error: msg }, 400);
       }
-      if (facultyId != null) await admin.from("profiles").update({ faculty_id: facultyId }).eq("id", data.user.id);
+      await admin.from("profiles").update({ establishment_id: etab }).eq("id", data.user.id);
+      const { error: eM } = await admin.from("memberships").upsert({ user_id: data.user.id, establishment_id: etab, faculty_id: facultyId });
+      if (eM) return json({ error: eM.message }, 400);
       return json({ user_id: data.user.id, email, temp_password: password });
     }
 
@@ -69,6 +84,8 @@ Deno.serve(async (req: Request) => {
       const userId = String(body.user_id ?? "");
       if (!userId) return json({ error: "Compte manquant." }, 400);
       if (!(await canManage(userId))) return json({ error: "Ce compte ne dépend pas de votre faculté." }, 403);
+      const { data: shared } = await caller.rpc("is_shared_account", { u: userId });
+      if (shared === true) return json({ error: "Ce compte sert aussi dans un autre établissement : la personne gère elle-même son mot de passe." }, 403);
       const password = tempPassword();
       const { error } = await admin.auth.admin.updateUserById(userId, { password });
       if (error) return json({ error: error.message }, 400);
@@ -81,10 +98,12 @@ Deno.serve(async (req: Request) => {
       if (!userId) return json({ error: "Compte manquant." }, 400);
       if (!(await canManage(userId))) return json({ error: "Ce compte ne dépend pas de votre faculté." }, 403);
       if (userId === me.user?.id && !active) return json({ error: "Vous ne pouvez pas désactiver votre propre compte." }, 400);
-      const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: active ? "none" : "876000h" });
-      if (error) return json({ error: error.message }, 400);
-      const { error: e2 } = await admin.from("profiles").update({ active }).eq("id", userId);
+      // l'accès est retiré dans cet établissement seulement ; le compte n'est bloqué que s'il n'a plus aucun établissement actif
+      const { error: e2 } = await admin.from("memberships").update({ active }).eq("user_id", userId).eq("establishment_id", etab);
       if (e2) return json({ error: e2.message }, 400);
+      const { data: still } = await admin.from("memberships").select("establishment_id").eq("user_id", userId).eq("active", true);
+      const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: (still ?? []).length ? "none" : "876000h" });
+      if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }
 

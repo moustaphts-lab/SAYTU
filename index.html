@@ -632,6 +632,11 @@ async function setLang(l,save){LANG=l;try{localStorage.setItem(LANG_KEY,l);if(!s
 const GLOBE=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>`;
 const LANG_NAME={fr:"Français",ar:"العربية"};
 const langBtn=()=>`<button type="button" class="btn sm langbtn" data-langpick aria-label="Langue"><span class="lgico">${GLOBE}</span><span data-notr>${LANG_NAME[LANG]}</span></button>`;
+/* personne membre de plusieurs établissements : elle choisit celui où elle travaille */
+function etabPicker(){
+  openDialog(`<h2>Établissement</h2><div class="lgopts">${(S.etabs||[]).map(e=>`<button type="submit" class="lgopt${e.current?" cur":""}" value="${e.id}"><span>${esc(e.name)}</span><i>${e.current?"✓":""}</i></button>`).join("")}</div>
+    <div class="actions"><button class="btn" value="cancel" formmethod="dialog">Fermer</button></div>`,
+    async v=>{const id=Number(v);if(id&&id!==S.etab){await q(sb.rpc("set_my_establishment",{p_etab:id}));location.reload();return "keep"}})}
 function langPicker(save){
   openDialog(`<h2>Langue de l'interface</h2><div class="lgopts">${["fr","ar"].map(l=>`<button type="submit" class="lgopt${l===LANG?" cur":""}" value="${l}" lang="${l}"><span data-notr>${LANG_NAME[l]}</span><i>${l===LANG?"✓":""}</i></button>`).join("")}</div>
     <div class="actions"><button class="btn" value="cancel" formmethod="dialog">Fermer</button></div>`,
@@ -645,7 +650,7 @@ const SAYTU_MARK=(sz,light)=>{const st=light?"#fff":"var(--accent)",cap=light?"#
 const AUTH_ART=`<svg viewBox="0 0 440 300" role="img" aria-label="Un bâtiment universitaire à colonnes, un livre ouvert devant les marches"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 270 H420" stroke-opacity=".45"/><path d="M52 270 V240" stroke-opacity=".7"/><circle cx="52" cy="222" r="20" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M390 270 V246" stroke-opacity=".7"/><circle cx="390" cy="232" r="15" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M96 122 L220 62 L344 122 Z" fill="#fff" fill-opacity=".06"/><rect x="104" y="122" width="232" height="16" rx="2"/><rect x="122" y="144" width="16" height="102" rx="2"/><rect x="168" y="144" width="16" height="102" rx="2"/><rect x="214" y="144" width="16" height="102" rx="2"/><rect x="260" y="144" width="16" height="102" rx="2"/><rect x="306" y="144" width="16" height="102" rx="2"/><path d="M100 246 H340"/><path d="M92 256 H348"/><path d="M84 266 H356"/></g><circle cx="220" cy="100" r="11" fill="#D9A441"/><path d="M220 94 V100 L224 103" fill="none" stroke="#0B5C4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 C 175 250, 205 250, 220 258 C 235 250, 265 250, 290 262 L290 290 C 265 278, 235 278, 220 286 C 205 278, 175 278, 150 290 Z" fill="#0B5C4C" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M220 258 V286" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M162 270 C 178 264, 196 264, 208 268 M162 279 C 178 273, 196 273, 208 277" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M232 268 C 244 264, 262 264, 278 270" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M262 255 V276 L267 271 L272 276 V256" fill="#D9A441" stroke="#D9A441" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").eq("id",1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
@@ -745,12 +750,16 @@ async function boot(){
   if(picked){try{await q(sb.rpc("set_my_lang",{p_lang:LANG}))}catch(e){}}
   else try{const pl=await q(sb.rpc("my_lang"));if(pl&&pl!==LANG){try{localStorage.setItem(LANG_KEY,pl)}catch(e){}location.reload();return}}catch(e){}
   try{
+    /* établissements de la personne : celui de travail, et les autres si elle en a plusieurs */
+    try{S.etabs=await q(sb.rpc("my_establishments"))||[]}catch(e){S.etabs=[]}
+    S.etab=(S.etabs.find(x=>x.current)||S.etabs[0]||{}).id||null;
     try{S.roles=await q(sb.rpc("my_scope"))}catch(e){S.roles=await q(sb.rpc("my_roles"))}
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
-    const t=await q(sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id).maybeSingle());
+    let tq=sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id);if(S.etab)tq=tq.eq("establishment_id",S.etab);
+    const t=await q(tq.maybeSingle());
     S.teacher=t;
     await loadFacs();await loadSchedule();await loadClosures();await loadAnnonces();await loadPostes();
-    try{const me=await q(sb.from("profiles").select("poste_id").eq("id",S.user.id).maybeSingle());S.myPoste=me?.poste_id||null}catch(e){S.myPoste=null}
+    try{const me=await q(sb.from("accounts").select("poste_id").eq("id",S.user.id).maybeSingle());S.myPoste=me?.poste_id||null}catch(e){S.myPoste=null}
     try{const y=await q(sb.from("academic_years").select("label").eq("is_current",true).maybeSingle());S.year=y?y.label:""}catch(e){S.year=""}
   }catch(e){toast(errMsg(e),true)}
   const tabs=availableTabs();
@@ -884,7 +893,7 @@ function renderShell(){
       ${multiFac()?`<label class="hdrfac"><span class="sr">Faculté</span><select id="hdrFac" aria-label="Faculté">${S.facs.map(f=>`<option value="${f.id}" ${f.id===S.fac?"selected":""}>${esc(f.code)}</option>`).join("")}</select></label>`:""}
       <div class="hdrend"><button type="button" class="langtop" id="langBtn" aria-label="Langue" title="Langue">${GLOBE}<span data-notr>${LANG==="ar"?"ع":"FR"}</span></button>
       <details class="menu"><summary aria-label="Mon compte"><span class="av">${esc((name||"?").trim()[0].toUpperCase())}</span><span class="nm">${esc(name)}</span></summary>
-        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p><button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div></div>
+        <div class="pop"><p><b>${esc(name)}</b>${esc(roles)}${myFacName?`<br>${esc(myFacName)}`:""}</p>${(S.etabs||[]).length>1?`<button class="btn" id="etabBtn">Changer d'établissement</button>`:""}<button class="btn" id="pwBtn">Changer mon mot de passe</button><button class="btn" id="logout">Se déconnecter</button></div></details></div></div>
     <div class="scrim" id="scrim"></div><div class="wrap"><nav class="tabs" id="mainNav" role="tablist"><div class="drawer-top">${brandHtml(S.cfg?.subtitle||"Enseignements")}<p><b style="color:var(--ink)">${esc(name)}</b><br>${esc(roles)}</p></div>${(()=>{const mixed=tabs.some(t=>t.me)&&tabs.some(t=>!t.me);let prev=null;
       return tabs.map(t=>{const g=t.me?"me":"gest";const h=mixed&&g!==prev?`<div class="navh">${g==="me"?"Mon enseignement":"Gestion"}</div>`:"";prev=g;
         return h+`<button role="tab" data-tab="${t.id}" aria-selected="${t.id===S.tab}">${tabIcon(t.id)}<span>${t.label}</span></button>`}).join("")})()}<div class="navsig">${SAYTU_MARK(20)}<span>saytu</span></div></nav></div>
@@ -901,6 +910,7 @@ function renderShell(){
   document.onkeydown=e=>{if(e.key==="Escape"){setNav(false);closeAcct()}};
   document.onclick=e=>{if(acct&&acct.open&&!acct.contains(e.target))closeAcct()};
   pwBtn.onclick=()=>{closeAcct();passwordDialog()};
+  const eb=$app.querySelector("#etabBtn");if(eb)eb.onclick=()=>{closeAcct();etabPicker()};
   const hf=document.getElementById("hdrFac");if(hf)hf.onchange=async()=>{await setFac(Number(hf.value));renderShell()};
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
   const lb=$app.querySelector("#langBtn");if(lb)lb.onclick=()=>{closeAcct();langPicker(true)};
@@ -3023,7 +3033,7 @@ async function viewEtab(v){
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);logo=c.toDataURL("image/png");URL.revokeObjectURL(url);prev()};img.onerror=()=>toast("Image illisible.",true);img.src=url};
   eLx.onclick=()=>{logo=null;eL.value="";prev()};
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
-    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("id",1).select());
+    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
   /* facultés */
@@ -3347,7 +3357,7 @@ function goAccounts(o){Object.assign(S,{accTab:o.tab||"all",accState:o.state||""
   S.tab="comptes";try{history.replaceState(null,"","#comptes")}catch(e){}renderShell()}
 async function viewAdminDash(v){
   let [profiles,roles,teachers,info,logs]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
+    q(sb.from("accounts").select("id,full_name,email,active,must_change_password,poste_id").order("full_name")),
     q(sb.from("user_roles").select("id,user_id,role,department_id")),
     q(sb.from("teachers").select("id,profile_id,first_name,last_name,active").order("last_name")),
     q(sb.rpc("admin_users_info")).catch(()=>[]),
@@ -3412,7 +3422,7 @@ async function viewAdminDash(v){
 
 async function viewAccounts(el){
   let [profiles,roles,teachers,deps,info]=await Promise.all([
-    q(sb.from("profiles").select("id,full_name,email,active,must_change_password,poste_id,faculty_id").order("full_name")),
+    q(sb.from("accounts").select("id,full_name,email,active,must_change_password,poste_id,faculty_id").order("full_name")),
     q(sb.from("user_roles").select("id,user_id,role,department_id,faculty_id")),
     q(sb.from("teachers").select("id,profile_id,first_name,last_name,email,phone,active,department_id").order("last_name")),
     q(sb.from("departments").select("id,code,name,faculty_id").order("code")),
@@ -3492,6 +3502,8 @@ async function viewAccounts(el){
       const po=readPosteForm();
       const r=await callUsers({action:"create",email:aE.value,full_name:aN.value,faculty_id:po.p_fac});
       try{await assignPoste(r.user_id,po)}catch(e){toast("Compte créé, mais le poste n'a pas pu être enregistré : "+errMsg(e),true)}
+      /* la personne a déjà un compte Saytu (autre établissement) : elle garde son mot de passe */
+      if(r.existing){toast("Compte ajouté à votre établissement. La personne se connecte avec son mot de passe habituel.");document.getElementById("dlg").close();rerender();return "keep"}
       try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
       showCredentials("Compte créé",r.email,r.temp_password);
       return "keep";
@@ -3510,10 +3522,10 @@ async function viewAccounts(el){
     async()=>{const done=[],errs=[];
       for(const t of tNoAcc){try{if(!t.email)throw new Error("pas d'adresse e-mail");
         const r=await callUsers({action:"create",email:t.email,full_name:t.first_name+" "+t.last_name,faculty_id:tFac(t)});
-        const pp=profPoste();if(pp)await assignPoste(r.user_id,{p_poste:pp.id,p_dep:null,p_teaches:false,p_fac:tFac(t)});else await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null}));
-        try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
+        const pp=profPoste();if(pp)await assignPoste(r.user_id,{p_poste:pp.id,p_dep:null,p_teaches:false,p_fac:tFac(t)});else await q(sb.from("user_roles").insert({user_id:r.user_id,role:"professeur",department_id:null,faculty_id:tFac(t)}));
+        if(!r.existing)try{await q(sb.rpc("admin_set_must_change",{p_user:r.user_id,p_value:true}))}catch(e){}
         try{await q(sb.rpc("admin_link_teacher",{p_user:r.user_id,p_teacher:t.id}))}catch(e){}
-        done.push({t,email:r.email,pwd:r.temp_password})}catch(e){errs.push(t.first_name+" "+t.last_name+" : "+errMsg(e))}}
+        done.push({t,email:r.email,pwd:r.existing?"(mot de passe habituel)":r.temp_password})}catch(e){errs.push(t.first_name+" "+t.last_name+" : "+errMsg(e))}}
       credsResult(done,errs);return "keep"});
   function credsResult(done,errs){
     const f=document.getElementById("dlgForm");
@@ -4056,7 +4068,7 @@ async function viewAudit(v){
   let qy=sb.from("audit_logs").select("*").gte("occurred_at",S.auF+"T00:00:00").lte("occurred_at",S.auT+"T23:59:59").order("occurred_at",{ascending:false}).limit(S.auLim);
   if(S.auCat)qy=qy.in("table_name",CAT[S.auCat][1]);
   if(S.auWho)qy=qy.eq("actor",S.auWho);
-  const [rows,people]=await Promise.all([q(qy),q(sb.from("profiles").select("id,full_name").order("full_name"))]);
+  const [rows,people]=await Promise.all([q(qy),q(sb.from("accounts").select("id,full_name").order("full_name"))]);
   const {say,nm}=auditText(people);
   const dt=x=>new Date(x).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"});
   v.innerHTML=`<h1>Journal des opérations</h1><p class="lead">Chaque action sensible est enregistrée avec son auteur et l'heure. Le journal ne peut pas être modifié.</p>

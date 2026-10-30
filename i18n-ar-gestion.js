@@ -1101,7 +1101,11 @@ const X={
 "le service financier": "المصلحة المالية",
 "Rapport mensuel": "التقرير الشهري",
 "brouillon, non publiée": "مسودة، غير منشورة",
-"brouillon": "مسودة"
+"brouillon": "مسودة",
+"Changer d'établissement": "تغيير المؤسسة",
+"Un compte existe déjà avec cette adresse dans votre établissement.": "يوجد حساب بهذا البريد في مؤسستك مسبقًا.",
+"Ce compte sert aussi dans un autre établissement : la personne gère elle-même son mot de passe.": "يُستعمل هذا الحساب في مؤسسة أخرى أيضًا: يدير صاحبه كلمة مروره بنفسه.",
+"Compte ajouté à votre établissement. La personne se connecte avec son mot de passe habituel.": "أُضيف الحساب إلى مؤسستك. يدخل صاحبه بكلمة مروره المعتادة."
 };
 const P=[
 [
