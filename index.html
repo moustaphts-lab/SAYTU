@@ -615,7 +615,7 @@ function startLang(){
   new MutationObserver(ms=>{if(busy)return;busy=true;try{ms.forEach(m=>{if(m.type==="characterData")trTree(m.target);else m.addedNodes.forEach(trTree)})}finally{busy=false}})
     .observe(document.body,{childList:true,subtree:true,characterData:true});
   trTree(document.body)}
-async function setLang(l,save){LANG=l;try{localStorage.setItem(LANG_KEY,l)}catch(e){}
+async function setLang(l,save){LANG=l;try{localStorage.setItem(LANG_KEY,l);if(!save)localStorage.setItem(LANG_KEY+"_pick","1")}catch(e){}
   if(save){try{await q(sb.rpc("set_my_lang",{p_lang:l}))}catch(e){}}
   location.reload()}
 const langBtn=()=>`<button type="button" class="btn sm langbtn" data-lang="${LANG==="ar"?"fr":"ar"}">${LANG==="ar"?"Français":"العربية"}</button>`;
@@ -723,7 +723,10 @@ async function boot(){
   if(!session){renderLogin();return}
   S.user=session.user;
   /* la langue suit le profil de l'utilisateur, sur tous ses appareils */
-  try{const pl=await q(sb.rpc("my_lang"));if(pl&&pl!==LANG){try{localStorage.setItem(LANG_KEY,pl)}catch(e){}location.reload();return}}catch(e){}
+  /* langue choisie sur l'écran de connexion : elle devient celle du profil ; sinon, on suit le profil */
+  let picked=false;try{picked=localStorage.getItem(LANG_KEY+"_pick")==="1";localStorage.removeItem(LANG_KEY+"_pick")}catch(e){}
+  if(picked){try{await q(sb.rpc("set_my_lang",{p_lang:LANG}))}catch(e){}}
+  else try{const pl=await q(sb.rpc("my_lang"));if(pl&&pl!==LANG){try{localStorage.setItem(LANG_KEY,pl)}catch(e){}location.reload();return}}catch(e){}
   try{
     try{S.roles=await q(sb.rpc("my_scope"))}catch(e){S.roles=await q(sb.rpc("my_roles"))}
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
@@ -882,7 +885,7 @@ function renderShell(){
   pwBtn.onclick=()=>{closeAcct();passwordDialog()};
   const hf=document.getElementById("hdrFac");if(hf)hf.onchange=async()=>{await setFac(Number(hf.value));renderShell()};
   logout.onclick=async()=>{await sb.auth.signOut();S.roles=[];S.teacher=null;renderLogin()};
-  langBtn.onclick=()=>setLang(langBtn.dataset.lang,true);
+  const lb=$app.querySelector("#langBtn");if(lb)lb.onclick=()=>{closeAcct();setLang(lb.dataset.lang,true)};
   $app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.avFor=null;try{history.replaceState(null,"","#"+S.tab)}catch(e){}renderShell()});
   const tab=tabs.find(t=>t.id===S.tab);
   /* si l'on change d'écran avant la fin du chargement, l'ancien écran est abandonné sans afficher d'erreur */
