@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="i18n-ar.js"></script>
+<script src="i18n-ar-gestion.js"></script>
 <style>
 /* Design : sobre, vert profond, grandes zones tactiles. Sur téléphone : navigation en bas, tableaux en cartes, fenêtres en feuille basse. */
 :root{
@@ -591,8 +592,11 @@ function tr(s){if(LANG!=="ar"||s==null)return s;s=String(s);
   const m=s.match(/^(\s*)([\s\S]*?)(\s*)$/),core=m[2];if(!core||!/[A-Za-zÀ-ÿ]/.test(core))return s;
   let r=TRX.get(core);
   /* texte composé « a · b · c » : chaque morceau est traduit séparément */
-  if(r==null&&core.includes(" · ")){const parts=core.split(" · "),t=parts.map(x=>trCore(x.trim())??x);if(t.some((x,i)=>x!==parts[i]))r=t.join(" · ")}
+  if(r==null&&core.includes(" · ")){const parts=core.split(" · "),t=parts.map(x=>trCore(x.trim())??x);
+    if(t.some((x,i)=>x!==parts[i])){const j=t.join(" · ");r=/[A-Za-zÀ-ÿ]{3,}/.test(j.replace(/FCFA|PDF|Excel|Wave|Orange Money/g,""))?(trCore(core)??j):j}}
   if(r==null)r=trCore(core);
+  /* texte de plusieurs phrases dont une contient un nom : chaque phrase est traduite séparément */
+  if(r==null&&/\. \S/.test(core)){const parts=core.split(/(?<=\.) (?=\S)/),t=parts.map(x=>trCore(x)??x);if(t.some((x,i)=>x!==parts[i]))r=t.join(" ")}
   return r==null?s:m[1]+r+m[3]}
 function trCore(core){let r=TRX.get(core);if(r==null)for(const [re,f] of (AR.pats||[])){const mm=core.match(re);if(mm){r=typeof f==="function"?f(...mm):core.replace(re,f);break}}return r}
 function trTree(root){if(LANG!=="ar"||!root)return;
