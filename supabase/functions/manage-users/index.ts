@@ -25,6 +25,38 @@ Deno.serve(async (req: Request) => {
   const caller = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: authHeader } },
   });
+  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return json({ error: "Requête invalide." }, 400); }
+  const action = String(body.action ?? "");
+
+  // 0. Administrateur de la plateforme : premier administrateur central d'un établissement
+  if (action === "platform_create_admin") {
+    const { data: isPlatform } = await caller.rpc("is_platform_admin");
+    if (isPlatform !== true) return json({ error: "Réservé à l'administrateur de la plateforme." }, 403);
+    const etabId = Number(body.establishment_id);
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const fullName = String(body.full_name ?? "").trim();
+    if (!etabId) return json({ error: "Établissement manquant." }, 400);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Adresse e-mail invalide." }, 400);
+    if (!fullName) return json({ error: "Le nom est obligatoire." }, 400);
+    const { data: prev } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+    let userId: string, password: string | null = null;
+    if (prev) {
+      userId = prev.id;
+      await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
+    } else {
+      password = tempPassword();
+      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
+      if (error) return json({ error: error.message }, 400);
+      userId = data.user.id;
+      await admin.from("profiles").update({ establishment_id: etabId, must_change_password: true }).eq("id", userId);
+    }
+    const { error: eA } = await caller.rpc("platform_attach_admin", { p_etab: etabId, p_user: userId });
+    if (eA) return json({ error: eA.message }, 400);
+    return password ? json({ user_id: userId, email, temp_password: password }) : json({ user_id: userId, email, existing: true });
+  }
+
   const { data: isAdmin, error: roleErr } = await caller.rpc("has_role", { r: "admin" });
   if (roleErr || isAdmin !== true) return json({ error: "Réservé à l'administrateur." }, 403);
   const { data: me } = await caller.auth.getUser();
@@ -32,11 +64,6 @@ Deno.serve(async (req: Request) => {
   // établissement de travail de l'administrateur qui appelle
   const { data: etab } = await caller.rpc("current_establishment");
   if (!etab) return json({ error: "Établissement introuvable." }, 403);
-
-  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return json({ error: "Requête invalide." }, 400); }
-  const action = String(body.action ?? "");
 
   // 2. Un administrateur de faculté n'agit que sur les comptes de sa faculté.
   const canManage = async (userId: string) => {

@@ -653,6 +653,8 @@ const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
 async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
+  /* administrateur de la plateforme sans établissement : la marque Saytu */
+  if(S.platform&&!S.etab)return `<div class="brand"><i style="background:none">${SAYTU_MARK(30)}</i><div>Saytu<small>${esc(small)}</small></div></div>`;
   return `<div class="brand">${c.logo?`<img class="blogo" src="${esc(c.logo)}" alt="">`:`<i>${esc(((c.name||"?").trim()[0]||"?").toUpperCase())}</i>`}<div>${esc(c.name)}<small>${esc(small)}</small></div></div>`}
 /* logo et lignes d'en-tête / de pied de page dans les PDF */
 /* faculté des documents : celle en cours ; son logo remplace celui de l'université s'il existe */
@@ -717,7 +719,6 @@ function renderLogin(msg){
         <p class="wolof">Saytu : « veiller sur », en wolof.</p></div>
     </aside>
     <main class="authmain"><div class="authlang">${langBtn()}</div><div class="login">
-      ${brandHtml(S.cfg?.subtitle||"Enseignements")}
       <h1>${hello}</h1>
       <p class="lead">Connectez-vous pour retrouver vos cours et vos heures.</p>
       <form class="panel" id="loginForm">
@@ -753,6 +754,7 @@ async function boot(){
     /* établissements de la personne : celui de travail, et les autres si elle en a plusieurs */
     try{S.etabs=await q(sb.rpc("my_establishments"))||[]}catch(e){S.etabs=[]}
     S.etab=(S.etabs.find(x=>x.current)||S.etabs[0]||{}).id||null;
+    try{S.platform=await q(sb.rpc("is_platform_admin"))===true}catch(e){S.platform=false}
     try{S.roles=await q(sb.rpc("my_scope"))}catch(e){S.roles=await q(sb.rpc("my_roles"))}
     try{if(await q(sb.rpc("my_must_change"))){renderForcePw();return}}catch(e){}
     let tq=sb.from("teachers").select("id,first_name,last_name").eq("profile_id",S.user.id);if(S.etab)tq=tq.eq("establishment_id",S.etab);
@@ -825,7 +827,7 @@ function grpIds(ta){return ta?[ta.group_id,...(ta.assignment_groups||[]).map(x=>
 function grpLabel(ta,code){const ex=(ta?.assignment_groups||[]).map(x=>x.student_groups?.code).filter(Boolean);return [code,...ex].filter(Boolean).join(" + ")}
 function decorateTA(ta){if(!ta||ta._g)return ta;ta._g=grpIds(ta);if(ta.student_groups)ta.student_groups={...ta.student_groups,code:grpLabel(ta,ta.student_groups.code)};return ta}
 function isProf(){return !!S.teacher&&has("professeur")}
-const TABICON={
+const TABICON={plateforme:`<path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/><path d="M9 11h.01M15 11h.01"/>`,
   calendrier:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M9 14l6 4M15 14l-6 4"/>',
   comptes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',
   dept:'<path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-4h4v4M9 11h6M9 14h6"/>',
@@ -851,6 +853,7 @@ const TABICON={
 const tabIcon=id=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABICON[id]||""}</svg>`;
 function availableTabs(){
   const t=[],reader=has("direction")||has("lecteur");
+  if(S.platform)t.push({id:"plateforme",label:"Établissements",fn:viewPlatform});
   if(isCentralReader())t.push({id:"compare",label:"Comparaison des facultés",fn:viewCompare});
   if(reader)t.push({id:"synthdg",label:"Synthèse",fn:viewDgSynth});
   if(reader)t.push({id:"suividg",label:"Suivi des enseignements",fn:viewDgSuivi});
@@ -885,7 +888,7 @@ function renderShell(){
   /* rattachement de la personne, en toutes lettres : sa faculté, ou l'université */
   const myFacName=S.facs&&S.facs.length?(myFac.length===1&&myFac[0]!=null?(facById(myFac[0])?.name||facCode(myFac[0])):myFac.includes(null)&&!(S.roles||[]).every(r=>r.role==="professeur")?"Université":""):"";
   /* faculté affichée en haut : celle en cours */
-  const curFac=facById(S.fac),yr="Année universitaire "+(S.year||"");
+  const curFac=facById(S.fac),yr=S.platform&&!S.etab?"Plateforme":"Année universitaire "+(S.year||"");
   $app.innerHTML=`<header class="top"><div class="wrap bar">
       <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mainNav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       ${brandHtml(curFac?curFac.name+" · "+(S.year||""):yr)}
@@ -2945,6 +2948,42 @@ function showCredentials(title,email,pwd){
     <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="cpPwd">Copier</button><button class="btn primary" value="cancel">Fermer</button></div>`;
   document.getElementById("cpPwd").onclick=async()=>{try{await navigator.clipboard.writeText(pwd);toast("Copié")}catch(e){const r=document.createRange();r.selectNodeContents(document.getElementById("tmpPwd"));const s=getSelection();s.removeAllRanges();s.addRange(r)}};
   document.getElementById("dlg").addEventListener("close",()=>rerender(),{once:true});
+}
+
+/* ---------- administrateur de la plateforme : les établissements (fiche et activité, jamais leurs données) ---------- */
+const MODELS={publique:"Université publique",privee:"Université privée",ecole:"École ou institut"};
+async function viewPlatform(v){
+  const L=await q(sb.rpc("platform_establishments"))||[];
+  const dt=x=>x?new Date(x).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}):"—";
+  v.innerHTML=`<h1>Établissements</h1><p class="lead">Les établissements qui utilisent Saytu. Vous voyez leur fiche et leur activité, jamais leurs données : chacun se gère lui-même avec son administrateur central.</p>
+    <div class="row" style="margin-bottom:12px"><button class="btn primary" id="pfNew">+ Nouvel établissement</button></div>
+    <div class="tbl"><table><thead><tr><th>Établissement</th><th>Code</th><th class="num">Comptes actifs</th><th class="num">Facultés</th><th class="num">Administrateurs</th><th>Dernière connexion</th><th>Créé le</th><th>État</th><th></th></tr></thead><tbody>
+    ${L.map(e=>`<tr><td data-label="Établissement"><b data-notr>${esc(e.name)}</b></td><td data-label="Code" class="mono">${esc(e.code)}</td><td data-label="Comptes actifs" class="num">${e.comptes}</td><td data-label="Facultés" class="num">${e.facultes}</td><td data-label="Administrateurs" class="num">${e.administrateurs}</td><td data-label="Dernière connexion">${dt(e.derniere_connexion)}</td><td data-label="Créé le">${dt(e.created_at)}</td>
+      <td data-label="État">${e.active?`<span class="pill p-ok">Actif</span>`:`<span class="pill p-bad">Désactivé</span>`}</td>
+      <td><div class="row" style="gap:6px"><button class="btn sm" data-pfadm="${e.id}">+ Administrateur</button><button class="btn sm" data-pfact="${e.id}" data-on="${e.active?0:1}">${e.active?"Désactiver":"Réactiver"}</button></div></td></tr>`).join("")}
+    </tbody></table></div>`;
+  const adminForm=()=>`<label>Nom complet de l'administrateur central<input id="pfAN" required></label><label>Son adresse e-mail<input id="pfAE" type="email" required></label>`;
+  const createAdmin=async(etab)=>{const r=await callUsers({action:"platform_create_admin",establishment_id:etab,email:pfAE.value,full_name:pfAN.value});
+    if(r.existing){toast("Compte ajouté comme administrateur central. La personne se connecte avec son mot de passe habituel.");document.getElementById("dlg").close();rerender();return}
+    showCredentials("Administrateur central créé",r.email,r.temp_password)};
+  pfNew.onclick=()=>openDialog(`<h2>Nouvel établissement</h2>
+    <label>Nom de l'établissement<input id="pfN" required placeholder="Ex. Université de Thiès"></label>
+    <label>Code (court, sans espace)<input id="pfC" required maxlength="20" placeholder="Ex. UT"></label>
+    <label>Modèle de départ<select id="pfM">${Object.entries(MODELS).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select></label>
+    <p class="sub" style="margin:0">Le modèle donne les postes et les statuts d'enseignants de départ ; l'établissement les ajuste ensuite. Une école ou un institut reçoit une faculté unique à son nom.</p>
+    ${adminForm()}
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Créer l'établissement</button></div>`,
+    async()=>{const id=await q(sb.rpc("platform_create_establishment",{p_code:pfC.value,p_name:pfN.value,p_model:pfM.value}));await createAdmin(id);return "keep"});
+  v.querySelectorAll("[data-pfadm]").forEach(b=>b.onclick=()=>openDialog(`<h2>Ajouter un administrateur central</h2>
+    <p class="sub" style="margin:0">Par exemple si l'établissement a perdu l'accès à son administrateur.</p>${adminForm()}
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Ajouter</button></div>`,
+    async()=>{await createAdmin(Number(b.dataset.pfadm));return "keep"}));
+  const setAct=async(id,on)=>{await q(sb.rpc("platform_set_active",{p_id:id,p_active:on}));toast(on?"Établissement réactivé":"Établissement désactivé");rerender()};
+  v.querySelectorAll("[data-pfact]").forEach(b=>b.onclick=()=>{const on=b.dataset.on==="1",id=Number(b.dataset.pfact);
+    if(on){setAct(id,true).catch(e=>toast(errMsg(e),true));return}
+    openDialog(`<h3>Désactiver cet établissement ?</h3><p style="margin:0">Plus aucun de ses membres ne pourra y accéder. Ses données sont conservées et l'établissement peut être réactivé.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn danger" value="ok">Désactiver</button></div>`,
+      async()=>{await setAct(id,false)})});
 }
 
 /* fenêtre de création ou de modification d'une faculté */
