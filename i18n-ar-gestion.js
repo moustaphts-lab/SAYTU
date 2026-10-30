@@ -30,6 +30,8 @@ const X={
 "Action": "الإجراء",
 "Activité récente": "النشاط الأخير",
 "Activité": "النشاط",
+"Nom donné aux facultés dans Saytu": "الاسم المعطى للكليات في Saytu",
+"Vocabulaire enregistré": "تم حفظ المصطلحات",
 "Administrateur (comptes)": "مهندس النظام (الحسابات)",
 "Administration des comptes": "إدارة الحسابات",
 "Adresse": "العنوان",

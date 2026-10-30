@@ -25,7 +25,7 @@ function visual(s){
 
 const clean=s=>String(s).replace(/[⁦-⁩‎‏]/g,"").replace(/⁠/g,"").replace(/\u202f/g,"\u00a0").replace(/\u2248/g,"~").replace(/\u2713\s?/g,"").replace(/(\d)\s*–\s*(\d)/g,"$1-$2");
 function arLine(doc,s){
-  s=clean(typeof tr==="function"?tr(String(s)):String(s));
+  s=clean(typeof tv==="function"?tv(String(s)):String(s));
   s=s.replace(/(^|\s)(virement|espèces|chèque)(?=\s|$)/g,(_,p,w)=>p+({virement:"تحويل بنكي","espèces":"نقدًا","chèque":"شيك"})[w]);
   s=s.replace(/\b(\d+) h (\d{2})\b/g,"$1 س $2 د").replace(/\b(\d+) h\b/g,"$1 س");
   if(!AR.test(s))return s;
@@ -42,12 +42,12 @@ function arabize(doc){
   const o={text:doc.text,setFont:doc.setFont,rect:doc.rect,roundedRect:doc.roundedRect,line:doc.line,addImage:doc.addImage,circle:doc.circle,ellipse:doc.ellipse,getTextWidth:doc.getTextWidth,splitTextToSize:doc.splitTextToSize};
   doc.setFont=function(f,st){return o.setFont.call(doc,"SaytuAR",/bold/i.test(st||"")?"bold":"normal")};
   doc.setFont("SaytuAR","normal");
-  doc.splitTextToSize=function(t,w,opt){const tt=Array.isArray(t)?t.map(x=>clean(typeof tr==="function"?tr(String(x)):String(x))):clean(typeof tr==="function"?tr(String(t)):String(t));return o.splitTextToSize.call(doc,tt,w,opt)};
+  doc.splitTextToSize=function(t,w,opt){const tt=Array.isArray(t)?t.map(x=>clean(typeof tv==="function"?tv(String(x)):String(x))):clean(typeof tv==="function"?tv(String(t)):String(t));return o.splitTextToSize.call(doc,tt,w,opt)};
   doc.text=function(t,x,y,opt,trans){
     opt=Object.assign({},opt||{});
     const conv=v=>Array.isArray(v)?v.map(conv):arLine(doc,v);
     let lines=conv(t);
-    if(opt.maxWidth&&!Array.isArray(lines)){const raw=clean(typeof tr==="function"?tr(String(t)):String(t));lines=o.splitTextToSize.call(doc,raw,opt.maxWidth).map(l=>arLine(doc,l));delete opt.maxWidth}
+    if(opt.maxWidth&&!Array.isArray(lines)){const raw=clean(typeof tv==="function"?tv(String(t)):String(t));lines=o.splitTextToSize.call(doc,raw,opt.maxWidth).map(l=>arLine(doc,l));delete opt.maxWidth}
     const a=opt.align||"left";opt.align=a==="left"?"right":a==="right"?"left":a;
     opt.isInputVisual=true;opt.isOutputVisual=true;opt.isInputRtl=false;opt.isOutputRtl=false;
     return o.text.call(doc,lines,W()-x,y,opt,trans)};
@@ -63,16 +63,24 @@ function arabize(doc){
     const fix=s=>Object.assign({},s||{},{font:"SaytuAR"});
     opts.styles=fix(opts.styles);opts.headStyles=Object.assign({},opts.headStyles||{},{font:"SaytuAR"});
     const prev=opts.didParseCell;
-    opts.didParseCell=function(d){d.cell.text=(d.cell.text||[]).map(x=>clean(typeof tr==="function"?tr(String(x)):String(x)));if(prev)prev(d)};
+    opts.didParseCell=function(d){d.cell.text=(d.cell.text||[]).map(x=>clean(typeof tv==="function"?tv(String(x)):String(x)));if(prev)prev(d)};
     return at.call(doc,opts)};
   return doc}
 
+/* en français, vocabulaire de l'établissement (UFR, école, institut) dans les textes du PDF */
+function vocalize(doc){const V=x=>typeof vocFr==="function"?vocFr(x):x,o={text:doc.text,splitTextToSize:doc.splitTextToSize,autoTable:doc.autoTable};
+  const map=t=>Array.isArray(t)?t.map(x=>typeof x==="string"?V(x):x):(typeof t==="string"?V(t):t);
+  doc.text=function(t,...r){return o.text.call(doc,map(t),...r)};
+  doc.splitTextToSize=function(t,...r){return o.splitTextToSize.call(doc,map(t),...r)};
+  if(o.autoTable)doc.autoTable=function(opts){opts=Object.assign({},opts);const prev=opts.didParseCell;
+    opts.didParseCell=function(d){d.cell.text=(d.cell.text||[]).map(x=>V(String(x)));if(prev)prev(d)};return o.autoTable.call(doc,opts)};
+  return doc}
 /* en arabe, chaque « new jsPDF(...) » de l'application rend un document déjà arabisé */
 function hook(){const J=window.jspdf;if(!J||J.__arHook)return;J.__arHook=true;const Orig=J.jsPDF;
   /* la mise en forme arabe est faite ici, avant le calcul de l'ordre d'affichage : celle de jsPDF, appliquée ensuite
      au texte déjà retourné, formerait de fausses ligatures (lam-alif) ; on la retire */
   const pa=Orig.API.processArabic;if(pa&&Array.isArray(Orig.API.events)){for(let i=Orig.API.events.length-1;i>=0;i--){const e=Orig.API.events[i];if(e&&e[0]==="preProcessText"&&e[1]===pa)Orig.API.events.splice(i,1)}}
-  const Wrapped=function(...a){const d=new Orig(...a);return (typeof LANG!=="undefined"&&LANG==="ar")?(fontData?arabize(d):(()=>{throw new Error("جارٍ تحميل الخط العربي، أعد المحاولة بعد لحظة.")})()):d};
+  const Wrapped=function(...a){const d=new Orig(...a);return (typeof LANG!=="undefined"&&LANG==="ar")?(fontData?arabize(d):(()=>{throw new Error("جارٍ تحميل الخط العربي، أعد المحاولة بعد لحظة.")})()):((typeof VOC!=="undefined"&&VOC!=="faculte")?vocalize(d):d)};
   Wrapped.API=Orig.API;Wrapped.version=Orig.version;Object.setPrototypeOf(Wrapped,Orig);J.jsPDF=Wrapped}
 window.SAYTU_PDF={hook,loadFonts,arabize,visual,
   /* à appeler juste après « new jsPDF(...) » : ne fait rien en français */

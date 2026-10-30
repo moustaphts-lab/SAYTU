@@ -601,15 +601,50 @@ function tr(s){if(LANG!=="ar"||s==null)return s;s=String(s);
   if(r==null&&/\. \S/.test(core)){const parts=core.split(/(?<=\.) (?=\S)/),t=parts.map(x=>trCore(x)??x);if(t.some((x,i)=>x!==parts[i]))r=t.join(" ")}
   return r==null?s:m[1]+r+m[3]}
 function trCore(core){let r=TRX.get(core);if(r==null)for(const [re,f] of (AR.pats||[])){const mm=core.match(re);if(mm){r=typeof f==="function"?f(...mm):core.replace(re,f);break}}return r}
-function trTree(root){if(LANG!=="ar"||!root)return;
-  if(root.nodeType===3){const v=tr(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v;return}
+/* vocabulaire de l'établissement : « faculté » ou UFR, école, institut (réglé par l'administrateur central).
+   Le mot est remplacé à l'affichage, après la traduction, dans les écrans, les PDF et les titres des fichiers Excel. */
+let VOC="faculte";
+const VOCOPT=[["faculte","Faculté (faculté, doyen)","كلية (الكلية، العميد)"],["ufr","UFR (UFR, directeur)","وحدة التكوين والبحث (المدير)"],["ecole","École (école, directeur)","مدرسة (المدرسة، المدير)"],["institut","Institut (institut, directeur)","معهد (المعهد، المدير)"]];
+const VOCW={ufr:{w:"UFR",W:"UFR",p:"UFR",P:"UFR",m:0},ecole:{w:"école",W:"École",p:"écoles",P:"Écoles",m:0},institut:{w:"institut",W:"Institut",p:"instituts",P:"Instituts",m:1}};
+const VB="(?<![\\wÀ-ÿ'’])",VE="(?![\\wÀ-ÿ])";
+const vre=x=>new RegExp(VB+x+VE,"g");
+const VOCFR=(()=>{const R={};for(const [k,o] of Object.entries(VOCW)){const m=o.m;R[k]=[
+  [vre("([Ll])a nouvelle faculté"),(_,l)=>m?(l==="L"?"Le":"le")+" nouvel "+o.w:l+"a nouvelle "+o.w],
+  [vre("([Nn])ouvelle faculté"),(_,n)=>n+(m?"ouvel ":"ouvelle ")+o.w],
+  [vre("([Uu])ne faculté"),(_,u)=>u+(m?"n ":"ne ")+o.w],
+  [vre("([Aa])ucune faculté"),(_,a)=>a+(m?"ucun ":"ucune ")+o.w],
+  [vre("([Cc])ette faculté"),(_,c)=>c+(m?"et ":"ette ")+o.w],
+  [vre("([Tt])oute la faculté"),(_,t)=>t+(m?"out l'":"oute l'")+o.w],
+  [vre("([Ll])a faculté"),(_,l)=>l+"'"+o.w],
+  [vre("([Ss])a faculté"),(_,x)=>x+"on "+o.w],
+  [vre("([Dd])e facultés"),(_,d)=>d+"'"+o.p],
+  [vre("([Dd])e faculté"),(_,d)=>d+"'"+o.w],
+  [vre("([Ff])aculté (supprimée|enregistrée|créée|rattachée|sélectionnée|choisie|concernée)"),(_,f,a)=>(f==="F"?o.W:o.w)+" "+(m?a.slice(0,-1):a)],
+  [/Elle n'a aucun département\. Ses horaires et ses jours sans cours sont supprimés avec elle\./g,()=>m?"Il n'a aucun département. Ses horaires et ses jours sans cours sont supprimés avec lui.":"Elle n'a aucun département. Ses horaires et ses jours sans cours sont supprimés avec elle."],
+  [vre("Facultés"),()=>o.P],[vre("facultés"),()=>o.p],[vre("Faculté"),()=>o.W],[vre("faculté"),()=>o.w],
+  [vre("Doyens"),()=>"Directeurs"],[vre("doyens"),()=>"directeurs"],[vre("Doyen"),()=>"Directeur"],[vre("doyen"),()=>"directeur"]]}return R})();
+const VOCAR={
+  ecole:[[/الكليات/g,"المدارس"],[/كليات/g,"مدارس"],[/كليت/g,"مدرست"],[/كلية/g,"مدرسة"],[/العميد/g,"المدير"]],
+  institut:[[/لا توجد كلية/g,"لا يوجد معهد"],[/الكلية الجديدة/g,"المعهد الجديد"],[/كلية جديدة/g,"معهد جديد"],[/تتلقى الكلية/g,"يتلقى المعهد"],
+    [/لكل كلية أقسامها وقاعاتها وسداسياتها وتوقيتاتها/g,"لكل معهد أقسامه وقاعاته وسداسياته وتوقيتاته"],[/لكل كلية سداسياتها وتواريخها/g,"لكل معهد سداسياته وتواريخه"],
+    [/تضيف كل كلية أيامها/g,"يضيف كل معهد أيامه"],[/لتفاصيل كلية، اخترها/g,"لتفاصيل معهد، اختره"],[/اسم كليتك وشعارها/g,"اسم معهدك وشعاره"],[/ما زالت للكلية/g,"ما زال للمعهد"],
+    [/الكليات/g,"المعاهد"],[/كليات/g,"معاهد"],[/كليتك/g,"معهدك"],[/كليتي/g,"معهدي"],[/كلية/g,"معهد"],[/العميد/g,"المدير"]],
+  ufr:[[/الكليات/g,"وحدات التكوين والبحث"],[/كليات/g,"وحدات تكوين وبحث"],[/للكلية/g,"لوحدة التكوين والبحث"],[/الكلية/g,"وحدة التكوين والبحث"],
+    [/كليتك/g,"وحدة التكوين والبحث الخاصة بك"],[/كليتي/g,"وحدة التكوين والبحث الخاصة بي"],[/كلية/g,"وحدة تكوين وبحث"],[/العميد/g,"المدير"]]};
+function vocFr(s){if(VOC==="faculte"||s==null)return s;s=String(s);if(!/[Ff]acult|[Dd]oyen|Elle n'a/.test(s))return s;for(const [re,f] of VOCFR[VOC])s=s.replace(re,f);return s}
+function voc(s){if(VOC==="faculte"||s==null)return s;if(LANG!=="ar")return vocFr(s);s=String(s);if(!/كلي|العميد/.test(s))return s;for(const [re,f] of VOCAR[VOC])s=s.replace(re,f);return s}
+/* texte affiché : traduit (arabe), puis au vocabulaire de l'établissement */
+const tv=s=>voc(tr(s));
+function setVocab(w){const n=VOCW[w]?w:"faculte";if(n===VOC)return;VOC=n;try{if(window.SAYTU_PDF)SAYTU_PDF.hook()}catch(e){}startObserver()}
+function trTree(root){if((LANG!=="ar"&&VOC==="faculte")||!root)return;
+  if(root.nodeType===3){const v=tv(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v;return}
   if(root.nodeType!==1&&root.nodeType!==11)return;
   if(root.nodeType===1&&(root.closest&&root.closest("script,style,textarea,[data-notr]")))return;
   const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement&&n.parentElement.closest("script,style,textarea,[data-notr]")?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
   const L=[];while(w.nextNode())L.push(w.currentNode);
-  L.forEach(n=>{const v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  L.forEach(n=>{const v=tv(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
   const els=root.nodeType===1?[root,...root.querySelectorAll("[placeholder],[title],[aria-label],input[type=button],input[type=submit]")]:[...root.querySelectorAll("[placeholder],[title],[aria-label]")];
-  els.forEach(e=>{["placeholder","title","aria-label"].forEach(a=>{const v=e.getAttribute&&e.getAttribute(a);if(v){const t=tr(v);if(t!==v)e.setAttribute(a,t)}})})}
+  els.forEach(e=>{["placeholder","title","aria-label"].forEach(a=>{const v=e.getAttribute&&e.getAttribute(a);if(v){const t=tv(v);if(t!==v)e.setAttribute(a,t)}})})}
 function startLang(){
   document.documentElement.lang=LANG;document.documentElement.dir=LANG==="ar"?"rtl":"ltr";
   if(LANG!=="ar")return;
@@ -621,10 +656,12 @@ function startLang(){
   const fix=l=>(!l||l==="fr-FR"||l==="fr")?"ar-u-nu-latn":l;
   ["toLocaleDateString","toLocaleString","toLocaleTimeString"].forEach(k=>{const o=Date.prototype[k];Date.prototype[k]=function(l,opt){const op=opt&&(opt.timeStyle||opt.hour)?{...opt,hourCycle:"h23"}:opt;return o.call(this,fix(l),op)}});
   ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"].forEach((d,i)=>{DAYS[i+1]=d});
-  let busy=false;
-  new MutationObserver(ms=>{if(busy)return;busy=true;try{ms.forEach(m=>{if(m.type==="characterData")trTree(m.target);else m.addedNodes.forEach(trTree)})}finally{busy=false}})
-    .observe(document.body,{childList:true,subtree:true,characterData:true});
-  trTree(document.body)}
+  startObserver()}
+/* traduction et vocabulaire appliqués à tout ce qui s'affiche */
+let OBS=null;
+function startObserver(){trTree(document.body);if(OBS)return;let busy=false;
+  OBS=new MutationObserver(ms=>{if(busy)return;busy=true;try{ms.forEach(m=>{if(m.type==="characterData")trTree(m.target);else m.addedNodes.forEach(trTree)})}finally{busy=false}});
+  OBS.observe(document.body,{childList:true,subtree:true,characterData:true})}
 async function setLang(l,save){LANG=l;try{localStorage.setItem(LANG_KEY,l);if(!save)localStorage.setItem(LANG_KEY+"_pick","1")}catch(e){}
   if(save){try{await q(sb.rpc("set_my_lang",{p_lang:l}))}catch(e){}}
   location.reload()}
@@ -650,8 +687,8 @@ const SAYTU_MARK=(sz,light)=>{const st=light?"#fff":"var(--accent)",cap=light?"#
 const AUTH_ART=`<svg viewBox="0 0 440 300" role="img" aria-label="Un bâtiment universitaire à colonnes, un livre ouvert devant les marches"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 270 H420" stroke-opacity=".45"/><path d="M52 270 V240" stroke-opacity=".7"/><circle cx="52" cy="222" r="20" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M390 270 V246" stroke-opacity=".7"/><circle cx="390" cy="232" r="15" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M96 122 L220 62 L344 122 Z" fill="#fff" fill-opacity=".06"/><rect x="104" y="122" width="232" height="16" rx="2"/><rect x="122" y="144" width="16" height="102" rx="2"/><rect x="168" y="144" width="16" height="102" rx="2"/><rect x="214" y="144" width="16" height="102" rx="2"/><rect x="260" y="144" width="16" height="102" rx="2"/><rect x="306" y="144" width="16" height="102" rx="2"/><path d="M100 246 H340"/><path d="M92 256 H348"/><path d="M84 266 H356"/></g><circle cx="220" cy="100" r="11" fill="#D9A441"/><path d="M220 94 V100 L224 103" fill="none" stroke="#0B5C4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 C 175 250, 205 250, 220 258 C 235 250, 265 250, 290 262 L290 290 C 265 278, 235 278, 220 286 C 205 278, 175 278, 150 290 Z" fill="#0B5C4C" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M220 258 V286" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M162 270 C 178 264, 196 264, 208 268 M162 279 C 178 273, 196 273, 208 277" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M232 268 C 244 264, 262 264, 278 270" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M262 255 V276 L267 271 L272 276 V256" fill="#D9A441" stroke="#D9A441" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
-  document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights,unit_word").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+  setVocab(S.cfg.unit_word);document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   /* administrateur de la plateforme sans établissement : la marque Saytu */
   if(S.platform&&!S.etab)return `<div class="brand"><i style="background:none">${SAYTU_MARK(30)}</i><div>Saytu<small>Plateforme</small></div></div>`;
@@ -2424,9 +2461,9 @@ function exportExcel(file,sheets){
     if(!window.XLSX)throw new Error("Le module Excel n'a pas pu être chargé. Vérifiez la connexion et rechargez la page.");
     const wb=XLSX.utils.book_new();
     sheets.forEach(s=>{
-      const ws=XLSX.utils.aoa_to_sheet([[s.title||s.name],[s.subtitle||""],[],s.head,...s.rows]);
+      const ws=XLSX.utils.aoa_to_sheet([[vocFr(s.title||s.name)],[vocFr(s.subtitle||"")],[],s.head.map(vocFr),...s.rows]);
       ws["!cols"]=s.head.map((h,c)=>({wch:Math.min(42,Math.max(String(h).length,...s.rows.map(r=>String(r[c]??"").length))+2)}));
-      XLSX.utils.book_append_sheet(wb,ws,String(s.name).replace(/[\\\/?*\[\]:]/g,"-").slice(0,31));
+      XLSX.utils.book_append_sheet(wb,ws,String(vocFr(s.name)).replace(/[\\\/?*\[\]:]/g,"-").slice(0,31));
     });
     XLSX.writeFile(wb,file+".xlsx");
   }catch(e){toast(errMsg(e),true)}
@@ -3050,6 +3087,8 @@ async function viewEtab(v){
 
     <section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Facultés</h2><button class="btn sm primary" id="fNew">Nouvelle faculté</button></div>
       <p class="sub" style="margin:6px 0 10px">Chaque faculté a ses départements, ses salles, ses semestres, ses horaires et ses jours sans cours. Son nom et son logo figureront avec ceux de l'université sur ses documents.</p>
+      <div class="row" style="align-items:flex-end;gap:10px;margin:0 0 12px"><label style="max-width:320px">Nom donné aux facultés dans Saytu<select id="eW" data-notr>${VOCOPT.map(([k,f,a])=>`<option value="${k}" ${(cfg.unit_word||"faculte")===k?"selected":""}>${LANG==="ar"?a:f}</option>`).join("")}</select></label>
+        <button type="button" class="btn sm" id="eWs">Enregistrer</button></div>
       <div class="rl">${facs.map(f=>{const nd=depsAll.filter(d=>d.faculty_id===f.id).length;return `<div class="rlrow" style="align-items:center"><div style="display:flex;gap:10px;align-items:center;flex:1">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)} · ${nd} département(s) · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""}</div></div></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-fe="${f.id}">Modifier</button>${nd||facs.length<2?"":`<button class="btn sm danger" data-fd="${f.id}">Supprimer</button>`}</div></div>`}).join("")}</div></section>
 
@@ -3087,6 +3126,9 @@ async function viewEtab(v){
     try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
+  /* vocabulaire : faculté, UFR, école ou institut, partout dans l'application */
+  eWs.onclick=async()=>{try{const r=await q(sb.from("app_settings").update({unit_word:eW.value,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
+    if(!r.length)throw new Error("Enregistrement refusé.");toast("Vocabulaire enregistré");setTimeout(()=>location.reload(),600)}catch(e){toast(errMsg(e),true)}};
   /* facultés */
   const facDlg=f=>facultyDialog(f);
   fNew.onclick=()=>facDlg(null);
