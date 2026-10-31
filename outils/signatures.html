@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signatures des bibliothèques</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:20px 16px;max-width:720px;margin-inline:auto;color:#16202e;background:#f4f6f5}
+h1{font-size:20px;color:#0B5C4C;margin:0 0 6px}p{margin:6px 0}
+button{font:inherit;padding:14px 18px;border:0;border-radius:12px;background:#0B5C4C;color:#fff;width:100%;margin:12px 0 6px}
+button.sec{background:#fff;color:#0B5C4C;border:1px solid #0B5C4C}
+textarea{width:100%;box-sizing:border-box;min-height:230px;font:13px/1.4 ui-monospace,monospace;padding:10px;border:1px solid #cfd6de;border-radius:10px}
+.ok{color:#0B5C4C}.ko{color:#b23a3a}
+</style></head><body>
+<h1>Signatures des bibliothèques</h1>
+<p>Page temporaire. Appuyez sur « Calculer », puis sur « Copier », et collez le résultat dans la conversation.</p>
+<button id="go">Calculer</button>
+<p id="etat" aria-live="polite"></p>
+<textarea id="out" readonly placeholder="Le résultat apparaîtra ici"></textarea>
+<button class="sec" id="cp">Copier le résultat</button>
+<script>
+const LIBS=[
+ ["supabase-js 2.45.4","https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"],
+ ["jspdf 2.5.1","https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"],
+ ["jspdf-autotable 3.8.2","https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"],
+ ["xlsx 0.18.5","https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"]];
+const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
+async function hash(url){
+  const r=await fetch(url,{mode:"cors",cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);
+  const a=await r.arrayBuffer();
+  const h1=b64(await crypto.subtle.digest("SHA-384",a)),h2=b64(await crypto.subtle.digest("SHA-384",a));
+  return {size:a.byteLength,sri:"sha384-"+h1,stable:h1===h2}}
+go.onclick=async()=>{go.disabled=true;out.value="";etat.className="";etat.textContent="Calcul en cours…";const L=[];let bad=0;
+  for(const [n,u] of LIBS){try{const x=await hash(u);L.push(n+" | "+x.size+" octets | "+x.sri+" | "+u)}catch(e){bad++;L.push(n+" | ERREUR "+e.message+" | "+u)}}
+  out.value=L.join("\n");etat.className=bad?"ko":"ok";etat.textContent=bad?bad+" erreur(s) : réessayez avec le réseau mobile ou le Wi-Fi.":"Terminé : "+LIBS.length+" signatures.";go.disabled=false};
+cp.onclick=async()=>{out.select();try{await navigator.clipboard.writeText(out.value);etat.className="ok";etat.textContent="Copié."}catch(e){etat.textContent="Sélectionnez le texte et copiez-le à la main."}};
+</script></body></html>

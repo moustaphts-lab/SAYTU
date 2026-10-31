@@ -7,7 +7,7 @@ def lire_entetes():
     h={};dans=False
     for l in open(os.path.join(ROOT,"_headers"),encoding="utf-8"):
         if l.startswith("#") or not l.strip(): continue
-        if not l.startswith(" "): dans=l.strip()=="/*"; continue
+        if not l.startswith(" "): dans=l.strip() in ("/index.html","/*"); continue
         if dans:
             k,v=l.strip().split(":",1);h[k.strip()]=v.strip()
     return h

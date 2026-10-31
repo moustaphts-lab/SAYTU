@@ -1,9 +1,14 @@
 # En-têtes de sécurité (Cloudflare Pages). Test local : tests/ui/test_csp.py
-# Content-Security-Policy : seuls ce site, les 4 bibliothèques (jsdelivr, cdnjs), les polices Google et la base Supabase sont autorisés.
-# 'unsafe-inline' est nécessaire tant que l'application tient dans un seul index.html avec ses scripts et styles intégrés.
-/*
+# La politique de contenu (CSP) ne s'applique qu'à la page de l'application ; elle n'autorise que ce site, les 4 bibliothèques
+# (jsdelivr, cdnjs), les polices Google et la base Supabase. 'unsafe-inline' est nécessaire tant que l'application tient dans un seul
+# index.html avec ses scripts et styles intégrés.
+/
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://fkfuviwquoacpehmctsn.supabase.co wss://fkfuviwquoacpehmctsn.supabase.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
-  X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
+/index.html
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://fkfuviwquoacpehmctsn.supabase.co wss://fkfuviwquoacpehmctsn.supabase.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+/*
+  X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
