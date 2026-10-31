@@ -37,7 +37,7 @@ with sync_playwright() as p:
         elif u.startswith("http://127.0.0.1"): r.continue_()
         elif "evil.example" in u: r.abort()
         else: r.fulfill(body="",content_type="text/css" if "css" in u else "application/javascript")
-    pg.route("**/*",h);pg.goto(f"http://127.0.0.1:{port}/index.html");pg.wait_for_timeout(1500)
+    pg.route("**/*",h);pg.goto(f"http://127.0.0.1:{port}/.index-test.html");pg.wait_for_timeout(1500)
     ecran_connexion=pg.locator("form#loginForm").count()==1
     pg.evaluate("""()=>{window.__tb={schedule_sessions:[],absence_requests:[],availability_weeks:[],published_weeks:[],attendance_records:[],teacher_availability:[],
         faculties:[{id:1,code:'F',name:'Faculté X',short_name:'X'}],postes:[{id:1,name:'Professeur',roles:['professeur'],scope:'faculte',sort:1}]};

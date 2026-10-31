@@ -37,3 +37,4 @@ chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas con
 - `db/droits_fonctions.sql` : un visiteur ne doit pouvoir exécuter que `login_demo()`.
 - `ui/test_jour_arabe.py` : en arabe, le jour abrégé s'écrit « الخميس » (jamais « خميس », forme abrégée de Safari).
 - `ui/test_entete_arabe.py` : profil et bouton de langue au bord de fin de la barre du haut (à gauche en arabe, à droite en français).
+- `ui/test_signatures.py` : les 4 bibliothèques externes portent une signature (SRI) ; les copies locales (jsPDF) correspondent.

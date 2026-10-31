@@ -1,2 +1,4 @@
 tests/ui/out/
 fn.ts
+.index-test.html
+__pycache__/
