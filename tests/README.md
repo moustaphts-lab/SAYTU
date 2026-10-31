@@ -29,3 +29,9 @@ la différence doit être vide pour les comptes de l'UCAB.
 
 Les essais de règles métier (conflits de salles, visa, suppression d'un établissement vide…) ont été faits dans la base,
 chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas conservés comme scripts : à refaire de la même façon si besoin.
+
+## Ajouts de l'audit du 31/10/2026
+- `ui/test_csp.py` : sert l'application avec les en-têtes de `_headers` ; aucune violation attendue, et les appels vers un site tiers (script, requête, image, formulaire) doivent être bloqués.
+- `ui/test_connexion_demo.py` : comptes de démonstration de l'écran de connexion, y compris quand la lecture des réglages est refusée au visiteur.
+- `functions/lancer.sh` : teste `manage-users` avec un faux client Supabase (Node 22+).
+- `db/droits_fonctions.sql` : un visiteur ne doit pouvoir exécuter que `login_demo()`.
