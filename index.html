@@ -689,7 +689,7 @@ const SAYTU_MARK=(sz,light)=>{const st=light?"#fff":"var(--accent)",cap=light?"#
 const AUTH_ART=`<svg viewBox="0 0 440 300" role="img" aria-label="Un bâtiment universitaire à colonnes, un livre ouvert devant les marches"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 270 H420" stroke-opacity=".45"/><path d="M52 270 V240" stroke-opacity=".7"/><circle cx="52" cy="222" r="20" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M390 270 V246" stroke-opacity=".7"/><circle cx="390" cy="232" r="15" fill="#fff" fill-opacity=".07" stroke-opacity=".7"/><path d="M96 122 L220 62 L344 122 Z" fill="#fff" fill-opacity=".06"/><rect x="104" y="122" width="232" height="16" rx="2"/><rect x="122" y="144" width="16" height="102" rx="2"/><rect x="168" y="144" width="16" height="102" rx="2"/><rect x="214" y="144" width="16" height="102" rx="2"/><rect x="260" y="144" width="16" height="102" rx="2"/><rect x="306" y="144" width="16" height="102" rx="2"/><path d="M100 246 H340"/><path d="M92 256 H348"/><path d="M84 266 H356"/></g><circle cx="220" cy="100" r="11" fill="#D9A441"/><path d="M220 94 V100 L224 103" fill="none" stroke="#0B5C4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 C 175 250, 205 250, 220 258 C 235 250, 265 250, 290 262 L290 290 C 265 278, 235 278, 220 286 C 205 278, 175 278, 150 290 Z" fill="#0B5C4C" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M220 258 V286" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M162 270 C 178 264, 196 264, 208 268 M162 279 C 178 273, 196 273, 208 277" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M232 268 C 244 264, 262 264, 278 270" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/><path d="M262 255 V276 L267 271 L272 276 V256" fill="#D9A441" stroke="#D9A441" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const CFG_DEFAULT={name:"Mon établissement",subtitle:"Enseignements",pdf_header:"",pdf_footer:"",logo:null,payroll_visa:false,show_demo:false};
 const APPN=()=>(S.cfg&&S.cfg.name)||CFG_DEFAULT.name;
-async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights,unit_word,shared_rooms").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
+async function loadSettings(){try{const r=await q(sb.from("app_settings").select("establishment_id,name,subtitle,pdf_header,pdf_footer,logo,payroll_visa,show_demo,enabled_rights,unit_word,shared_rooms,payroll_visa_mode").order("establishment_id").limit(1).maybeSingle());S.cfg={...CFG_DEFAULT,...(r||{})}}catch(e){S.cfg=S.cfg||{...CFG_DEFAULT}}
   setVocab(S.cfg.unit_word);document.title=(S.cfg.name?S.cfg.name+" · ":"")+PRODUCT;return S.cfg}
 function brandHtml(small){const c=S.cfg||CFG_DEFAULT;
   /* administrateur de la plateforme sans établissement : la marque Saytu */
@@ -3060,7 +3060,7 @@ function facultyDialog(f){let flogo=f?.logo||null;
       <label>Nom complet<input id="fN" required maxlength="120" value="${esc(f?.name||"")}" placeholder="Ex. Faculté des lettres et sciences humaines"></label>
       <label>Ligne d'en-tête de ses PDF (facultatif)<input id="fH" maxlength="120" value="${esc(f?.pdf_header||"")}" placeholder="Ex. Décanat · Direction des études"></label>
       <label>Emploi du temps<select id="fM"><option value="hebdomadaire">Hebdomadaire : refait chaque semaine, disponibilités chaque semaine</option><option value="fixe" ${f?.timetable_mode==="fixe"?"selected":""}>Fixe : le même chaque semaine du semestre, disponibilités une fois par semestre</option></select></label>
-      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="fV" ${!f||f.payroll_visa?"checked":""}> Visa du doyen obligatoire avant d'enregistrer les paiements</label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);${visaMode()==="faculte"?"":"display:none"}"><input type="checkbox" id="fV" ${!f||f.payroll_visa?"checked":""}> Visa du doyen obligatoire avant d'enregistrer les paiements</label>
       <div class="row" style="align-items:center;gap:12px"><div id="fLB" class="logobox"></div><label class="btn sm" style="flex-direction:row;cursor:pointer">Logo de la faculté<input id="fL" type="file" accept="image/png,image/jpeg" hidden></label><button type="button" class="btn sm" id="fLx">Retirer</button></div>
       ${f?"":`<p class="sub" style="margin:0">La nouvelle faculté reçoit des jours et horaires par défaut, à régler ensuite dans Référentiel › Jours et horaires.</p>`}
       <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Annuler</button><button class="btn primary" value="ok">Enregistrer</button></div>`,
@@ -3075,7 +3075,7 @@ function facultyDialog(f){let flogo=f?.logo||null;
 async function viewEtabFac(v){
   await loadFacs();const L=adminFacs();
   v.innerHTML=`<h1>Ma faculté</h1><p class="lead">Le nom, le logo, l'en-tête des documents, le mode d'emploi du temps et la règle du visa de la paie de votre faculté. Les comptes de la faculté se gèrent dans « Comptes ».</p>
-    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""} · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"} · visa du doyen ${f.payroll_visa?"obligatoire":"non requis"}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
+    ${L.map(f=>`<section class="adsec panel" style="padding:16px 18px"><div class="row" style="justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">${f.logo?`<img src="${esc(f.logo)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff">`:`<span class="pill p-info mono">${esc(f.code)}</span>`}<div><b>${esc(f.name)}</b><div class="sub">${esc(f.code)}${f.short_name?" · "+esc(f.short_name):""}${f.pdf_header?" · en-tête : "+esc(f.pdf_header):""} · emploi du temps ${f.timetable_mode==="fixe"?"fixe":"hebdomadaire"}${visaMode()==="faculte"?` · visa du doyen ${f.payroll_visa?"obligatoire":"non requis"}`:""}</div></div></div><button class="btn sm" data-fe="${f.id}">Modifier</button></div></section>`).join("")||'<p class="empty">Aucune faculté rattachée à votre compte.</p>'}`;
   v.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>facultyDialog(facById(Number(b.dataset.fe))));
 }
 
@@ -3124,6 +3124,11 @@ async function viewEtab(v){
       ${OPT_RIGHTS.map(r=>`<label style="flex-direction:row;align-items:flex-start;gap:10px;color:var(--ink);margin-bottom:10px"><input type="checkbox" data-or="${r}" ${rightsOn().includes(r)?"checked":""} style="margin-top:3px"><span><b>${esc(ROLE_LABEL[r])}</b><br><span class="sub">${esc(OPT_DESC[r])}</span></span></label>`).join("")}
       <div class="row" style="justify-content:flex-end"><button class="btn primary" id="orSave">Enregistrer les droits optionnels</button></div></section>
 
+    <section class="adsec panel" style="padding:16px 18px"><h2>Visa de la paie</h2>
+      <p class="sub" style="margin:0 0 10px">Après l'approbation de la paie par le service financier, faut-il un visa avant d'enregistrer les paiements ?</p>
+      <div style="display:grid;gap:8px;margin-bottom:10px">${VISA_OPT.map(([k,t,d])=>`<label style="flex-direction:row;align-items:flex-start;gap:10px;color:var(--ink)"><input type="radio" name="vMode" value="${k}" ${(cfg.payroll_visa_mode||"faculte")===k?"checked":""} style="margin-top:3px"><span><b>${t}</b><br><span class="sub">${d}</span></span></label>`).join("")}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" id="vmSave">Enregistrer le visa de la paie</button></div></section>
+
     <section class="adsec panel" style="padding:16px 18px"><h2>Année universitaire</h2>
       <div class="rl">${years.map(y=>`<div class="rlrow"><div style="flex:1"><b>${esc(y.label)}</b> ${y.is_current?'<span class="pill p-ok">En cours</span>':""}<div class="sub">du ${fdl(y.start_date)} au ${fdl(y.end_date)} · ${semOf(y).map(x=>esc((multiFac()?facCode(x.faculty_id)+" ":"")+x.label)).join(", ")||"aucun semestre"}</div></div>${y.is_current?"":`<button class="btn sm" data-cur="${y.id}">Mettre en cours</button>`}</div>`).join("")||'<p class="sub">Aucune année.</p>'}</div>
       <p class="sub">L'année en cours est celle affichée en haut de l'écran et utilisée par défaut. Les années passées restent consultables : rien n'est effacé.</p>
@@ -3155,6 +3160,10 @@ async function viewEtab(v){
     fields:[{k:"code",l:"Code",req:1},{k:"name",l:"Nom",req:1},{k:"capacity",l:"Capacité (places)",t:"number",min:1,req:1},
       {k:"room_type",l:"Type",t:"select",opt:[["standard","Standard"],["labo","Laboratoire"],["amphi","Amphithéâtre"],["informatique","Salle informatique"]],req:1}],
     normalize:o=>({...o,faculty_id:null})},shEl);
+  /* visa de la paie : aucun, doyen de chaque faculté, ou direction de l'établissement */
+  vmSave.onclick=async()=>{const m=v.querySelector("[name=vMode]:checked")?.value;if(!m)return;
+    try{const r=await q(sb.from("app_settings").update({payroll_visa_mode:m,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
+      if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Visa de la paie enregistré");rerender()}catch(e){toast(errMsg(e),true)}};
   /* vocabulaire : faculté, UFR, école ou institut, partout dans l'application */
   eWs.onclick=async()=>{try{const r=await q(sb.from("app_settings").update({unit_word:eW.value,shared_rooms:eSR.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
     if(!r.length)throw new Error("Enregistrement refusé.");toast("Organisation enregistrée");setTimeout(()=>location.reload(),600)}catch(e){toast(errMsg(e),true)}};
@@ -3267,7 +3276,7 @@ async function viewDgSynth(v){
   /* alertes */
   const A=[];const dow=now.getDay()||7;
   const visaWait=visaOn()?periods.filter(x=>["approuvee","payee"].includes(x.status)&&!x.visa_at):[];
-  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente ${isDoyen()?"de votre visa":"du visa du doyen"} : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
+  if(visaWait.length)A.push(["warn",`${visaWait.length} paie(s) en attente ${isDoyen()?"de votre visa":"du visa "+VISA_BY().du} : ${visaWait.map(x=>esc(x.name)).join(", ")}.`,"paie"]);
   if(!pubs.some(x=>x.week_start===cw)&&dow<=5)A.push(["bad","L'emploi du temps de cette semaine n'est pas publié.",null]);
   if(dow>=4&&!pubs.some(x=>x.week_start===nw))A.push(["warn","L'emploi du temps de la semaine prochaine n'est pas encore publié.",null]);
   if(late.length)A.push(["warn",`${late.length} matière(s) en retard sur le rythme du semestre.`,"#dgProg"]);
@@ -3344,7 +3353,7 @@ async function viewCompare(v){
         <div class="stat"><b>${hrs(Math.round(f.heures_validees*60))}</b><span>heures validées${f.a_controler?` · ${f.a_controler} à contrôler`:""}</span></div>
         <div class="stat"><b>${fcfa(f.paie_engagee)}</b><span>paie engagée sur l'année · payé ${fcfa(f.paie_payee)}</span></div>
       </div>
-      ${f.paies_attente_visa?`<div class="gpwarn" style="margin-top:10px">${f.paies_attente_visa} paie(s) en attente du visa du doyen.</div>`:""}
+      ${f.paies_attente_visa?`<div class="gpwarn" style="margin-top:10px">${f.paies_attente_visa} paie(s) en attente du visa ${VISA_BY().du}.</div>`:""}
     </section>`;
   v.innerHTML=`<h1>Comparaison des facultés</h1>
     <p class="lead">Les mêmes indicateurs pour chaque faculté, pour situer chacune et repérer où poser une question. Les séances, émargements et heures portent sur la période choisie ; l'avancement porte sur le semestre en cours, la paie sur l'année universitaire${R.annee?" "+esc(R.annee):""}.</p>
@@ -3751,8 +3760,14 @@ function fdl(s){if(!s)return "—";const [y,m,d]=String(s).slice(0,10).split("-"
 const roleHere=r=>(S.roles||[]).some(x=>x.role===r&&x.faculty_id&&x.faculty_id===S.fac);
 function canPay(){return roleHere("finance")}
 /* paie par faculté : visa du doyen réglé par chaque faculté ; seul le doyen de la faculté vise */
-const visaOn=()=>{const f=facById(S.fac);return f?!!f.payroll_visa:!!(S.cfg&&S.cfg.payroll_visa)};
-const isDoyen=()=>(S.roles||[]).some(r=>r.role==="direction"&&r.faculty_id&&r.faculty_id===S.fac);
+/* visa de la paie selon l'établissement : aucun, par le doyen de chaque faculté (réglé par faculté), ou par la direction */
+const visaMode=()=>S.cfg?.payroll_visa_mode||"faculte";
+const visaOn=()=>{const m=visaMode();if(m==="aucun")return false;if(m==="etablissement")return true;const f=facById(S.fac);return f?!!f.payroll_visa:!!(S.cfg&&S.cfg.payroll_visa)};
+const VISA_OPT=[["aucun","Pas de visa","Les paiements s'enregistrent dès que le service financier a approuvé la paie."],
+  ["faculte","Visa du doyen de chaque faculté","À activer faculté par faculté (fenêtre de la faculté). Le doyen vise la paie de sa faculté."],
+  ["etablissement","Visa de la direction de l'établissement","La personne qui a le poste de direction au niveau de l'établissement vise la paie de toutes les facultés."]];
+const VISA_BY=()=>visaMode()==="etablissement"?{du:"de la direction",par:"par la direction"}:{du:"du doyen",par:"par le doyen"};
+const isDoyen=()=>visaMode()==="etablissement"?(S.roles||[]).some(r=>r.role==="direction"&&r.faculty_id==null):(S.roles||[]).some(r=>r.role==="direction"&&r.faculty_id&&r.faculty_id===S.fac);
 function canRecordPay(){return roleHere("finance")||roleHere("caissier")}
 
 async function viewPayroll(v){
@@ -3859,8 +3874,8 @@ async function periodDetail(el,p){
   el.innerHTML=`<div class="panel phead"><div class="ph-top"><div><div class="sub">Période sélectionnée</div><h2>${esc(p.name)}</h2><div class="sub">Du ${fdl(p.start_date)} au ${fdl(p.end_date)} · approuvée le ${new Date(p.approved_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>${ppill(PER,p.status)}</div>
       <div class="ph-prog"><div class="hbar"><i style="width:${pct(tp,tot)}%;background:${tot-tp?"var(--accent)":"var(--ok)"}"></i></div><div class="sub">${pct(tp,tot)} % réglé · ${slips.length} bulletin${slips.length>1?"s":""} figé${slips.length>1?"s":""}</div></div>
       ${slips.length?`<div class="ph-x">${xbar("pX")}</div>`:""}
-      ${visaReq?`<div class="visa ${p.visa_at?"ok":""}">${p.visa_at?`<b>✓ Visée par le doyen</b> le ${new Date(p.visa_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}${p.visa_note?` · « ${esc(p.visa_note)} »`:""}`
-        :`<b>En attente du visa du doyen</b>${p.visa_note?`<div>Remarque du doyen : « ${esc(p.visa_note)} »</div>`:""}<div class="sub">${isDoyen()?"Vérifiez les bulletins, puis visez la paie : le service financier pourra alors enregistrer les paiements.":"Les paiements pourront être enregistrés après le visa."}</div>
+      ${visaReq?`<div class="visa ${p.visa_at?"ok":""}">${p.visa_at?`<b>✓ Visée ${VISA_BY().par}</b> le ${new Date(p.visa_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}${p.visa_note?` · « ${esc(p.visa_note)} »`:""}`
+        :`<b>En attente du visa ${VISA_BY().du}</b>${p.visa_note?`<div>Remarque ${VISA_BY().du} : « ${esc(p.visa_note)} »</div>`:""}<div class="sub">${isDoyen()?"Vérifiez les bulletins, puis visez la paie : le service financier pourra alors enregistrer les paiements.":"Les paiements pourront être enregistrés après le visa."}</div>
           ${isDoyen()?`<div class="row" style="margin-top:8px"><button class="btn primary" id="visaOk">Viser la paie</button><button class="btn" id="visaNote">Faire une remarque</button></div>`:""}`}</div>`:""}
       ${canRecordPay()&&slips.length?`<div class="ph-act" style="margin-top:10px">${tot-tp>0&&payOk?`<button class="btn primary" id="payBulk">Payer en lot</button>`:""}${tot-tp>0?`<button class="btn" id="payOrder">${DLI}Ordre de paiement</button>`:""}<button class="btn" id="slipNot">Prévenir les professeurs</button></div>`:""}</div>
     <div class="stats"><div class="stat"><b>${fcfa(tot)}</b><span>Net à payer</span></div><div class="stat"><b>${fcfa(tp)}</b><span>Réglé</span></div>
