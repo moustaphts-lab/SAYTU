@@ -38,6 +38,9 @@ Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archi
 | (31/10/2026) | audit_e1b_rate_for_interne | fin de `08_droits_fonctions.sql` |
 | (31/10/2026) | audit_e2_etablissement_demo | `09_etablissement_demo.sql` |
 | (31/10/2026) | audit_m4_droits_tables_visiteurs, audit_m4b_visiteurs_aucune_table | `10_droits_tables_visiteurs.sql` |
+| (31/10/2026) | audit_m6_rls_copies | `13_rls_copies.sql` |
+| (31/10/2026) | audit_m5_limite_logos | `12_limite_logos.sql` |
+| (31/10/2026) | audit_m5_reinitialisation_demo | `11_reinitialisation_demo.sql` (test : `tests/db/reinitialisation_demo.sql`) |
 
 ## Opération ponctuelle (hors migrations)
 `07_nettoyage_ucab.sql` : nettoyage unique du 31/10/2026 (étape 7). L'établissement n° 1 devient « DEMO », les essais sont supprimés, un nouvel « UCAB » vide est créé (n° 6). **À ne pas rejouer.** Sauvegarde : schéma `saytu_backup_20261031`.
@@ -48,3 +51,7 @@ Note : la suppression (4c) a été appliquée après 5a et 5b ; l'ordre d'applic
 ## Fonction de gestion des comptes
 `supabase/functions/manage-users/index.ts` (version 7 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
 et actions de la plateforme (premier administrateur, nouveau mot de passe, suppression d'un établissement vide).
+
+## Remise à zéro de DEMO
+Le schéma privé `saytu_demo_ref` (jamais exposé) garde une copie de référence de DEMO (`take_snapshot()`, prise le 31/10/2026) et sait la rétablir (`reset_demo()`, en une seule transaction : données, journal, noms, langues et mots de passe des 12 comptes).
+Seul le propriétaire de la base peut l'appeler (éditeur SQL de Supabase, ou plus tard une tâche pg_cron). Si DEMO change volontairement (nouvelles données de démonstration), relancer `take_snapshot()` après les avoir préparées.

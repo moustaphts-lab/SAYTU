@@ -38,3 +38,4 @@ chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas con
 - `ui/test_jour_arabe.py` : en arabe, le jour abrégé s'écrit « الخميس » (jamais « خميس », forme abrégée de Safari).
 - `ui/test_entete_arabe.py` : profil et bouton de langue au bord de fin de la barre du haut (à gauche en arabe, à droite en français).
 - `ui/test_signatures.py` : les 4 bibliothèques externes portent une signature (SRI) ; les copies locales (jsPDF) correspondent.
+- `db/reinitialisation_demo.sql` : abîme DEMO (réglages, salles, séances, mot de passe d'un compte), lance `reset_demo()` et compare l'empreinte de chaque table avec l'état d'avant ; tout est annulé à la fin par une erreur volontaire (résultat : « tables différentes: aucune »).
