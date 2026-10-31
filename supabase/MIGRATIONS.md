@@ -1,13 +1,14 @@
 # Migrations de la base (ordre d'application)
 
 La base Supabase garde la liste officielle des migrations appliquées (`supabase_migrations.schema_migrations`, texte SQL compris).
-Ce dépôt en garde une copie lisible. **Les 68 anciennes ne sont pas encore copiées ici** : leur texte est dans Supabase.
+Ce dépôt en garde une copie lisible. Les 68 anciennes sont copiées dans `supabase/migrations-anciennes/` (un fichier par migration, nommé `version_nom.sql`).
+`python3 supabase/migrations-anciennes/verifier.py` compare chaque fichier à l'empreinte (md5) relevée dans la base (`MANIFEST.tsv`) : toutes sont conformes.
 Les 17 migrations « plusieurs établissements » sont toutes dans `supabase/multi-etablissements/`.
 
-Pour reconstruire une base vide : appliquer d'abord les 68 premières (récupérées dans Supabase), puis les fichiers ci-dessous dans l'ordre.
-Dans plusieurs fichiers, `DLT` / `DRP` remplacent deux mots-clés SQL (suppression) : voir l'en-tête du fichier. Les copies sont fidèles au SQL appliqué.
+Pour reconstruire une base vide : appliquer d'abord les 68 de `migrations-anciennes/` (dans l'ordre du nom de fichier), puis les fichiers ci-dessous dans l'ordre.
+Dans plusieurs fichiers, `DLT` / `DRP` remplacent deux mots-clés SQL (suppression) : voir l'en-tête du fichier. Les 68 anciennes sont vérifiées par empreinte ; celles de `multi-etablissements/` sont des copies relues à la main (non vérifiées par empreinte).
 
-## Avant les établissements (dans Supabase seulement)
+## Avant les établissements (dans `supabase/migrations-anciennes/`)
 Socle, sécurité, paie, référentiel, rôles, délégation, disponibilités, semaines, tronc commun, absences, postes et droits, facultés,
 paie par faculté, comparaison, langue (`20261023162424` à `20261030151320`, 68 migrations).
 Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archives/`.

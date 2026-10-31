@@ -57,6 +57,7 @@ Règles constantes : personne ne valide ses propres heures ni un émargement qu'
 | `i18n-ar.js`, `i18n-ar-gestion.js`, `pdf-ar.js` | traduction arabe des écrans et des PDF |
 | `icons/`, `fonts/`, `manifest.webmanifest` | logo, polices, ajout à l'écran d'accueil |
 | `supabase/MIGRATIONS.md` | liste ordonnée des migrations de la base et où lire leur SQL |
+| `supabase/migrations-anciennes/` | les 68 premières migrations, copiées de la base et vérifiées par empreinte (`verifier.py`) |
 | `supabase/multi-etablissements/` | SQL et notes des étapes « plusieurs établissements » (01 à 06) |
 | `supabase/functions/manage-users/` | fonction de gestion des comptes (déployée sur Supabase) |
 | `supabase/archives/`, `supabase/postes_et_nettoyage.sql` | anciens scripts, déjà exécutés, gardés pour mémoire |

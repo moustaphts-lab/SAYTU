@@ -1,0 +1,2 @@
+alter table public.school_schedule drop constraint school_schedule_faculty_id_fkey, add constraint school_schedule_faculty_id_fkey foreign key (faculty_id) references public.faculties(id) on delete cascade;
+alter table public.calendar_closures drop constraint calendar_closures_faculty_id_fkey, add constraint calendar_closures_faculty_id_fkey foreign key (faculty_id) references public.faculties(id) on delete cascade;
