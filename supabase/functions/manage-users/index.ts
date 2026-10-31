@@ -8,6 +8,17 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+// Messages d'erreur : le détail technique reste dans les journaux du serveur, l'utilisateur reçoit un message générique.
+// Seules passent telles quelles les erreurs voulues des règles métier (fonctions de la base qui lèvent une exception, code P0001).
+const GENERIC = "L'opération a échoué. Réessayez ; si cela continue, contactez l'administrateur de la plateforme.";
+type Err = { message?: string; code?: string } | null | undefined;
+const fail = (e: Err, where: string, status = 400) => {
+  console.error(where + ":", e?.message ?? e);
+  return json({ error: GENERIC }, status);
+};
+const businessOrFail = (e: Err, where: string) =>
+  e?.code === "P0001" && e.message ? json({ error: e.message }, 400) : fail(e, where);
+
 function tempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -57,12 +68,12 @@ Deno.serve(async (req: Request) => {
     } else {
       password = tempPassword();
       const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
-      if (error) return json({ error: error.message }, 400);
+      if (error) return fail(error, "platform_create_user");
       userId = data.user.id;
       await admin.from("profiles").update({ establishment_id: etabId, must_change_password: true }).eq("id", userId);
     }
     const { error: eA } = await caller.rpc("platform_attach_admin", { p_etab: etabId, p_user: userId });
-    if (eA) return json({ error: eA.message }, 400);
+    if (eA) return businessOrFail(eA, "platform_attach_admin");
     await trace(password ? "ADMIN_CREE" : "ADMIN_RATTACHE", userId, etabId, { email });
     return password ? json({ user_id: userId, email, temp_password: password }) : json({ user_id: userId, email, existing: true });
   }
@@ -75,7 +86,7 @@ Deno.serve(async (req: Request) => {
     if (ok !== true) return json({ error: "Réservé à l'administrateur de la plateforme, pour un administrateur central." }, 403);
     const password = tempPassword();
     const { error } = await admin.auth.admin.updateUserById(userId, { password, ban_duration: "none" });
-    if (error) return json({ error: error.message }, 400);
+    if (error) return fail(error, "platform_reset_admin");
     await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
     await admin.from("memberships").update({ active: true }).eq("user_id", userId).eq("establishment_id", etabId);
     await trace("ADMIN_MOT_DE_PASSE_REINITIALISE", userId, etabId, {});
@@ -87,7 +98,7 @@ Deno.serve(async (req: Request) => {
     const { data: users, error: eR } = await caller.rpc("platform_remove_establishment", {
       p_id: Number(body.establishment_id), p_code: String(body.code ?? ""),
     });
-    if (eR) return json({ error: eR.message }, 400);
+    if (eR) return businessOrFail(eR, "platform_remove_establishment");
     // comptes qui n'existaient que pour cet établissement
     let failed = 0;
     for (const id of (users ?? []) as string[]) {
@@ -141,7 +152,7 @@ Deno.serve(async (req: Request) => {
         const { data: mem } = await admin.from("memberships").select("user_id").eq("user_id", prev.id).eq("establishment_id", etab).maybeSingle();
         if (mem) return json({ error: "Un compte existe déjà avec cette adresse dans votre établissement." }, 400);
         const { error: eM } = await admin.from("memberships").insert({ user_id: prev.id, establishment_id: etab, faculty_id: facultyId });
-        if (eM) return json({ error: eM.message }, 400);
+        if (eM) return businessOrFail(eM, "create_membership");
         await admin.auth.admin.updateUserById(prev.id, { ban_duration: "none" });
         await trace("COMPTE_RATTACHE", prev.id, etab, { email, faculty_id: facultyId });
         return json({ user_id: prev.id, email, existing: true });
@@ -151,12 +162,12 @@ Deno.serve(async (req: Request) => {
         email, password, email_confirm: true, user_metadata: { full_name: fullName },
       });
       if (error) {
-        const msg = /already|exists|registered/i.test(error.message) ? "Un compte existe déjà avec cette adresse." : error.message;
-        return json({ error: msg }, 400);
+        if (/already|exists|registered/i.test(error.message)) return json({ error: "Un compte existe déjà avec cette adresse." }, 400);
+        return fail(error, "create_user");
       }
       await admin.from("profiles").update({ establishment_id: etab, must_change_password: true }).eq("id", data.user.id);
       const { error: eM } = await admin.from("memberships").upsert({ user_id: data.user.id, establishment_id: etab, faculty_id: facultyId });
-      if (eM) return json({ error: eM.message }, 400);
+      if (eM) return businessOrFail(eM, "create_membership");
       await trace("COMPTE_CREE", data.user.id, etab, { email, faculty_id: facultyId });
       return json({ user_id: data.user.id, email, temp_password: password });
     }
@@ -169,7 +180,7 @@ Deno.serve(async (req: Request) => {
       if (shared === true) return json({ error: "Ce compte sert aussi dans un autre établissement : la personne gère elle-même son mot de passe." }, 403);
       const password = tempPassword();
       const { error } = await admin.auth.admin.updateUserById(userId, { password });
-      if (error) return json({ error: error.message }, 400);
+      if (error) return fail(error, "reset_password");
       await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
       const { data: tp } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
       await trace("MOT_DE_PASSE_REINITIALISE", userId, etab, { email: tp?.email ?? null });
@@ -184,10 +195,10 @@ Deno.serve(async (req: Request) => {
       if (userId === me.user?.id && !active) return json({ error: "Vous ne pouvez pas désactiver votre propre compte." }, 400);
       // l'accès est retiré dans cet établissement seulement ; le compte n'est bloqué que s'il n'a plus aucun établissement actif
       const { error: e2 } = await admin.from("memberships").update({ active }).eq("user_id", userId).eq("establishment_id", etab);
-      if (e2) return json({ error: e2.message }, 400);
+      if (e2) return businessOrFail(e2, "set_active_membership");
       const { data: still } = await admin.from("memberships").select("establishment_id").eq("user_id", userId).eq("active", true);
       const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: (still ?? []).length ? "none" : "876000h" });
-      if (error) return json({ error: error.message }, 400);
+      if (error) return fail(error, "set_active_ban");
       const { data: tp } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
       await trace(active ? "COMPTE_ACTIVE" : "COMPTE_DESACTIVE", userId, etab, { email: tp?.email ?? null, blocked: (still ?? []).length === 0 });
       return json({ ok: true });
@@ -195,6 +206,6 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: "Action inconnue." }, 400);
   } catch (e) {
-    return json({ error: (e as Error).message }, 500);
+    return fail(e as Error, "exception", 500);
   }
 });

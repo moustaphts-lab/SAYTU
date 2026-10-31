@@ -42,3 +42,22 @@ r=await call({rpc:base,rows:{establishments:[{id:5,demo:true}]}},{action:"create
 ok(traces(r).length===0,"journal : une action refusée n'écrit rien");
 r=await call({rpc:{is_platform_admin:true,platform_attach_admin:null},rows:{}},{action:"platform_create_admin",establishment_id:7,email:"n@m.co",full_name:"N"});
 t=traces(r);ok(r.status===200&&t.length===1&&t[0].action==="ADMIN_CREE"&&t[0].establishment_id===7&&sansMdp(t),"journal : création d'un administrateur central par la plateforme");
+
+// Audit F5 : pas de message technique renvoyé au client
+const E5={establishments:[{id:5,demo:false}]};
+const tech="duplicate key value violates unique constraint \"memberships_pkey\" (secret interne)";
+r=await call({rpc:base,rows:E5,tableErr:{memberships:{message:tech,code:"23505"}}},{action:"create",email:"a@b.co",full_name:"A"});
+ok(r.status===400&&!JSON.stringify(r.body).includes("secret")&&!JSON.stringify(r.body).includes("memberships_pkey")&&/échoué/.test(r.body.error),"F5 : erreur technique de la base remplacée par un message générique");
+r=await call({rpc:base,rows:E5,tableErr:{memberships:{message:"Ce compte n'appartient pas à cette faculté.",code:"P0001"}}},{action:"create",email:"a@b.co",full_name:"A"});
+ok(r.status===400&&r.body.error==="Ce compte n'appartient pas à cette faculté.","F5 : règle métier (exception voulue) transmise telle quelle");
+r=await call({rpc:base,rows:E5,createErr:{message:"AuthApiError: internal db failure at host 10.0.0.3"}},{action:"create",email:"a@b.co",full_name:"A"});
+ok(r.status===400&&!/10\.0\.0\.3|AuthApiError/.test(JSON.stringify(r.body)),"F5 : erreur technique de l'authentification masquée");
+r=await call({rpc:base,rows:E5,createErr:{message:"A user with this email address has already been registered"}},{action:"create",email:"a@b.co",full_name:"A"});
+ok(r.status===400&&/existe déjà/.test(r.body.error),"F5 : compte déjà existant : message clair conservé");
+r=await call({rpc:base,rows:E5,updErr:{message:"connection reset by peer 10.1.2.3"}},{action:"reset_password",user_id:"U"});
+ok(r.status===400&&!/10\.1\.2\.3/.test(JSON.stringify(r.body)),"F5 : réinitialisation, erreur technique masquée");
+r=await call({rpc:{is_platform_admin:true,platform_attach_admin:null},rows:{}},{action:"platform_create_admin",establishment_id:7,email:"n@m.co",full_name:"N",});
+r=await call({rpc:{is_platform_admin:true},rpcErr:{platform_attach_admin:{message:"permission denied for table x (interne)",code:"42501"}},rows:{}},{action:"platform_create_admin",establishment_id:7,email:"n@m.co",full_name:"N"});
+ok(r.status===400&&!/interne|permission denied/.test(JSON.stringify(r.body)),"F5 : plateforme, erreur technique masquée");
+r=await call({rpc:{is_platform_admin:true},rpcErr:{platform_attach_admin:{message:"Cet établissement a déjà un administrateur.",code:"P0001"}},rows:{}},{action:"platform_create_admin",establishment_id:7,email:"n@m.co",full_name:"N"});
+ok(r.status===400&&r.body.error==="Cet établissement a déjà un administrateur.","F5 : plateforme, règle métier transmise");

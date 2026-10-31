@@ -41,6 +41,7 @@ Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archi
 | (31/10/2026) | audit_m6_rls_copies | `13_rls_copies.sql` |
 | (31/10/2026) | audit_m5_limite_logos | `12_limite_logos.sql` |
 | (31/10/2026) | audit_m5_reinitialisation_demo | `11_reinitialisation_demo.sql` (test : `tests/db/reinitialisation_demo.sql`) |
+| (31/10/2026) | audit_f2_fac_of_etablissement | `14_fac_of_etablissement.sql` (test : `tests/db/fac_of_etablissement.sql`) |
 
 ## Opération ponctuelle (hors migrations)
 `07_nettoyage_ucab.sql` : nettoyage unique du 31/10/2026 (étape 7). L'établissement n° 1 devient « DEMO », les essais sont supprimés, un nouvel « UCAB » vide est créé (n° 6). **À ne pas rejouer.** Sauvegarde : schéma `saytu_backup_20261031`.
@@ -49,7 +50,7 @@ Les fichiers `.md` du même dossier expliquent chaque étape en français (01 à
 Note : la suppression (4c) a été appliquée après 5a et 5b ; l'ordre d'application réel est celui de la colonne « Version ».
 
 ## Fonction de gestion des comptes
-`supabase/functions/manage-users/index.ts` (version 8 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
+`supabase/functions/manage-users/index.ts` (version 9 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
 et actions de la plateforme (premier administrateur, nouveau mot de passe, suppression d'un établissement vide).
 
 ## Remise à zéro de DEMO
@@ -57,3 +58,5 @@ Le schéma privé `saytu_demo_ref` (jamais exposé) garde une copie de référen
 Seul le propriétaire de la base peut l'appeler (éditeur SQL de Supabase, ou plus tard une tâche pg_cron). Si DEMO change volontairement (nouvelles données de démonstration), relancer `take_snapshot()` après les avoir préparées.
 
 Version 8 (31/10/2026, audit F4) : chaque action sur un compte (création, rattachement, mot de passe réinitialisé, activation ou désactivation, création et réinitialisation d'un administrateur central, suppression d'un établissement) écrit une ligne dans le journal (`audit_logs`, table `comptes`) : qui, quoi, quand, jamais de mot de passe. Les actions refusées n'écrivent rien.
+
+Version 9 (31/10/2026, audit F5) : les erreurs techniques (base, authentification) ne sont plus renvoyées à l'écran ; l'utilisateur reçoit un message générique et le détail reste dans les journaux de la fonction (Supabase > Edge Functions > manage-users > Logs). Les règles métier voulues (exceptions des fonctions de la base) et le message « compte déjà existant » restent affichés tels quels.
