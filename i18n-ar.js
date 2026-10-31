@@ -10,7 +10,7 @@ const n=(x,one,many)=>Number(x)>1?many:one;
 const exact={
 /* connexion et compte */
 "Bonjour":"صباح الخير","Bonsoir":"مساء الخير",
-"Connectez-vous pour retrouver vos cours et vos heures.":"سجّل الدخول للاطلاع على دروسك وساعاتك.",
+"Connectez-vous pour accéder à votre espace.":"سجّل الدخول للوصول إلى فضائك.",
 "Adresse e-mail":"البريد الإلكتروني","Mot de passe":"كلمة المرور","Se connecter":"تسجيل الدخول","Se déconnecter":"تسجيل الخروج",
 "Mot de passe oublié ? Demandez-en un nouveau à l'administrateur.":"نسيت كلمة المرور؟ اطلب كلمة جديدة من مهندس النظام.",
 "Propulsé par":"بدعم من",
