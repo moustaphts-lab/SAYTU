@@ -9,12 +9,12 @@ const hrs=s=>s.replace(/(\d+) h(?: (\d+))?/g,(_,h,m)=>m?`${h} س ${m} د`:`${h} 
 const n=(x,one,many)=>Number(x)>1?many:one;
 const exact={
 /* connexion et compte */
-"Bonjour":"صباح الخير","Bonsoir":"مساء الخير",
+"Bonjour":"صباح الخير","Bonjour !":"صباح الخير !","Enseignements, heures, paie :":"التدريس والساعات والرواتب:","tout est suivi.":"كل شيء تحت المتابعة.","Bonsoir !":"مساء الخير !","Plateforme de gestion des enseignements":"منصة تسيير التدريس","Votre mot de passe":"كلمة المرور","Bonsoir":"مساء الخير",
 "Connectez-vous pour accéder à votre espace.":"سجّل الدخول للوصول إلى فضائك.",
 "Adresse e-mail":"البريد الإلكتروني","Mot de passe":"كلمة المرور","Se connecter":"تسجيل الدخول","Se déconnecter":"تسجيل الخروج",
 "Mot de passe oublié ? Demandez-en un nouveau à l'administrateur.":"نسيت كلمة المرور؟ اطلب كلمة جديدة من مهندس النظام.",
 "Propulsé par":"بدعم من",
-"Enseignements, heures, paie : tout est suivi.":"التدريس والساعات والرواتب: كل شيء تحت المتابعة.",
+
 "La gestion des enseignements de votre établissement : emplois du temps, émargement, contrôle des heures et paie.":"تسيير التدريس في مؤسستك: الجداول الدراسية، تسجيل الحضور، التحقق من الساعات والرواتب.",
 "Saytu : des heures claires, une paie juste.":"Saytu : ساعات واضحة، وأجر عادل.",
 "Comptes de démonstration (mot de passe : Demo-2026!)":"حسابات تجريبية (كلمة المرور: Demo-2026!)",
