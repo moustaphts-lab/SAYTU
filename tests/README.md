@@ -35,3 +35,4 @@ chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas con
 - `ui/test_connexion_demo.py` : comptes de démonstration de l'écran de connexion, y compris quand la lecture des réglages est refusée au visiteur.
 - `functions/lancer.sh` : teste `manage-users` avec un faux client Supabase (Node 22+).
 - `db/droits_fonctions.sql` : un visiteur ne doit pouvoir exécuter que `login_demo()`.
+- `ui/test_jour_arabe.py` : en arabe, le jour abrégé s'écrit « الخميس » (jamais « خميس », forme abrégée de Safari).

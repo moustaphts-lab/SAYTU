@@ -656,7 +656,9 @@ function startLang(){
   try{const l=document.createElement("link");l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap";document.head.appendChild(l)}catch(e){}
   /* dates en arabe avec les chiffres 0-9, heures sur 24 h */
   const fix=l=>(!l||l==="fr-FR"||l==="fr")?"ar-u-nu-latn":l;
-  ["toLocaleDateString","toLocaleString","toLocaleTimeString"].forEach(k=>{const o=Date.prototype[k];Date.prototype[k]=function(l,opt){const op=opt&&(opt.timeStyle||opt.hour)?{...opt,hourCycle:"h23"}:opt;return o.call(this,fix(l),op)}});
+  ["toLocaleDateString","toLocaleString","toLocaleTimeString"].forEach(k=>{const o=Date.prototype[k];Date.prototype[k]=function(l,opt){let op=opt&&(opt.timeStyle||opt.hour)?{...opt,hourCycle:"h23"}:opt;
+    /* jour de la semaine abrégé : Safari écrit « خميس » ; on veut « الخميس » comme dans les listes de jours */
+    if(op&&op.weekday==="short")op={...op,weekday:"long"};return o.call(this,fix(l),op)}});
   ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"].forEach((d,i)=>{DAYS[i+1]=d});
   startObserver()}
 /* traduction et vocabulaire appliqués à tout ce qui s'affiche */
