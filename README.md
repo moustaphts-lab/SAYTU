@@ -49,10 +49,21 @@ Règles constantes : personne ne valide ses propres heures ni un émargement qu'
 4. L'aide du responsable financier valide les émargements conformes en lot et examine les autres.
 5. En fin de mois, le responsable financier calcule, vérifie, approuve ; la direction vise ; les paiements sont enregistrés et les professeurs prévenus.
 
-## Scripts de base de données
+## Organisation du dépôt
 
-- `supabase/postes_et_nettoyage.sql` : postes configurables et retrait des anciennes fonctions. À exécuter une fois.
-- `supabase/archives/` : scripts déjà exécutés ou de données de test, gardés pour mémoire.
+| Où | Quoi |
+|---|---|
+| `index.html` | l'application (un fichier, sans compilation) |
+| `i18n-ar.js`, `i18n-ar-gestion.js`, `pdf-ar.js` | traduction arabe des écrans et des PDF |
+| `icons/`, `fonts/`, `manifest.webmanifest` | logo, polices, ajout à l'écran d'accueil |
+| `supabase/MIGRATIONS.md` | liste ordonnée des migrations de la base et où lire leur SQL |
+| `supabase/multi-etablissements/` | SQL et notes des étapes « plusieurs établissements » (01 à 06) |
+| `supabase/functions/manage-users/` | fonction de gestion des comptes (déployée sur Supabase) |
+| `supabase/archives/`, `supabase/postes_et_nettoyage.sql` | anciens scripts, déjà exécutés, gardés pour mémoire |
+| `tests/` | tests d'interface (`tests/ui`) et d'isolement de la base (`tests/db`) : voir `tests/README.md` |
+
+Déploiement : pousser sur `main` publie le site (Cloudflare Pages). La base et la fonction de comptes se changent dans Supabase, pas par le dépôt :
+toute modification de base doit aussi être copiée dans `supabase/` avec son numéro d'étape.
 
 ## Comptes de démonstration
 
