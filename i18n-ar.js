@@ -16,7 +16,7 @@ const exact={
 "Propulsé par":"بدعم من",
 "Enseignements, heures, paie : tout est suivi.":"التدريس والساعات والرواتب: كل شيء تحت المتابعة.",
 "La gestion des enseignements de votre établissement : emplois du temps, émargement, contrôle des heures et paie.":"تسيير التدريس في مؤسستك: الجداول الدراسية، تسجيل الحضور، التحقق من الساعات والرواتب.",
-"Saytu : « veiller sur », en wolof.":"Saytu: «السهر على» بلغة الولوف.",
+"Saytu : des heures claires, une paie juste.":"Saytu : ساعات واضحة، وأجر عادل.",
 "Comptes de démonstration (mot de passe : Demo-2026!)":"حسابات تجريبية (كلمة المرور: Demo-2026!)",
 "Changer mon mot de passe":"تغيير كلمة المرور","Mon compte":"حسابي","Ouvrir le menu":"فتح القائمة","Fermer le menu":"إغلاق القائمة",
 "Afficher le mot de passe":"إظهار كلمة المرور","Masquer le mot de passe":"إخفاء كلمة المرور",

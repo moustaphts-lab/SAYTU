@@ -739,7 +739,6 @@ const X={
 "Sauvegarde des données": "النسخ الاحتياطي للبيانات",
 "Sauvegarde téléchargée ·": "تم تحميل النسخة الاحتياطية ·",
 "Sauvegarder": "حفظ نسخة احتياطية",
-"Saytu : « veiller sur », en wolof.": "Saytu: «السهر على» بلغة الولوف.",
 "Semaine": "الأسبوع",
 "Semaine déjà publiée : le générateur ajoute seulement les heures qui manquent, sans toucher aux cours publiés.": "الأسبوع منشور مسبقًا: يضيف المولّد الساعات الناقصة فقط، دون المساس بالدروس المنشورة.",
 "Semaine publiée : toute modification est visible tout de suite par les professeurs. Pour un empêchement, touchez le cours puis « Annuler » ou « Reporter » : le professeur voit le motif.": "الأسبوع منشور: كل تعديل يراه الأساتذة فورًا. في حال وجود مانع، المس الدرس ثم «إلغاء» أو «تأجيل»: يرى الأستاذ السبب.",
