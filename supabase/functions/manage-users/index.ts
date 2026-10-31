@@ -93,6 +93,9 @@ Deno.serve(async (req: Request) => {
   // établissement de travail de l'administrateur qui appelle
   const { data: etab } = await caller.rpc("current_establishment");
   if (!etab) return json({ error: "Établissement introuvable." }, 403);
+  // l'établissement de démonstration a un mot de passe public : on n'y crée ni ne modifie de comptes
+  const { data: estRow } = await admin.from("establishments").select("demo").eq("id", etab).maybeSingle();
+  if (estRow?.demo === true) return json({ error: "Établissement de démonstration : les comptes y sont figés." }, 403);
 
   // 2. Un administrateur de faculté n'agit que sur les comptes de sa faculté.
   const canManage = async (userId: string) => {
@@ -115,6 +118,15 @@ Deno.serve(async (req: Request) => {
       // un compte par personne : si l'adresse sert déjà dans un autre établissement, on y ajoute seulement l'appartenance
       const { data: prev } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
       if (prev) {
+        // on ne rattache qu'un compte déjà activé par sa personne (première connexion faite, mot de passe choisi) :
+        // un compte créé par un autre administrateur et jamais activé pourrait lui avoir été préparé avec un mot de passe connu de lui
+        const { data: isPlat } = await admin.from("platform_admins").select("user_id").eq("user_id", prev.id).maybeSingle();
+        if (isPlat) return json({ error: "Cette adresse ne peut pas être utilisée." }, 400);
+        const { data: pu } = await admin.auth.admin.getUserById(prev.id);
+        const { data: pp } = await admin.from("profiles").select("must_change_password").eq("id", prev.id).maybeSingle();
+        if (!pu?.user?.last_sign_in_at || pp?.must_change_password !== false) {
+          return json({ error: "Cette adresse a déjà un compte, créé dans un autre établissement et pas encore activé par la personne (première connexion et choix de son mot de passe). Réessayez après son activation, ou contactez l'administrateur de la plateforme." }, 409);
+        }
         const { data: mem } = await admin.from("memberships").select("user_id").eq("user_id", prev.id).eq("establishment_id", etab).maybeSingle();
         if (mem) return json({ error: "Un compte existe déjà avec cette adresse dans votre établissement." }, 400);
         const { error: eM } = await admin.from("memberships").insert({ user_id: prev.id, establishment_id: etab, faculty_id: facultyId });
@@ -130,7 +142,7 @@ Deno.serve(async (req: Request) => {
         const msg = /already|exists|registered/i.test(error.message) ? "Un compte existe déjà avec cette adresse." : error.message;
         return json({ error: msg }, 400);
       }
-      await admin.from("profiles").update({ establishment_id: etab }).eq("id", data.user.id);
+      await admin.from("profiles").update({ establishment_id: etab, must_change_password: true }).eq("id", data.user.id);
       const { error: eM } = await admin.from("memberships").upsert({ user_id: data.user.id, establishment_id: etab, faculty_id: facultyId });
       if (eM) return json({ error: eM.message }, 400);
       return json({ user_id: data.user.id, email, temp_password: password });
@@ -145,6 +157,7 @@ Deno.serve(async (req: Request) => {
       const password = tempPassword();
       const { error } = await admin.auth.admin.updateUserById(userId, { password });
       if (error) return json({ error: error.message }, 400);
+      await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
       return json({ temp_password: password });
     }
 

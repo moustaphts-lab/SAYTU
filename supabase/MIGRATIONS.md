@@ -36,6 +36,7 @@ Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archi
 | (31/10/2026) | etape7_connexion_demo | `07b_connexion_demo.sql` |
 | (31/10/2026) | audit_e1_droits_fonctions | `08_droits_fonctions.sql` (test : `tests/db/droits_fonctions.sql`) |
 | (31/10/2026) | audit_e1b_rate_for_interne | fin de `08_droits_fonctions.sql` |
+| (31/10/2026) | audit_e2_etablissement_demo | `09_etablissement_demo.sql` |
 
 ## Opération ponctuelle (hors migrations)
 `07_nettoyage_ucab.sql` : nettoyage unique du 31/10/2026 (étape 7). L'établissement n° 1 devient « DEMO », les essais sont supprimés, un nouvel « UCAB » vide est créé (n° 6). **À ne pas rejouer.** Sauvegarde : schéma `saytu_backup_20261031`.
@@ -44,5 +45,5 @@ Les fichiers `.md` du même dossier expliquent chaque étape en français (01 à
 Note : la suppression (4c) a été appliquée après 5a et 5b ; l'ordre d'application réel est celui de la colonne « Version ».
 
 ## Fonction de gestion des comptes
-`supabase/functions/manage-users/index.ts` (version 6 déployée) : création de comptes, mots de passe provisoires, activation,
+`supabase/functions/manage-users/index.ts` (version 7 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
 et actions de la plateforme (premier administrateur, nouveau mot de passe, suppression d'un établissement vide).
