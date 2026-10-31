@@ -3171,7 +3171,7 @@ async function viewEtab(v){
           <span class="sub">PNG ou JPEG, carré de préférence. Il est réduit automatiquement.</span></div>
         <div class="panel" style="padding:12px 14px;background:var(--bg)"><div class="sub" style="margin-bottom:8px">Aperçu</div><div id="ePrev"></div></div>
         
-        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eD" ${cfg.show_demo?"checked":""}> Afficher les comptes de démonstration sur l'écran de connexion <span class="sub">(à décocher avant d'utiliser de vraies données)</span></label>
+        ${(S.etabs||[]).find(x=>x.id===S.etab)?.code==="DEMO"?`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="eD" ${cfg.show_demo?"checked":""}> Afficher les comptes de démonstration sur l'écran de connexion <span class="sub">(à décocher avant d'utiliser de vraies données)</span></label>`:""}
         <div class="err" id="eErr"></div>
         <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer l'identité</button></div></form></section>
 
@@ -3221,7 +3221,7 @@ async function viewEtab(v){
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);logo=c.toDataURL("image/png");URL.revokeObjectURL(url);prev()};img.onerror=()=>toast("Image illisible.",true);img.src=url};
   eLx.onclick=()=>{logo=null;eL.value="";prev()};
   idForm.onsubmit=async ev=>{ev.preventDefault();eErr.textContent="";
-    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,show_demo:eD.checked,updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
+    try{const r=await q(sb.from("app_settings").update({name:eN.value.trim(),subtitle:eS.value.trim()||"Enseignements",pdf_header:eH.value.trim(),pdf_footer:eF.value.trim(),logo,...(document.getElementById("eD")?{show_demo:eD.checked}:{}),updated_at:new Date().toISOString()}).eq("establishment_id",S.cfg.establishment_id).select());
       if(!r.length)throw new Error("Enregistrement refusé.");await loadSettings();toast("Identité enregistrée");rerender()}catch(e){eErr.textContent=errMsg(e)}};
 
   /* salles partagées : gérées ici par l'administrateur central, réservées par toutes les facultés */
