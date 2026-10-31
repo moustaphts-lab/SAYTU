@@ -15,3 +15,7 @@ begin
 end $m$;
 -- Fonctions futures : pas de droit automatique pour PUBLIC ni anon (accorder explicitement à authenticated).
 alter default privileges for role postgres in schema public revoke execute on functions from public, anon;
+
+-- 08b (migration audit_e1b_rate_for_interne) : rate_for n'est appelée que par calculate_payroll et payroll_not_included,
+-- qui s'exécutent avec les droits du propriétaire ; plus aucun compte connecté ne peut la lire directement (fuite entre établissements).
+revoke execute on function public.rate_for(bigint, date, bigint) from authenticated;

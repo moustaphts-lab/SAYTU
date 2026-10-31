@@ -35,6 +35,7 @@ Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archi
 | 20261031063054 | etape6_comparaison_visa | `06b_comparaison_visa.sql` |
 | (31/10/2026) | etape7_connexion_demo | `07b_connexion_demo.sql` |
 | (31/10/2026) | audit_e1_droits_fonctions | `08_droits_fonctions.sql` (test : `tests/db/droits_fonctions.sql`) |
+| (31/10/2026) | audit_e1b_rate_for_interne | fin de `08_droits_fonctions.sql` |
 
 ## Opération ponctuelle (hors migrations)
 `07_nettoyage_ucab.sql` : nettoyage unique du 31/10/2026 (étape 7). L'établissement n° 1 devient « DEMO », les essais sont supprimés, un nouvel « UCAB » vide est créé (n° 6). **À ne pas rejouer.** Sauvegarde : schéma `saytu_backup_20261031`.
