@@ -33,6 +33,7 @@ Quelques scripts d'époque : `supabase/postes_et_nettoyage.sql`, `supabase/archi
 | 20261030232912 | etape4c_suppression_dernier_admin | `04c_suppression_dernier_admin.sql` |
 | 20261031063007 | etape6_visa_paie | `06_visa_paie.sql` |
 | 20261031063054 | etape6_comparaison_visa | `06b_comparaison_visa.sql` |
+| (31/10/2026) | etape7_connexion_demo | `07b_connexion_demo.sql` |
 
 ## Opération ponctuelle (hors migrations)
 `07_nettoyage_ucab.sql` : nettoyage unique du 31/10/2026 (étape 7). L'établissement n° 1 devient « DEMO », les essais sont supprimés, un nouvel « UCAB » vide est créé (n° 6). **À ne pas rejouer.** Sauvegarde : schéma `saytu_backup_20261031`.
