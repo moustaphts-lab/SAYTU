@@ -1937,7 +1937,7 @@ function notifyDialog(o){ /* o = {title, intro, common, items:[{t:{id,first_name
   const wa=p=>{let n=tel(p).replace(/^\+/,"");if(n.length===9)n="221"+n;return n};
   const noPhone=o.items.filter(x=>!x.t.phone).length;
   openDialog(`<h3>${esc(o.title)}</h3>
-    <p class="sub" style="margin:0">${o.intro}</p>
+    <p class="sub" style="margin:0">${esc(o.intro)}</p>
     ${o.common!=null?`<label>Message commun<textarea id="rlMsg" rows="4" style="font:inherit;padding:10px;border:1px solid var(--line);border-radius:12px">${esc(o.common)}</textarea></label>
     <div class="row"><button type="button" class="btn sm" id="rlCopy">Copier le message commun</button></div>`:""}
     <div class="rl">${o.items.map((x,i)=>`<div class="rlrow"><div><b>${esc(x.t.first_name+" "+x.t.last_name)}</b><div class="sub">${x.t.phone?esc(x.t.phone):"pas de numéro (Référentiel > Enseignants)"}</div></div>
@@ -4182,6 +4182,7 @@ function auditText(people){
   const label=x=>x.code||x.label||x.name||x.full_name||((x.first_name||"")+" "+(x.last_name||"")).trim()||"";
   const say=r=>{const d=D(r),n=N(r),o=O(r),a=r.action;
     switch(r.table_name){
+      case "comptes":{const w=n.email||"";return ({COMPTE_CREE:`a créé le compte ${w}`,COMPTE_RATTACHE:`a ajouté le compte existant ${w} à l'établissement`,MOT_DE_PASSE_REINITIALISE:`a réinitialisé le mot de passe de ${w}`,COMPTE_DESACTIVE:`a désactivé le compte ${w}`,COMPTE_ACTIVE:`a réactivé le compte ${w}`,ADMIN_CREE:`a créé l'administrateur central ${w}`,ADMIN_RATTACHE:`a rattaché l'administrateur central ${w}`,ADMIN_MOT_DE_PASSE_REINITIALISE:`a réinitialisé le mot de passe de l'administrateur central`,ETABLISSEMENT_SUPPRIME:`a supprimé l'établissement ${n.code||""}`}[a]||`${a} ${w}`).trim()}
       case "published_weeks":return a==="DELETE"?`a retiré la publication de la semaine ${wkl(o.week_start)}`:`a publié la semaine ${wkl(d.week_start)}`;
       case "timetable_slots":return `${a==="INSERT"?"a placé":a==="DELETE"?"a retiré":"a déplacé ou modifié"} un cours ${d.week_start?"(semaine "+wkl(d.week_start)+", "+(DAYS[d.day_of_week]||"").toLowerCase()+" "+hm(d.start_time)+")":""}`;
       case "schedule_sessions":return a==="UPDATE"&&o.status!==n.status?(n.status==="annulee"?`a annulé la séance du ${fdl(d.session_date)} à ${hm(d.start_time)}`:`a remis en place la séance du ${fdl(d.session_date)}`)+(n.note?` · ${n.note}`:""):`${verb[a]} la séance du ${fdl(d.session_date)} à ${hm(d.start_time)}`;
@@ -4205,7 +4206,7 @@ async function viewAudit(v){
   const CAT={edt:["Emplois du temps",["timetable_slots","published_weeks","schedule_sessions","teacher_availability","availability_weeks","school_schedule"]],
     emarg:["Émargements et validations",["attendance_records"]],paie:["Paie et tarifs",["pay_periods","payslips","payments","payroll_items","hourly_rates"]],
     ref:["Référentiel et affectations",["departments","programs","student_groups","courses","course_programs","rooms","teachers","teacher_statuses","teaching_assignments","assignment_groups","academic_years","semesters"]],
-    comptes:["Comptes et rôles",["profiles","memberships","user_roles"]]};
+    comptes:["Comptes et rôles",["profiles","memberships","user_roles","comptes"]]};
   let qy=sb.from("audit_logs").select("*").gte("occurred_at",S.auF+"T00:00:00").lte("occurred_at",S.auT+"T23:59:59").order("occurred_at",{ascending:false}).limit(S.auLim);
   if(S.auCat)qy=qy.in("table_name",CAT[S.auCat][1]);
   if(S.auWho)qy=qy.eq("actor",S.auWho);

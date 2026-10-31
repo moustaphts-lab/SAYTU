@@ -49,9 +49,11 @@ Les fichiers `.md` du même dossier expliquent chaque étape en français (01 à
 Note : la suppression (4c) a été appliquée après 5a et 5b ; l'ordre d'application réel est celui de la colonne « Version ».
 
 ## Fonction de gestion des comptes
-`supabase/functions/manage-users/index.ts` (version 7 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
+`supabase/functions/manage-users/index.ts` (version 8 déployée ; test sans réseau : `tests/functions/lancer.sh`) : création de comptes, mots de passe provisoires, activation,
 et actions de la plateforme (premier administrateur, nouveau mot de passe, suppression d'un établissement vide).
 
 ## Remise à zéro de DEMO
 Le schéma privé `saytu_demo_ref` (jamais exposé) garde une copie de référence de DEMO (`take_snapshot()`, prise le 31/10/2026) et sait la rétablir (`reset_demo()`, en une seule transaction : données, journal, noms, langues et mots de passe des 12 comptes).
 Seul le propriétaire de la base peut l'appeler (éditeur SQL de Supabase, ou plus tard une tâche pg_cron). Si DEMO change volontairement (nouvelles données de démonstration), relancer `take_snapshot()` après les avoir préparées.
+
+Version 8 (31/10/2026, audit F4) : chaque action sur un compte (création, rattachement, mot de passe réinitialisé, activation ou désactivation, création et réinitialisation d'un administrateur central, suppression d'un établissement) écrit une ligne dans le journal (`audit_logs`, table `comptes`) : qui, quoi, quand, jamais de mot de passe. Les actions refusées n'écrivent rien.

@@ -39,3 +39,6 @@ chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas con
 - `ui/test_entete_arabe.py` : profil et bouton de langue au bord de fin de la barre du haut (à gauche en arabe, à droite en français).
 - `ui/test_signatures.py` : les 4 bibliothèques externes portent une signature (SRI) ; les copies locales (jsPDF) correspondent.
 - `db/reinitialisation_demo.sql` : abîme DEMO (réglages, salles, séances, mot de passe d'un compte), lance `reset_demo()` et compare l'empreinte de chaque table avec l'état d'avant ; tout est annulé à la fin par une erreur volontaire (résultat : « tables différentes: aucune »).
+- `ui/test_injection.py` (audit F1) : un texte piégé (`<img onerror>`) passé à la fenêtre « Prévenir les professeurs » n'est jamais exécuté.
+- `ui/test_journal_comptes.py` (audit F4) : le journal écrit en français les actions sur les comptes.
+- `functions/lancer.sh` couvre aussi le journal des comptes (F4) : une ligne par action réussie, sans mot de passe, rien pour une action refusée.

@@ -25,3 +25,20 @@ r=await call({rpc:base,rows:{establishments:[{id:5,demo:false}]}},{action:"reset
 ok(r.status===200&&r.log.some((l:any)=>l[0]==="upd"&&l[1]==="profiles"&&l[3].must_change_password===true),"reset : changement obligatoire côté serveur");
 r=await call({rpc:{...base,has_role:false},rows:{}},{action:"create",email:"a@b.co",full_name:"A"});
 ok(r.status===403,"non administrateur : refusé");
+
+// Audit F4 : chaque action sur un compte laisse une trace (sans mot de passe)
+const traces=(r:any)=>r.log.filter((l:any)=>l[0]==="ins"&&l[1]==="audit_logs").map((l:any)=>l[2]);
+const sansMdp=(t:any[])=>!JSON.stringify(t).match(/Bonjour|temp_password|password/i);
+r=await call({rpc:base,rows:{establishments:[{id:5,demo:false}]}},{action:"create",email:"a@b.co",full_name:"A"});
+let t=traces(r);
+ok(t.length===1&&t[0].action==="COMPTE_CREE"&&t[0].table_name==="comptes"&&t[0].establishment_id===5&&t[0].actor==="ME"&&t[0].new_data.email==="a@b.co"&&sansMdp(t),"journal : création de compte");
+r=await call({rpc:base,rows:ex,lastSign:{P1:"2026-10-01"}},{action:"create",email:"x@y.co",full_name:"X"});
+t=traces(r);ok(t.length===1&&t[0].action==="COMPTE_RATTACHE"&&t[0].record_id==="P1","journal : rattachement d'un compte existant");
+r=await call({rpc:base,rows:{establishments:[{id:5,demo:false}],profiles:[{id:"U",email:"u@v.co"}]}},{action:"reset_password",user_id:"U"});
+t=traces(r);ok(t.length===1&&t[0].action==="MOT_DE_PASSE_REINITIALISE"&&t[0].new_data.email==="u@v.co"&&sansMdp(t),"journal : réinitialisation du mot de passe (sans le mot de passe)");
+r=await call({rpc:base,rows:{establishments:[{id:5,demo:false}],profiles:[{id:"U",email:"u@v.co"}]}},{action:"set_active",user_id:"U",active:false});
+t=traces(r);ok(t.length===1&&t[0].action==="COMPTE_DESACTIVE","journal : désactivation");
+r=await call({rpc:base,rows:{establishments:[{id:5,demo:true}]}},{action:"create",email:"a@b.co",full_name:"A"});
+ok(traces(r).length===0,"journal : une action refusée n'écrit rien");
+r=await call({rpc:{is_platform_admin:true,platform_attach_admin:null},rows:{}},{action:"platform_create_admin",establishment_id:7,email:"n@m.co",full_name:"N"});
+t=traces(r);ok(r.status===200&&t.length===1&&t[0].action==="ADMIN_CREE"&&t[0].establishment_id===7&&sansMdp(t),"journal : création d'un administrateur central par la plateforme");

@@ -29,6 +29,15 @@ Deno.serve(async (req: Request) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ error: "Requête invalide." }, 400); }
   const action = String(body.action ?? "");
+  const { data: me } = await caller.auth.getUser();
+  // Journal des opérations sur les comptes (qui, quoi, quand). Ne contient jamais de mot de passe.
+  // Écriture au mieux : un échec du journal ne bloque pas l'action déjà faite.
+  const trace = async (act: string, target: string | null, etabId: number | null, data: Record<string, unknown>) => {
+    const { error } = await admin.from("audit_logs").insert({
+      actor: me.user?.id ?? null, action: act, table_name: "comptes", record_id: target, new_data: data, establishment_id: etabId,
+    });
+    if (error) console.error("journal:", error.message);
+  };
 
   // 0. Administrateur de la plateforme : premier administrateur central d'un établissement
   if (action === "platform_create_admin") {
@@ -54,6 +63,7 @@ Deno.serve(async (req: Request) => {
     }
     const { error: eA } = await caller.rpc("platform_attach_admin", { p_etab: etabId, p_user: userId });
     if (eA) return json({ error: eA.message }, 400);
+    await trace(password ? "ADMIN_CREE" : "ADMIN_RATTACHE", userId, etabId, { email });
     return password ? json({ user_id: userId, email, temp_password: password }) : json({ user_id: userId, email, existing: true });
   }
 
@@ -68,6 +78,7 @@ Deno.serve(async (req: Request) => {
     if (error) return json({ error: error.message }, 400);
     await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
     await admin.from("memberships").update({ active: true }).eq("user_id", userId).eq("establishment_id", etabId);
+    await trace("ADMIN_MOT_DE_PASSE_REINITIALISE", userId, etabId, {});
     return json({ temp_password: password });
   }
 
@@ -83,12 +94,12 @@ Deno.serve(async (req: Request) => {
       const { error } = await admin.auth.admin.deleteUser(id);
       if (error) failed++;
     }
+    await trace("ETABLISSEMENT_SUPPRIME", null, null, { establishment_id: Number(body.establishment_id), code: String(body.code ?? ""), accounts: (users ?? []).length, failed });
     return json({ ok: true, accounts: (users ?? []).length, failed });
   }
 
   const { data: isAdmin, error: roleErr } = await caller.rpc("has_role", { r: "admin" });
   if (roleErr || isAdmin !== true) return json({ error: "Réservé à l'administrateur." }, 403);
-  const { data: me } = await caller.auth.getUser();
   const { data: central } = await caller.rpc("is_central_admin");
   // établissement de travail de l'administrateur qui appelle
   const { data: etab } = await caller.rpc("current_establishment");
@@ -132,6 +143,7 @@ Deno.serve(async (req: Request) => {
         const { error: eM } = await admin.from("memberships").insert({ user_id: prev.id, establishment_id: etab, faculty_id: facultyId });
         if (eM) return json({ error: eM.message }, 400);
         await admin.auth.admin.updateUserById(prev.id, { ban_duration: "none" });
+        await trace("COMPTE_RATTACHE", prev.id, etab, { email, faculty_id: facultyId });
         return json({ user_id: prev.id, email, existing: true });
       }
       const password = tempPassword();
@@ -145,6 +157,7 @@ Deno.serve(async (req: Request) => {
       await admin.from("profiles").update({ establishment_id: etab, must_change_password: true }).eq("id", data.user.id);
       const { error: eM } = await admin.from("memberships").upsert({ user_id: data.user.id, establishment_id: etab, faculty_id: facultyId });
       if (eM) return json({ error: eM.message }, 400);
+      await trace("COMPTE_CREE", data.user.id, etab, { email, faculty_id: facultyId });
       return json({ user_id: data.user.id, email, temp_password: password });
     }
 
@@ -158,6 +171,8 @@ Deno.serve(async (req: Request) => {
       const { error } = await admin.auth.admin.updateUserById(userId, { password });
       if (error) return json({ error: error.message }, 400);
       await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
+      const { data: tp } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
+      await trace("MOT_DE_PASSE_REINITIALISE", userId, etab, { email: tp?.email ?? null });
       return json({ temp_password: password });
     }
 
@@ -173,6 +188,8 @@ Deno.serve(async (req: Request) => {
       const { data: still } = await admin.from("memberships").select("establishment_id").eq("user_id", userId).eq("active", true);
       const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: (still ?? []).length ? "none" : "876000h" });
       if (error) return json({ error: error.message }, 400);
+      const { data: tp } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
+      await trace(active ? "COMPTE_ACTIVE" : "COMPTE_DESACTIVE", userId, etab, { email: tp?.email ?? null, blocked: (still ?? []).length === 0 });
       return json({ ok: true });
     }
 
