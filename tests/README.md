@@ -44,3 +44,6 @@ chacun terminé par une erreur volontaire pour tout annuler. Ils ne sont pas con
 - `functions/lancer.sh` couvre aussi le journal des comptes (F4) : une ligne par action réussie, sans mot de passe, rien pour une action refusée.
 - `db/fac_of_etablissement.sql` (audit F2) : un compte d'un autre établissement n'obtient aucune faculté de DEMO par les fonctions `fac_of_*` ; un compte de DEMO obtient les bonnes valeurs. La vérification « rien n'a changé pour personne » se fait avec `saytu_tests.visibility()` avant/après (14 comptes, 504 mesures, 0 différence le 31/10/2026).
 - `functions/lancer.sh` couvre aussi F5 : erreur technique masquée, règle métier et « compte déjà existant » conservés.
+
+## Traductions arabes
+`node tests/i18n/traductions_ar.js` : vérifie que les textes composés par l application (journal, tableau de bord, établissement) sont entièrement traduits en arabe.

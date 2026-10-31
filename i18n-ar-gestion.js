@@ -2431,4 +2431,27 @@ Object.keys(X).forEach(k=>{if(!(k in A.exact))A.exact[k]=X[k]});
 const mo=A.mo||(s=>s),hrs=s=>s.replace(/(\d+) h(?: (\d+))?\b/g,(_,h,m)=>m?h+" س "+m+" د":h+" س");
 const cap=c=>{if(c==null)return "";if(!c.trim())return c;const t=typeof tr==="function"?tr(c):c;return t!==c?t:mo(hrs(c))};
 A.pats.unshift(...P.map(([rx,ar])=>[new RegExp(rx),(...m)=>ar.replace(/§(\d)/g,(_,n)=>cap(m[+n]))]));
+/* compléments (journal, tableau de bord, établissement) : textes composés en français par l'application */
+const X2={"à":"إلى","jamais":"أبدًا","le compte":"الحساب","le semestre":"السداسي","l'enseignant":"الأستاذ","le statut":"الوضعية","a ajouté le compte existant":"أضاف الحساب الموجود",
+"a réinitialisé le mot de passe de l'administrateur central":"أعاد تعيين كلمة مرور المهندس العام"};
+Object.keys(X2).forEach(k=>{if(!(k in A.exact))A.exact[k]=X2[k]});
+const t2=x=>{const r=typeof tr==="function"?tr(x):x;return r};
+const Q=[
+ [/^a créé le compte (.+)$/,(_,w)=>"أنشأ الحساب "+w],
+ [/^a ajouté le compte existant (.+?) à l'établissement$/,(_,w)=>"أضاف الحساب الموجود "+w+" إلى المؤسسة"],
+ [/^a réinitialisé le mot de passe de (.+)$/,(_,w)=>"أعاد تعيين كلمة مرور "+w],
+ [/^a désactivé le compte (.+)$/,(_,w)=>"عطّل الحساب "+w],
+ [/^a réactivé le compte (.+)$/,(_,w)=>"أعاد تفعيل الحساب "+w],
+ [/^a créé l'administrateur central (.+)$/,(_,w)=>"أنشأ المهندس العام "+w],
+ [/^a rattaché l'administrateur central (.+)$/,(_,w)=>"ألحق المهندس العام "+w],
+ [/^a supprimé l'établissement(?: (.*))?$/,(_,w)=>"حذف المؤسسة"+(w?" "+w:"")],
+ [/^(a créé|a modifié|a supprimé) (le compte|l'accès d'un compte|le département|la filière|le groupe|la matière|la salle|l'enseignant|le statut|l'année|le semestre|une affectation|un regroupement \(tronc commun\)|les filières d'une matière|une plage de disponibilité)(?: (.+))?$/,
+  (_,v,t,l)=>t2(v)+" "+t2(t)+(l?" "+l:"")],
+ [/^(.+) \(université\)$/,(_,n)=>t2(n)+" (الجامعة)"],
+ [/^Droits : (.+)\.$/,(_,l)=>"الصلاحيات: "+l.split(" · ").map(x=>t2(x)).join(" · ")+"."],
+ [/^(Un seul administrateur|Aucun administrateur actif)\.$/,(_,x)=>t2(x)+"."],
+ [/^Dernière sauvegarde depuis cet appareil : (.+)$/,(_,d)=>"آخر نسخة احتياطية من هذا الجهاز: "+d],
+ [/^((?:[A-Za-z]{1,8} )?Semestre \d+)(?:, ((?:[A-Za-z]{1,8} )?Semestre \d+))+$/,(m)=>m.split(", ").map(x=>x.replace(/Semestre (\d+)$/,(_,n)=>"السداسي "+n)).join("، ")]
+];
+A.pats.unshift(...Q);
 })();
